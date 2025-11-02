@@ -1,0 +1,343 @@
+package cn.ling.service.impl;
+
+import cn.ling.domain.Result;
+import cn.ling.domain.dto.UserDTO;
+import cn.ling.email.EmailUtils;
+import cn.ling.encode.BCryptUtils;
+import cn.ling.jwt.JwtUtils;
+import cn.ling.random.NumberUtils;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import cn.ling.domain.User;
+import cn.ling.service.UserService;
+import cn.ling.mapper.UserMapper;
+import jakarta.annotation.Resource;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.concurrent.TimeUnit;
+
+/**
+* @author Administrator
+* @description 针对表【user(系统用户表)】的数据库操作Service实现
+* @createDate 2025-10-31 00:07:11
+*/
+@Service
+public class UserServiceImpl extends ServiceImpl<UserMapper, User>
+    implements UserService{
+
+    @Resource
+    private EmailUtils emailUtils;
+
+    @Resource
+    private NumberUtils numberUtils;
+
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
+    private final static String REGISTER_CODE_KEY = "register_code:";
+    private final static String FIND_PASSWORD_CODE_KEY = "find_password_code:";
+
+    @Override
+    public Result<String> sendRegisterCode(UserDTO userDTO) {
+        // 参数校验
+        if (userDTO.getEmail() == null || userDTO.getEmail().trim().isEmpty()) {
+            return Result.error("邮箱不能为空");
+        }
+
+        // 验证邮箱格式
+        if (!userDTO.getEmail().matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")) {
+            return Result.error("邮箱格式不正确");
+        }
+
+        // 检查邮箱是否已被注册
+        User existUser = lambdaQuery().eq(User::getEmail, userDTO.getEmail()).one();
+
+
+        if (existUser != null) {
+            return Result.error("该邮箱已被注册");
+        }
+
+        try {
+            // 生成6位数字验证码
+            String code = String.valueOf(numberUtils.generateDigitCode(6));
+
+            // 存储验证码到Redis，设置5分钟过期时间
+            String redisKey = REGISTER_CODE_KEY + userDTO.getEmail();
+            stringRedisTemplate.opsForValue().set(redisKey, code, 300, TimeUnit.SECONDS);
+
+            // 发送邮件
+            String subject = "SchQueryAI - 注册验证码";
+            String content = "您好，\n\n您正在注册SchQueryAI账号，验证码为：" + code +
+                           "\n\n验证码有效期为5分钟，请及时使用。" +
+                           "\n\n如果这不是您本人操作，请忽略此邮件。";
+
+            Boolean sendResult = emailUtils.sendEmail(userDTO.getEmail(), subject, content);
+
+            if (sendResult) {
+                return Result.success("验证码发送成功，请查收邮件");
+            } else {
+                return Result.error("验证码发送失败，请稍后重试");
+            }
+        } catch (Exception e) {
+            return Result.error("验证码发送失败：" + e.getMessage());
+        }
+    }
+
+    @Override
+    @Transactional
+    public Result<User> register(UserDTO userDTO) {
+        try {
+            // 参数校验
+            if (!checkInfo(userDTO)) {
+                return Result.error("注册信息校验失败");
+            }
+
+            // 验证邮箱验证码
+            String redisKey = REGISTER_CODE_KEY + userDTO.getEmail();
+            String storedCode = stringRedisTemplate.opsForValue().get(redisKey);
+            if (storedCode == null) {
+                return Result.error("验证码已过期，请重新获取");
+            }
+            if (!storedCode.equals(userDTO.getCode())) {
+                return Result.error("验证码错误");
+            }
+
+            // 创建新用户
+            User newUser = new User();
+            newUser.setUserName(userDTO.getUserName());
+            newUser.setPassWord(BCryptUtils.encode(userDTO.getPassword()));
+            newUser.setEmail(userDTO.getEmail());
+            newUser.setCreateTime(new Date());
+            newUser.setUpdateTime(new Date());
+
+            boolean save = save(newUser);
+
+            if (save) {
+                // 删除已使用的验证码
+                stringRedisTemplate.delete(redisKey);
+                // 清空密码信息后返回
+                newUser.setPassWord(null);
+                return Result.success(newUser, "注册成功");
+            } else {
+                return Result.error("注册失败");
+            }
+        } catch (Exception e) {
+            return Result.error("注册失败：" + e.getMessage());
+        }
+    }
+
+    private boolean checkInfo(UserDTO userDTO) {
+        if (userDTO.getUserName() == null || userDTO.getUserName().trim().isEmpty()) {
+            throw new RuntimeException("请输入账号");
+        }
+
+        if (userDTO.getUserName().length() <= 5) {
+            throw new RuntimeException("账号最小为6位");
+        }
+
+        // 检查用户名是否已存在
+        User existUserByUserName = lambdaQuery().eq(User::getUserName, userDTO.getUserName()).one();
+
+        if (existUserByUserName != null) {
+            throw new RuntimeException("账号已存在");
+        }
+
+        if (userDTO.getPassword() == null || userDTO.getPassword().trim().isEmpty()) {
+            throw new RuntimeException("请输入密码");
+        }
+        if (userDTO.getPassword().length() <= 5) {
+            throw new RuntimeException("密码最小为6位");
+        }
+        if (userDTO.getRePassword() == null || userDTO.getRePassword().trim().isEmpty()) {
+            throw new RuntimeException("请输入确认密码");
+        }
+        if (!userDTO.getPassword().equals(userDTO.getRePassword())) {
+            throw new RuntimeException("两次密码不一致");
+        }
+        if (userDTO.getEmail() == null || userDTO.getEmail().trim().isEmpty()) {
+            throw new RuntimeException("请输入邮箱");
+        }
+        if (!userDTO.getEmail().matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")) {
+            throw new RuntimeException("邮箱格式错误");
+        }
+
+        return true;
+    }
+
+    @Override
+    public Result<String> login(UserDTO userDTO) {
+        // 参数校验
+        if (userDTO.getUserName() == null || userDTO.getUserName().trim().isEmpty()) {
+            return Result.error("用户名不能为空");
+        }
+        if (userDTO.getPassword() == null || userDTO.getPassword().trim().isEmpty()) {
+            return Result.error("密码不能为空");
+        }
+
+        // 查询用户
+        User user = lambdaQuery().eq(User::getUserName, userDTO.getUserName()).one();
+
+        if (user == null) {
+            return Result.error("用户不存在");
+        }
+
+        // 验证密码
+        if (!BCryptUtils.judge(userDTO.getPassword(), user.getPassWord())) {
+            return Result.error("密码错误");
+        }
+
+        // 登录成功，清空密码信息后返回
+        user.setPassWord(null);
+
+        String token = JwtUtils.generateToken("用户信息", new HashMap<>(){
+            {
+                put("userId", user.getId());
+                put("userName", user.getUserName());
+                put("role", "user");
+            }
+        });
+
+        return Result.success(token);
+    }
+
+    //修改密码
+    @Override
+    public Result<String> updatePassword(UserDTO userDTO) {
+        // 参数校验
+        if (userDTO.getUserName() == null || userDTO.getUserName().trim().isEmpty()) {
+            return Result.error("用户名不能为空");
+        }
+        if (userDTO.getPassword() == null || userDTO.getPassword().trim().isEmpty()) {
+            return Result.error("原密码不能为空");
+        }
+        if (userDTO.getRePassword() == null || userDTO.getRePassword().trim().isEmpty()) {
+            return Result.error("新密码不能为空");
+        }
+        // 需要一个确认密码字段，这里暂时假设rePassword是新密码的确认
+        // 实际使用时，应该在UserDTO中添加一个confirmPassword字段
+
+        try {
+            // 查询用户
+            User user = lambdaQuery().eq(User::getUserName, userDTO.getUserName()).one();
+            if (user == null) {
+                return Result.error("用户不存在");
+            }
+
+            // 验证原密码
+            if (!BCryptUtils.judge(userDTO.getPassword(), user.getPassWord())) {
+                return Result.error("原密码错误");
+            }
+
+            // 更新密码
+            user.setPassWord(BCryptUtils.encode(userDTO.getRePassword()));
+            user.setUpdateTime(new Date());
+            boolean update = updateById(user);
+
+            if (update) {
+                return Result.success("密码修改成功");
+            } else {
+                return Result.error("密码修改失败");
+            }
+        } catch (Exception e) {
+            return Result.error("密码修改失败：" + e.getMessage());
+        }
+    }
+
+    //找回密码
+    @Override
+    public Result<String> findPassword(UserDTO userDTO) {
+        // 参数校验
+        if (userDTO.getEmail() == null || userDTO.getEmail().trim().isEmpty()) {
+            return Result.error("邮箱不能为空");
+        }
+        if (userDTO.getCode() == null || userDTO.getCode().trim().isEmpty()) {
+            return Result.error("验证码不能为空");
+        }
+        if (userDTO.getRePassword() == null || userDTO.getRePassword().trim().isEmpty()) {
+            return Result.error("新密码不能为空");
+        }
+
+        try {
+            // 验证邮箱验证码
+            String redisKey = FIND_PASSWORD_CODE_KEY + userDTO.getEmail();
+            String storedCode = stringRedisTemplate.opsForValue().get(redisKey);
+            if (storedCode == null) {
+                return Result.error("验证码已过期，请重新获取");
+            }
+            if (!storedCode.equals(userDTO.getCode())) {
+                return Result.error("验证码错误");
+            }
+
+            // 查询用户
+            User user = lambdaQuery().eq(User::getEmail, userDTO.getEmail()).one();
+            if (user == null) {
+                return Result.error("该邮箱未注册");
+            }
+
+            // 更新密码
+            user.setPassWord(BCryptUtils.encode(userDTO.getRePassword()));
+            user.setUpdateTime(new Date());
+            boolean update = updateById(user);
+
+            if (update) {
+                // 删除已使用的验证码
+                stringRedisTemplate.delete(redisKey);
+                return Result.success("密码重置成功");
+            } else {
+                return Result.error("密码重置失败");
+            }
+        } catch (Exception e) {
+            return Result.error("密码重置失败：" + e.getMessage());
+        }
+    }
+
+    @Override
+    public Result<String> sendFindPasswordCode(UserDTO userDTO) {
+        // 参数校验
+        if (userDTO.getEmail() == null || userDTO.getEmail().trim().isEmpty()) {
+            return Result.error("邮箱不能为空");
+        }
+
+        // 验证邮箱格式
+        if (!userDTO.getEmail().matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")) {
+            return Result.error("邮箱格式不正确");
+        }
+
+        // 检查邮箱是否存在
+        User user = lambdaQuery().eq(User::getEmail, userDTO.getEmail()).one();
+        if (user == null) {
+            return Result.error("该邮箱未注册");
+        }
+
+        try {
+            // 生成6位数字验证码
+            String code = String.valueOf(numberUtils.generateDigitCode(6));
+
+            // 存储验证码到Redis，设置5分钟过期时间
+            String redisKey = FIND_PASSWORD_CODE_KEY + userDTO.getEmail();
+            stringRedisTemplate.opsForValue().set(redisKey, code, 300, TimeUnit.SECONDS);
+
+            // 发送邮件
+            String subject = "SchQueryAI - 找回密码验证码";
+            String content = "您好，\n\n您正在重置SchQueryAI账号密码，验证码为：" + code +
+                           "\n\n验证码有效期为5分钟，请及时使用。" +
+                           "\n\n如果这不是您本人操作，请忽略此邮件或联系客服。";
+
+            Boolean sendResult = emailUtils.sendEmail(userDTO.getEmail(), subject, content);
+
+            if (sendResult) {
+                return Result.success("验证码发送成功，请查收邮件");
+            } else {
+                return Result.error("验证码发送失败，请稍后重试");
+            }
+        } catch (Exception e) {
+            return Result.error("验证码发送失败：" + e.getMessage());
+        }
+    }
+}
+
+
+
+

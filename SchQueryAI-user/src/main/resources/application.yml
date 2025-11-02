@@ -1,0 +1,93 @@
+server:
+  port: 8081
+
+spring:
+  # 数据源配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/schqueryai?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: ${PASSWORD}
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 15
+      auto-commit: true
+      idle-timeout: 30000
+      pool-name: HikariCP
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      connection-test-query: SELECT 1
+
+  # Redis配置
+  data:
+    redis:
+      host: localhost  # Your Redis server IP/domain
+      port: 6379       # Default Redis port
+      password: ""     # If Redis has a password, set it here (empty by default)
+      timeout: 2000ms  # Connection timeout
+      lettuce: # Lettuce is the default client; configure pool if needed
+        pool:
+          max-active: 8  # Max connections
+          max-idle: 8    # Max idle connections
+          min-idle: 2    # Min idle connections
+
+  # 邮件配置
+  mail:
+    host: smtp.qq.com
+    port: 465
+    username: your-email@qq.com
+    password: your-smtp-authorization-code
+    protocol: smtp
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+          socketFactory:
+            port: 465
+            class: javax.net.ssl.SSLSocketFactory
+          starttls:
+            enable: true
+            required: true
+    from: your-email@qq.com
+
+# MyBatis Plus配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/*.xml
+  type-aliases-package: cn.ling.domain
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+    banner: false
+  configuration:
+    map-underscore-to-camel-case: true
+    cache-enabled: false
+    call-setters-on-nulls: true
+    jdbc-type-for-null: 'null'
+
+# 邮件配置属性
+mail-notify:
+  host: smtp.qq.com
+  port: 465
+  username: your-email@qq.com
+  password: your-smtp-authorization-code
+  from: your-email@qq.com
+
+# JWT配置
+jwt:
+  secret: ${JWT_SECRET_KEY}
+  expiration: 86400000  # 24小时，单位毫秒
+
+# 日志配置
+logging:
+  level:
+    cn.ling.mapper: debug
+    org.springframework.web: debug
+    root: info
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n'

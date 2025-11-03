@@ -24,3 +24,6 @@ email:
   username: user@example.com
   password: ${EMAIL_PASSWORD}
   from: user@example.com
+
+server:
+  port: 8080

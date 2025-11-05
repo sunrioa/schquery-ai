@@ -2,7 +2,7 @@ package cn.ling.context;
 
 import cn.ling.role.UserInfo;
 
-public class Context {
+public class ContextUtils {
     // 定义ThreadLocal，泛型为UserInfo（存储当前线程的用户信息）
     private static final ThreadLocal<UserInfo> USER_CONTEXT = new ThreadLocal<>();
 

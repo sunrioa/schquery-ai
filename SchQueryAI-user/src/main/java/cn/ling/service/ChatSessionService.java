@@ -3,7 +3,10 @@ package cn.ling.service;
 import cn.ling.domain.Result;
 import cn.ling.domain.dto.ChatSessionDTO;
 import cn.ling.domain.pojo.ChatSession;
+import cn.ling.domain.vo.ChatSessionVO;
 import com.baomidou.mybatisplus.extension.service.IService;
+
+import java.util.List;
 
 public interface ChatSessionService extends IService<ChatSession> {
 
@@ -13,5 +16,7 @@ public interface ChatSessionService extends IService<ChatSession> {
 
     Result<String> updateSession(ChatSessionDTO chatSessionDTO);
 
-    Result<String> getSession();
+    Result<List<ChatSessionVO>> getSession();
+
+    void updateLastMessageTime(Long sessionId);
 }

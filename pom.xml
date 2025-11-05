@@ -15,11 +15,12 @@
     <name>SchQueryAI</name>
     <description>SchQueryAI</description>
     <modules>
-        <module>SchQueryAI-application</module>
+        <module>SchQueryAI-domain</module>
         <module>SchQueryAI-user</module>
         <module>SchQueryAI-admin</module>
         <module>SchQueryAI-utils</module>
         <module>SchQueryAI-ai</module>
+        <module>SchQueryAI-application</module>
     </modules>
     <properties>
         <java.version>17</java.version>

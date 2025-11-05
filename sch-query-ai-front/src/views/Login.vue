@@ -119,7 +119,9 @@ const handleLogin = async () => {
 
         // 处理登录结果
         if (result.data) {
+          console.log('Login successful, token received:', result.data)
           localStorage.setItem('token', result.data)
+          console.log('Token stored in localStorage:', localStorage.getItem('token'))
         } else {
           throw new Error('登录返回数据格式异常')
         }

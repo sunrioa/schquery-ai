@@ -3,11 +3,16 @@ package cn.ling.controller;
 import cn.ling.domain.Result;
 import cn.ling.domain.dto.ChatMessageDTO;
 import cn.ling.domain.dto.ChatSessionDTO;
+import cn.ling.domain.vo.ChatMessageVO;
+import cn.ling.domain.vo.ChatSessionVO;
 import cn.ling.service.ChatMessageService;
 import cn.ling.service.ChatSessionService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/user")
@@ -39,21 +44,24 @@ public class ChatController {
 
     //获取chatsession
     @RequestMapping("/session/get")
-    public Result<String> getSession() {
+    public Result<List<ChatSessionVO>> getSession() {
         return chatSessionService.getSession();
     }
 
 
     //获取历史消息
     @RequestMapping("/message/get")
-    public Result<String> getMessage(Long sessionId) {
+    public Result<List<ChatMessageVO>> getMessage(Long sessionId) {
         return chatMessageService.getMessage(sessionId);
     }
 
-    //发送消息
-    @RequestMapping("/message/send")
-    public Flux<String> sendMessage(@RequestBody ChatMessageDTO chatMessageDTO) {
-        return chatMessageService.sendMessage(chatMessageDTO);
+    //发送消息 (流式响应)
+    @GetMapping(value = "/message/send", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<String> sendMessage(@RequestParam Long sessionId, @RequestParam String content) {
+        ChatMessageDTO dto = new ChatMessageDTO();
+        dto.setSessionId(sessionId);
+        dto.setContent(content);
+        return chatMessageService.sendMessage(dto);
     }
 
     //删除消息

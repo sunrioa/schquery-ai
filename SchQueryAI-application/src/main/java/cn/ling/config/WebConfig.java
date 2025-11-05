@@ -36,7 +36,6 @@ public class WebConfig implements WebMvcConfigurer {
                        "/user/sendRegisterCode",
                        "/user/sendFindPasswordCode",
                        "/user/findPassword"
-               )
-        ;
+               );
     }
 }

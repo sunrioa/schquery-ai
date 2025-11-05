@@ -1,1 +1,6 @@
 C:\Users\Administrator\Desktop\SchQueryAI\SchQueryAI-application\src\main\java\cn\ling\Application.java
+C:\Users\Administrator\Desktop\SchQueryAI\SchQueryAI-application\src\main\java\cn\ling\config\CorsConfig.java
+C:\Users\Administrator\Desktop\SchQueryAI\SchQueryAI-application\src\main\java\cn\ling\config\WebConfig.java
+C:\Users\Administrator\Desktop\SchQueryAI\SchQueryAI-application\src\main\java\cn\ling\exception\GlobalExceptionHandler.java
+C:\Users\Administrator\Desktop\SchQueryAI\SchQueryAI-application\src\main\java\cn\ling\interceptor\JwtInterceptor.java
+C:\Users\Administrator\Desktop\SchQueryAI\SchQueryAI-application\src\main\java\cn\ling\interceptor\PowerInterceptor.java

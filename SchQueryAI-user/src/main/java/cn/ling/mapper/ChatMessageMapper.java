@@ -2,6 +2,7 @@ package cn.ling.mapper;
 
 import cn.ling.domain.pojo.ChatMessage;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import org.apache.ibatis.annotations.Mapper;
 
 /**
 * @author Administrator
@@ -9,6 +10,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 * @createDate 2025-11-05 23:24:44
 * @Entity cn.ling.domain.pojo.ChatMessage
 */
+@Mapper
 public interface ChatMessageMapper extends BaseMapper<ChatMessage> {
 
 }

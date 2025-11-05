@@ -55,6 +55,11 @@
             <span>统计分析</span>
           </el-menu-item>
 
+          <el-menu-item index="/chat">
+            <el-icon><ChatDotRound /></el-icon>
+            <span>AI 聊天</span>
+          </el-menu-item>
+
           <el-menu-item index="/settings">
             <el-icon><Setting /></el-icon>
             <span>系统设置</span>
@@ -164,6 +169,10 @@
                       <el-icon><Lock /></el-icon>
                       密码管理
                     </el-button>
+                    <el-button type="primary" @click="$router.push('/chat')">
+                      <el-icon><ChatDotRound /></el-icon>
+                      AI 聊天
+                    </el-button>
                   </el-space>
                 </div>
               </div>
@@ -189,6 +198,7 @@ import {
   School,
   TrendCharts,
   Setting,
+  ChatDotRound,
   ArrowDown,
   SwitchButton
 } from '@element-plus/icons-vue'
@@ -205,6 +215,7 @@ export default {
     School,
     TrendCharts,
     Setting,
+    ChatDotRound,
     ArrowDown,
     SwitchButton
   },
@@ -221,6 +232,7 @@ export default {
         '/query/paper': '论文查询',
         '/query/institution': '机构查询',
         '/statistics': '统计分析',
+        '/chat': 'AI 聊天',
         '/settings': '系统设置'
       }
       return routeMap[route.path] || ''

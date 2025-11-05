@@ -3,8 +3,11 @@ package cn.ling.service;
 import cn.ling.domain.Result;
 import cn.ling.domain.dto.ChatMessageDTO;
 import cn.ling.domain.pojo.ChatMessage;
+import cn.ling.domain.vo.ChatMessageVO;
 import com.baomidou.mybatisplus.extension.service.IService;
 import reactor.core.publisher.Flux;
+
+import java.util.List;
 
 /**
 * @author Administrator
@@ -13,7 +16,7 @@ import reactor.core.publisher.Flux;
 */
 public interface ChatMessageService extends IService<ChatMessage> {
 
-    Result<String> getMessage(Long sessionId);
+    Result<List<ChatMessageVO>> getMessage(Long sessionId);
 
     Flux<String> sendMessage(ChatMessageDTO chatMessageDTO);
 

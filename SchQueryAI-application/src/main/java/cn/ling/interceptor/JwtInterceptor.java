@@ -1,6 +1,6 @@
 package cn.ling.interceptor;
 
-import cn.ling.context.Context;
+import cn.ling.context.ContextUtils;
 import cn.ling.exception.CustomException;
 import cn.ling.jwt.JwtUtils;
 import cn.ling.role.UserInfo;
@@ -21,6 +21,11 @@ public class JwtInterceptor implements HandlerInterceptor {
      */
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        // 跳过OPTIONS请求（CORS预检请求）
+        if ("OPTIONS".equals(request.getMethod())) {
+            return true;
+        }
+
         // 1. 从请求头中获取Authorization字段（JWT令牌通常放在这里）
         // 格式一般为：Authorization: Bearer <token>
         String authHeader = request.getHeader("Authorization");
@@ -40,9 +45,9 @@ public class JwtInterceptor implements HandlerInterceptor {
             // 5. 令牌有效：可以将用户信息存入请求属性（方便后续Controller获取）
             UserInfo userInfo = new UserInfo();
             userInfo.setUserId(Long.parseLong(allClaimsAsMap.get("userId").toString()));
-            userInfo.setUsername(allClaimsAsMap.get("username").toString());
+            userInfo.setUsername(allClaimsAsMap.get("userName").toString());
             userInfo.setRole(allClaimsAsMap.get("role").toString());
-            Context.setUserInfo(userInfo);
+            ContextUtils.setUserInfo(userInfo);
 
             // 6. 放行请求
             return true;
@@ -64,6 +69,6 @@ public class JwtInterceptor implements HandlerInterceptor {
 
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
-        Context.clear();
+        ContextUtils.clear();
     }
 }

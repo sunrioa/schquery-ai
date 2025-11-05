@@ -4,6 +4,7 @@ import Register from '../views/Register.vue'
 import Home from '../views/Home.vue'
 import PasswordManager from '../views/PasswordManager.vue'
 import Password from '../views/Password.vue'
+import Chat from '../views/Chat.vue'
 import NotFound from '../views/NotFound.vue'
 
 const routes = [
@@ -36,6 +37,12 @@ const routes = [
     path: '/password-manager',
     name: 'PasswordManager',
     component: PasswordManager,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/chat',
+    name: 'Chat',
+    component: Chat,
     meta: { requiresAuth: true }
   },
   {

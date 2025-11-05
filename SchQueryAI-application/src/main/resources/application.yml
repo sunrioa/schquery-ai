@@ -17,7 +17,7 @@ spring:
       api-key: ${DASHSCOPE_API_KEY}
       chat:
         options:
-          model: qwen-3
+          model: qwen-plus
 
 
   # 数据库配置

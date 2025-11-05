@@ -1,1 +1,6 @@
+cn\ling\config\WebConfig.class
+cn\ling\interceptor\PowerInterceptor.class
+cn\ling\exception\GlobalExceptionHandler.class
+cn\ling\interceptor\JwtInterceptor.class
+cn\ling\config\CorsConfig.class
 cn\ling\Application.class

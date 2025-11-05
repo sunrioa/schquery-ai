@@ -3,6 +3,7 @@ import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
 import Home from '../views/Home.vue'
 import PasswordManager from '../views/PasswordManager.vue'
+import Password from '../views/Password.vue'
 import NotFound from '../views/NotFound.vue'
 
 const routes = [
@@ -28,6 +29,11 @@ const routes = [
   },
   {
     path: '/password',
+    name: 'Password',
+    component: Password
+  },
+  {
+    path: '/password-manager',
     name: 'PasswordManager',
     component: PasswordManager,
     meta: { requiresAuth: true }
@@ -54,7 +60,7 @@ router.beforeEach((to, from, next) => {
 
   if (to.meta.requiresAuth && !token) {
     next('/login')
-  } else if ((to.path === '/login' || to.path === '/register') && token) {
+  } else if ((to.path === '/login' || to.path === '/register' || to.path === '/password') && token) {
     next('/home')
   } else {
     next()

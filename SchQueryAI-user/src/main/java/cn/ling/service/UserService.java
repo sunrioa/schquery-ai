@@ -1,7 +1,7 @@
 package cn.ling.service;
 
 import cn.ling.domain.Result;
-import cn.ling.domain.User;
+import cn.ling.domain.pojo.User;
 import cn.ling.domain.dto.UserDTO;
 import com.baomidou.mybatisplus.extension.service.IService;
 

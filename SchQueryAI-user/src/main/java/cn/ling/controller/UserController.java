@@ -1,7 +1,7 @@
 package cn.ling.controller;
 
 import cn.ling.domain.Result;
-import cn.ling.domain.User;
+import cn.ling.domain.pojo.User;
 import cn.ling.domain.dto.UserDTO;
 import cn.ling.service.UserService;
 import jakarta.annotation.Resource;

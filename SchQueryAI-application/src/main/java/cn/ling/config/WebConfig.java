@@ -1,6 +1,7 @@
 package cn.ling.config;
 
 import cn.ling.interceptor.JwtInterceptor;
+import cn.ling.interceptor.PowerInterceptor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -19,8 +20,23 @@ public class WebConfig implements WebMvcConfigurer {
                 .addPathPatterns("/**")
                 // 排除不需要拦截的路径（根据实际业务调整）
                 .excludePathPatterns(
-                        "/login", // 登录接口
-                        "/register" // 注册接口
+                        "/user/login", // 登录接口
+                        "/user/register", // 注册接口
+                        "/user/sendRegisterCode",
+                        "/user/sendFindPasswordCode",
+                        "/user/findPassword"
                 );
+
+        registry.addInterceptor(new PowerInterceptor())
+                .addPathPatterns("/**")
+                 // 排除不需要拦截的路径（根据实际业务调整）
+                .excludePathPatterns(
+                       "/user/login", // 登录接口
+                       "/user/register", // 注册接口
+                       "/user/sendRegisterCode",
+                       "/user/sendFindPasswordCode",
+                       "/user/findPassword"
+               )
+        ;
     }
 }

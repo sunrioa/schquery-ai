@@ -19,6 +19,7 @@
         <module>SchQueryAI-user</module>
         <module>SchQueryAI-admin</module>
         <module>SchQueryAI-utils</module>
+        <module>SchQueryAI-ai</module>
     </modules>
     <properties>
         <java.version>17</java.version>

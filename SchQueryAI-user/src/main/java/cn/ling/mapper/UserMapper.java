@@ -1,6 +1,6 @@
 package cn.ling.mapper;
 
-import cn.ling.domain.User;
+import cn.ling.domain.pojo.User;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 
@@ -8,7 +8,7 @@ import org.apache.ibatis.annotations.Mapper;
 * @author Administrator
 * @description 针对表【user(系统用户表)】的数据库操作Mapper
 * @createDate 2025-10-31 00:07:11
-* @Entity cn.ling.domain.User
+* @Entity cn.ling.domain.pojo.User
 */
 @Mapper
 public interface UserMapper extends BaseMapper<User> {

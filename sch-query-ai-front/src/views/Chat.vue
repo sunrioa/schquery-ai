@@ -108,6 +108,17 @@
 
         <el-footer class="chat-input" v-if="currentSession">
           <div class="input-container">
+            <el-button
+                :class="['voice-btn', { 'recording': isRecording, 'voice-loading': voiceLoading }]"
+                @click="toggleRecording"
+                :disabled="voiceLoading"
+                :title="isRecording ? '停止录音' : '开始录音'"
+            >
+              <el-icon>
+                <Microphone v-if="!isRecording" />
+                <VideoPlay v-else />
+              </el-icon>
+            </el-button>
             <el-input
                 v-model="userMessage"
                 type="textarea"
@@ -158,7 +169,7 @@
 import { ref, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElEmpty, ElAvatar, ElDropdown, ElDropdownMenu, ElDropdownItem, ElButton, ElInput, ElDialog, ElForm, ElFormItem, ElIcon } from 'element-plus'
-import { Plus, Setting, Edit, Delete, UserFilled, Service, Upload } from '@element-plus/icons-vue'
+import { Plus, Setting, Edit, Delete, UserFilled, Service, Upload, Microphone, VideoPlay } from '@element-plus/icons-vue'
 import { chatApi } from '../api/chat'
 import { marked } from 'marked'
 import 'highlight.js/styles/github.css'
@@ -177,6 +188,12 @@ const sessionsLoading = ref(false)
 const showRenameDialog = ref(false)
 const renameSessionName = ref('')
 const messagesContainer = ref(null)
+
+// 录音相关状态
+const isRecording = ref(false)
+const voiceLoading = ref(false)
+const mediaRecorder = ref(null)
+const audioChunks = ref([])
 
 // 检查登录状态，返回是否已登录
 const checkToken = () => {
@@ -439,6 +456,97 @@ const renameSession = async () => {
     }
   } catch (error) {
     if (error.code !== 401) ElMessage.error('重命名失败')
+  }
+}
+
+// 切换录音状态
+const toggleRecording = async () => {
+  if (isRecording.value) {
+    stopRecording()
+  } else {
+    await startRecording()
+  }
+}
+
+// 开始录音
+const startRecording = async () => {
+  try {
+    // 请求麦克风权限
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+
+    // 创建MediaRecorder实例
+    const recorder = new MediaRecorder(stream)
+    mediaRecorder.value = recorder
+    audioChunks.value = []
+
+    // 监听数据可用事件
+    recorder.ondataavailable = (event) => {
+      audioChunks.value.push(event.data)
+    }
+
+    // 监听录音结束事件
+    recorder.onstop = async () => {
+      const audioBlob = new Blob(audioChunks.value, { type: 'audio/wav' })
+      await uploadAudioFile(audioBlob)
+
+      // 关闭所有音频轨道
+      stream.getTracks().forEach(track => track.stop())
+    }
+
+    // 开始录音
+    recorder.start()
+    isRecording.value = true
+
+    ElMessage.success('开始录音')
+  } catch (error) {
+    console.error('录音启动失败:', error)
+    ElMessage.error('无法访问麦克风，请检查权限设置')
+  }
+}
+
+// 停止录音
+const stopRecording = () => {
+  if (mediaRecorder.value && mediaRecorder.value.state !== 'inactive') {
+    mediaRecorder.value.stop()
+    isRecording.value = false
+    ElMessage.info('录音结束，正在识别...')
+  }
+}
+
+// 上传音频文件到后端
+const uploadAudioFile = async (audioBlob) => {
+  try {
+    voiceLoading.value = true
+
+    const formData = new FormData()
+    formData.append('radioFile', audioBlob, 'recording.wav')
+
+    const response = await fetch('http://localhost:8080/user/uploadAudioFile', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: formData
+    })
+
+    if (!response.ok) {
+      throw new Error('音频上传失败')
+    }
+
+    const result = await response.json()
+
+    if (result.code === 200 && result.data) {
+      // 将识别的文字追加到输入框
+      userMessage.value += (userMessage.value ? ' ' : '') + result.data
+      ElMessage.success('语音识别完成')
+    } else {
+      ElMessage.error(result.msg || '语音识别失败')
+    }
+  } catch (error) {
+    console.error('音频上传失败:', error)
+    ElMessage.error('语音识别失败，请重试')
+  } finally {
+    voiceLoading.value = false
   }
 }
 
@@ -821,11 +929,71 @@ onMounted(() => {
   align-items: center; /* 垂直居中 */
 }
 
+/* 录音按钮样式 */
+.voice-btn {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background-color: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  color: #6b7280;
+  transition: all 0.2s ease;
+  z-index: 2;
+}
+
+.voice-btn:hover {
+  background-color: #e5e7eb;
+  color: #374151;
+  border-color: #d1d5db;
+  transform: translateY(-50%) scale(1.05);
+}
+
+.voice-btn.recording {
+  background-color: #ef4444;
+  border-color: #dc2626;
+  color: white;
+  animation: recording-pulse 1.5s infinite ease-in-out;
+}
+
+.voice-btn.voice-loading {
+  background-color: #fbbf24;
+  border-color: #f59e0b;
+  color: white;
+}
+
+.voice-btn:disabled {
+  background-color: #f9fafb;
+  color: #9ca3af;
+  border-color: #e5e7eb;
+  cursor: not-allowed;
+  transform: translateY(-50%);
+}
+
+@keyframes recording-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+    transform: translateY(-50%) scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0.1);
+    transform: translateY(-50%) scale(1.05);
+  }
+}
+
 /* 输入框样式 */
 .message-input {
   border-radius: 12px;
   border: 1px solid #e5e7eb;
   padding: 14px 20px;
+  padding-left: 72px; /* 给录音按钮留出空间 */
   padding-right: 72px;
   min-height: 56px;
   max-height: 200px; /* 限制最大高度 */
@@ -1018,7 +1186,14 @@ onMounted(() => {
 
   .message-input {
     min-height: 52px;
+    padding-left: 64px; /* 移动端录音按钮空间 */
     padding-right: 64px;
+  }
+
+  .voice-btn {
+    width: 44px;
+    height: 44px;
+    left: 10px;
   }
 }
 

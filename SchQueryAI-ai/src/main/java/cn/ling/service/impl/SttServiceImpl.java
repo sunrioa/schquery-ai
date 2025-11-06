@@ -208,23 +208,17 @@ public class SttServiceImpl implements SttService {
                 return "错误：" + serverResult;
             }
 
-            // 处理空结果场景
-            if (StringUtils.hasText(serverResult)) {
-                log.debug("获取到完整识别结果，音频标识：{}，结果长度：{}字符", wavName, serverResult.length());
-                return serverResult;
-            } else {
-                log.warn("模型返回空结果，音频标识：{}", wavName);
-                return "错误：服务器返回空结果";
-            }
+            return serverResult;
 
         } catch (URISyntaxException e) {
             // 地址格式错误：如IP/端口格式非法，属于配置问题，无需重试
             log.error("WebSocket模型地址格式错误，地址：{}，音频标识：{}", serverIpPort, wavName, e);
-            return "错误：服务器地址格式错误 - " + e.getMessage();
+            throw CustomException.error("错误：服务器地址格式错误 - " + e.getMessage());
         } catch (TimeoutException e) {
             // 连接超时：模型服务未响应，可能是网络问题或模型过载
             log.error("WebSocket连接模型超时，地址：{}，超时时间：{}ms，音频标识：{}", serverIpPort, CONNECT_TIMEOUT, wavName, e);
-            return "错误：连接服务器超时（" + CONNECT_TIMEOUT + "ms）";
+            throw CustomException.error("错误：连接服务器超时（" + CONNECT_TIMEOUT + "ms）");
+
         } finally {
             // 强制关闭WebSocket会话：无论成功/失败，均释放连接资源，避免内存泄漏
             if (session != null && session.isOpen()) {

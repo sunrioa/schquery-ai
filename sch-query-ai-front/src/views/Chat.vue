@@ -107,18 +107,31 @@
         </el-main>
 
         <el-footer class="chat-input" v-if="currentSession">
-          <div class="input-container">
-            <el-button
-                :class="['voice-btn', { 'recording': isRecording, 'voice-loading': voiceLoading }]"
-                @click="toggleRecording"
-                :disabled="voiceLoading"
-                :title="isRecording ? '停止录音' : '开始录音'"
-            >
-              <el-icon>
-                <Microphone v-if="!isRecording" />
-                <VideoPlay v-else />
-              </el-icon>
-            </el-button>
+                  <div class="input-container">
+            <!-- 录音按钮专用容器 -->
+            <div class="voice-btn-container">
+              <el-button
+                  :class="['voice-btn', { 'recording': isRecording, 'voice-loading': voiceLoading }]"
+                  @click="toggleRecording"
+                  :disabled="voiceLoading"
+                  :title="isRecording ? '点击停止录音' : '点击开始录音'"
+              >
+                <el-icon>
+                  <Microphone />
+                </el-icon>
+              </el-button>
+            </div>
+            <!-- 实时转录显示区域 - 放在输入框内部 -->
+            <div v-if="isRecording && realTimeTranscript" class="transcript-input-display">
+              <div class="transcript-input-header">
+                <el-icon class="transcript-icon"><Microphone /></el-icon>
+                <span class="transcript-label">实时转录：</span>
+              </div>
+              <div class="transcript-input-content">
+                {{ realTimeTranscript }}
+              </div>
+            </div>
+
             <el-input
                 v-model="userMessage"
                 type="textarea"
@@ -127,8 +140,9 @@
             @keydown.enter.prevent="handleEnterKey"
             :disabled="isTyping"
             resize="none"
-            class="message-input"
-            />
+                class="message-input"
+                :class="{ 'with-transcript': isRecording && realTimeTranscript }"
+                />
             <el-button
                 type="primary"
                 @click="sendMessage"
@@ -166,10 +180,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElEmpty, ElAvatar, ElDropdown, ElDropdownMenu, ElDropdownItem, ElButton, ElInput, ElDialog, ElForm, ElFormItem, ElIcon } from 'element-plus'
-import { Plus, Setting, Edit, Delete, UserFilled, Service, Upload, Microphone, VideoPlay } from '@element-plus/icons-vue'
+import { Plus, Setting, Edit, Delete, UserFilled, Service, Upload, Microphone, Stop, Close } from '@element-plus/icons-vue'
 import { chatApi } from '../api/chat'
 import { marked } from 'marked'
 import 'highlight.js/styles/github.css'
@@ -194,6 +208,12 @@ const isRecording = ref(false)
 const voiceLoading = ref(false)
 const mediaRecorder = ref(null)
 const audioChunks = ref([])
+const audioContext = ref(null)
+const mediaStream = ref(null)
+const processor = ref(null)
+const recordingTimer = ref(null)
+const chunkBuffer = ref(new Int16Array(0))
+const realTimeTranscript = ref('')
 
 // 检查登录状态，返回是否已登录
 const checkToken = () => {
@@ -468,58 +488,213 @@ const toggleRecording = async () => {
   }
 }
 
-// 开始录音
+// 开始录音（实时流式）
 const startRecording = async () => {
+  if (isRecording.value) return
+
   try {
     // 请求麦克风权限
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    })
 
-    // 创建MediaRecorder实例
-    const recorder = new MediaRecorder(stream)
-    mediaRecorder.value = recorder
-    audioChunks.value = []
+    mediaStream.value = stream
 
-    // 监听数据可用事件
-    recorder.ondataavailable = (event) => {
-      audioChunks.value.push(event.data)
+    // 尝试使用Web Audio API进行实时处理
+    try {
+      await startWebAudioRecording(stream)
+    } catch (webAudioError) {
+      console.warn('Web Audio API 失败，回退到 MediaRecorder API:', webAudioError)
+      // 回退到MediaRecorder方案
+      await startMediaRecorderRecording(stream)
     }
 
-    // 监听录音结束事件
-    recorder.onstop = async () => {
-      const audioBlob = new Blob(audioChunks.value, { type: 'audio/wav' })
-      await uploadAudioFile(audioBlob)
-
-      // 关闭所有音频轨道
-      stream.getTracks().forEach(track => track.stop())
-    }
-
-    // 开始录音
-    recorder.start()
     isRecording.value = true
-
     ElMessage.success('开始录音')
+
   } catch (error) {
     console.error('录音启动失败:', error)
-    ElMessage.error('无法访问麦克风，请检查权限设置')
+    if (error.name === 'NotAllowedError') {
+      ElMessage.error('麦克风权限被拒绝，请在浏览器设置中允许麦克风访问')
+    } else if (error.name === 'NotFoundError') {
+      ElMessage.error('未找到麦克风设备')
+    } else {
+      ElMessage.error('无法访问麦克风，请检查权限设置')
+    }
+    cleanupRecording()
   }
+}
+
+// Web Audio API 录音方案
+const startWebAudioRecording = async (stream) => {
+  // 创建音频上下文（不强制设置采样率，使用默认值）
+  audioContext.value = new (window.AudioContext || window.webkitAudioContext)()
+
+  // 等待音频上下文启动
+  if (audioContext.value.state === 'suspended') {
+    await audioContext.value.resume()
+  }
+
+  const source = audioContext.value.createMediaStreamSource(stream)
+  processor.value = audioContext.value.createScriptProcessor(4096, 1, 1)
+
+  // 重置状态
+  chunkBuffer.value = new Int16Array(0)
+  realTimeTranscript.value = ''
+  const actualSampleRate = audioContext.value.sampleRate
+
+  // 音频处理回调
+  processor.value.onaudioprocess = (event) => {
+    const inputData = event.inputBuffer.getChannelData(0)
+
+    // 转换为16位PCM格式
+    const pcmData = new Int16Array(inputData.length)
+    for (let i = 0; i < inputData.length; i++) {
+      pcmData[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768))
+    }
+
+    // 累积音频数据
+    const newBuffer = new Int16Array(chunkBuffer.value.length + pcmData.length)
+    newBuffer.set(chunkBuffer.value)
+    newBuffer.set(pcmData, chunkBuffer.value.length)
+    chunkBuffer.value = newBuffer
+  }
+
+  source.connect(processor.value)
+  processor.value.connect(audioContext.value.destination)
+
+  // 启动定时器，每1秒发送一次音频分片
+  recordingTimer.value = setInterval(() => {
+    if (chunkBuffer.value.length > 0) {
+      sendAudioChunk(chunkBuffer.value, actualSampleRate)
+      chunkBuffer.value = new Int16Array(0)
+    }
+  }, 1000)
+}
+
+// MediaRecorder 录音方案（备用）
+const startMediaRecorderRecording = async (stream) => {
+  const recorder = new MediaRecorder(stream, {
+    mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
+  })
+
+  mediaRecorder.value = recorder
+  audioChunks.value = []
+  realTimeTranscript.value = ''
+
+  // 每1秒收集一次数据
+  recorder.ondataavailable = (event) => {
+    if (event.data.size > 0) {
+      audioChunks.value.push(event.data)
+    }
+  }
+
+  // 启动定时器，每1秒发送一次音频分片
+  recordingTimer.value = setInterval(async () => {
+    if (audioChunks.value.length > 0) {
+      await sendMediaRecorderChunk()
+    }
+  }, 1000)
+
+  recorder.start(1000) // 每1秒触发一次dataavailable事件
 }
 
 // 停止录音
-const stopRecording = () => {
-  if (mediaRecorder.value && mediaRecorder.value.state !== 'inactive') {
-    mediaRecorder.value.stop()
-    isRecording.value = false
-    ElMessage.info('录音结束，正在识别...')
+const stopRecording = async () => {
+  if (!isRecording.value) return
+
+  console.log('立即停止录音...')
+
+  // 立即设置录音状态为false，确保UI立即更新
+  isRecording.value = false
+
+  // 发送最后的音频片段（Web Audio API方案）
+  if (chunkBuffer.value.length > 0 && audioContext.value) {
+    await sendAudioChunk(chunkBuffer.value, audioContext.value.sampleRate)
+    chunkBuffer.value = new Int16Array(0)
   }
+
+  // 发送最后的音频片段（MediaRecorder方案）
+  if (audioChunks.value.length > 0) {
+    await sendMediaRecorderChunk()
+    audioChunks.value = []
+  }
+
+  // 立即处理转录文本
+  if (realTimeTranscript.value && realTimeTranscript.value.trim()) {
+    const transcriptText = realTimeTranscript.value.trim()
+    realTimeTranscript.value = ''
+    // 立即追加到输入框
+    userMessage.value += (userMessage.value && !userMessage.value.endsWith(' ') ? ' ' : '') + transcriptText
+    ElMessage.success(`语音识别完成: ${transcriptText}`)
+  }
+
+  // 立即清理录音资源
+  cleanupRecording()
+
+  console.log('录音已立即停止')
 }
 
-// 上传音频文件到后端
-const uploadAudioFile = async (audioBlob) => {
+// 强制停止录音（紧急情况使用）
+const forceStopRecording = () => {
+  console.log('强制停止录音...')
+
+  // 立即清理所有资源
+  cleanupRecording()
+  isRecording.value = false
+  realTimeTranscript.value = ''
+
+  ElMessage.warning('录音已强制停止')
+}
+
+// 清理录音资源
+const cleanupRecording = () => {
+  if (recordingTimer.value) {
+    clearInterval(recordingTimer.value)
+    recordingTimer.value = null
+  }
+
+  if (processor.value) {
+    processor.value.disconnect()
+    processor.value = null
+  }
+
+  if (audioContext.value) {
+    audioContext.value.close()
+    audioContext.value = null
+  }
+
+  if (mediaRecorder.value && mediaRecorder.value.state !== 'inactive') {
+    mediaRecorder.value.stop()
+    mediaRecorder.value = null
+  }
+
+  if (mediaStream.value) {
+    mediaStream.value.getTracks().forEach(track => track.stop())
+    mediaStream.value = null
+  }
+
+  // 重置状态
+  chunkBuffer.value = new Int16Array(0)
+  audioChunks.value = []
+}
+
+// 发送音频分片到后端（Web Audio API方案）
+const sendAudioChunk = async (audioData, sampleRate) => {
   try {
-    voiceLoading.value = true
+    // 检查录音状态，如果已经停止则不发送
+    if (!isRecording.value) return
+
+    // 将Int16Array转换为WAV格式的Blob
+    const wavBlob = createWavBlob(audioData, sampleRate)
 
     const formData = new FormData()
-    formData.append('radioFile', audioBlob, 'recording.wav')
+    formData.append('radioFile', wavBlob, 'chunk.wav')
 
     const response = await fetch('http://localhost:8080/user/uploadAudioFile', {
       method: 'POST',
@@ -529,32 +704,128 @@ const uploadAudioFile = async (audioBlob) => {
       body: formData
     })
 
-    if (!response.ok) {
-      throw new Error('音频上传失败')
-    }
-
-    const result = await response.json()
-
-    if (result.code === 200 && result.data) {
-      // 将识别的文字追加到输入框
-      userMessage.value += (userMessage.value ? ' ' : '') + result.data
-      ElMessage.success('语音识别完成')
+    if (response.ok) {
+      const result = await response.json()
+      if (result.code === 200 && result.data && result.data.trim()) {
+        // 追加新的转录内容到现有的转录文本
+        const newTranscript = result.data.trim()
+        if (realTimeTranscript.value) {
+          // 如果已有内容，添加空格后追加新内容
+          realTimeTranscript.value += ' ' + newTranscript
+        } else {
+          // 如果没有内容，直接设置
+          realTimeTranscript.value = newTranscript
+        }
+      } else {
+        // 服务器返回空结果或无效数据，不更新转录文本
+        console.warn('服务器返回空结果或无效数据:', result)
+      }
     } else {
-      ElMessage.error(result.msg || '语音识别失败')
+      console.warn('服务器响应错误:', response.status, response.statusText)
     }
   } catch (error) {
-    console.error('音频上传失败:', error)
-    ElMessage.error('语音识别失败，请重试')
-  } finally {
-    voiceLoading.value = false
+    console.error('音频分片发送失败:', error)
+    // 不显示错误消息，避免频繁打扰用户
   }
 }
+
+// 发送音频分片到后端（MediaRecorder方案）
+const sendMediaRecorderChunk = async () => {
+  try {
+    if (audioChunks.value.length === 0 || !isRecording.value) return
+
+    // 合并所有音频块
+    const combinedBlob = new Blob(audioChunks.value, {
+      type: mediaRecorder.value.mimeType
+    })
+
+    const formData = new FormData()
+    formData.append('radioFile', combinedBlob, 'chunk.webm')
+
+    const response = await fetch('http://localhost:8080/user/uploadAudioFile', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: formData
+    })
+
+    if (response.ok) {
+      const result = await response.json()
+      if (result.code === 200 && result.data && result.data.trim()) {
+        // 追加新的转录内容到现有的转录文本
+        const newTranscript = result.data.trim()
+        if (realTimeTranscript.value) {
+          // 如果已有内容，添加空格后追加新内容
+          realTimeTranscript.value += ' ' + newTranscript
+        } else {
+          // 如果没有内容，直接设置
+          realTimeTranscript.value = newTranscript
+        }
+      } else {
+        // 服务器返回空结果或无效数据，不更新转录文本
+        console.warn('服务器返回空结果或无效数据:', result)
+      }
+    } else {
+      console.warn('服务器响应错误:', response.status, response.statusText)
+    }
+
+    // 清空已发送的音频块
+    audioChunks.value = []
+  } catch (error) {
+    console.error('MediaRecorder音频分片发送失败:', error)
+    // 不显示错误消息，避免频繁打扰用户
+  }
+}
+
+// 创建WAV格式的Blob
+const createWavBlob = (audioData, sampleRate) => {
+  const length = audioData.length
+  const buffer = new ArrayBuffer(44 + length * 2)
+  const view = new DataView(buffer)
+
+  // WAV文件头
+  const writeString = (offset, string) => {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i))
+    }
+  }
+
+  writeString(0, 'RIFF')
+  view.setUint32(4, 36 + length * 2, true)
+  writeString(8, 'WAVE')
+  writeString(12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true)
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * 2, true)
+  view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true)
+  writeString(36, 'data')
+  view.setUint32(40, length * 2, true)
+
+  // 写入PCM数据
+  let offset = 44
+  for (let i = 0; i < length; i++) {
+    view.setInt16(offset, audioData[i], true)
+    offset += 2
+  }
+
+  return new Blob([buffer], { type: 'audio/wav' })
+}
+
 
 // 挂载时加载
 onMounted(() => {
   if (checkToken()) {
     loadSessions()
   }
+})
+
+// 组件卸载时清理资源
+onUnmounted(() => {
+  cleanupRecording()
 })
 </script>
 
@@ -907,12 +1178,105 @@ onMounted(() => {
   text-align: right;
 }
 
+/* 实时转录显示区域 */
+.transcript-display {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin: 0 0 12px 80px; /* 左边距留出录音按钮和发送按钮的空间 */
+  max-width: calc(100% - 96px); /* 减去左边距 */
+  position: relative;
+  z-index: 0; /* 设置为最低层级，确保不会遮挡按钮 */
+  animation: none; /* 移除动画 */
+}
+
+.transcript-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.transcript-icon {
+  color: #3b82f6;
+  font-size: 16px;
+  margin-right: 8px;
+}
+
+.transcript-label {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+  flex: 1;
+}
+
+.transcript-hint {
+  font-size: 12px;
+  color: #94a3b8;
+  font-style: italic;
+  flex: 1;
+}
+
+.force-stop-btn {
+  color: #ef4444;
+  font-size: 14px;
+  padding: 2px 6px;
+  height: auto;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  margin-left: 8px;
+  z-index: 1004; /* 最高层级，确保强制停止按钮始终可点击 */
+  position: relative; /* 确保层级生效 */
+  background-color: rgba(239, 68, 68, 0.1); /* 添加背景增强可见性 */
+}
+
+.force-stop-btn:hover {
+  background-color: #ef4444;
+  color: white;
+}
+
+/* 强制停止按钮专用容器 */
+.force-stop-container {
+  position: relative;
+  z-index: 1003; /* 确保强制停止按钮在最上层 */
+  isolation: isolate; /* 创建独立的堆叠上下文 */
+}
+
+/* 全局停止按钮容器（录音时使用） */
+.global-stop-container {
+  position: relative;
+  z-index: 100; /* 适当的层级，确保转录区域可见但不会过度遮挡 */
+  isolation: isolate; /* 创建独立的堆叠上下文 */
+}
+
+.transcript-content {
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.5;
+  min-height: 20px;
+  padding: 8px 0;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* 输入区域 - 固定高度 */
 .chat-input {
   background-color: #ffffff;
   border-top: 1px solid #e5e7eb;
   padding: 16px 24px;
-  height: 88px; /* 固定高度 */
+  min-height: 88px; /* 最小高度，会根据转录区域扩展 */
   flex-shrink: 0; /* 禁止收缩 */
   box-sizing: border-box;
   box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.03);
@@ -927,46 +1291,76 @@ onMounted(() => {
   height: 100%; /* 继承输入区高度 */
   display: flex;
   align-items: center; /* 垂直居中 */
+  isolation: isolate; /* 创建新的堆叠上下文 */
+  overflow: visible; /* 确保按钮不被裁剪 */
+  z-index: 10; /* 为容器设置基础层级 */
+}
+
+/* 录音按钮专用容器 */
+.voice-btn-container {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 9999; /* 设置最高层级 */
+  pointer-events: none;
 }
 
 /* 录音按钮样式 */
 .voice-btn {
-  position: absolute;
+  position: relative;
   left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 48px;
-  height: 48px;
+  width: 48px !important;
+  height: 48px !important;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
   background-color: #f3f4f6;
   border: 1px solid #e5e7eb;
   color: #6b7280;
-  transition: all 0.2s ease;
-  z-index: 2;
+  z-index: 9999;
+  user-select: none;
+  cursor: pointer;
+  outline: none;
+  pointer-events: auto;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.voice-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+/* 确保图标正确显示 */
+.voice-btn .el-icon {
+  font-size: 18px;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
 .voice-btn:hover {
   background-color: #e5e7eb;
   color: #374151;
   border-color: #d1d5db;
-  transform: translateY(-50%) scale(1.05);
 }
 
 .voice-btn.recording {
-  background-color: #ef4444;
-  border-color: #dc2626;
-  color: white;
-  animation: recording-pulse 1.5s infinite ease-in-out;
+  background-color: #ef4444 !important;
+  border-color: #dc2626 !important;
+  color: white !important;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4) !important;
 }
 
 .voice-btn.voice-loading {
   background-color: #fbbf24;
   border-color: #f59e0b;
   color: white;
+  display: flex !important; /* 强制显示 */
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 .voice-btn:disabled {
@@ -974,19 +1368,45 @@ onMounted(() => {
   color: #9ca3af;
   border-color: #e5e7eb;
   cursor: not-allowed;
-  transform: translateY(-50%);
+  display: flex !important; /* 强制显示 */
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
-@keyframes recording-pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
-    transform: translateY(-50%) scale(1);
-  }
-  50% {
-    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0.1);
-    transform: translateY(-50%) scale(1.05);
-  }
+/* 状态文字样式已移除，现在只使用图标 */
+
+/* 脉冲动画已移除，避免层级问题 */
+
+/* 输入框内部的转录显示区域 */
+.transcript-input-display {
+  position: absolute;
+  top: 8px;
+  left: 72px;
+  right: 72px;
+  background-color: #f0f9ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 8px 12px;
+  z-index: 5;
+  font-size: 13px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
+
+.transcript-input-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.transcript-input-content {
+  color: #374151;
+  line-height: 1.4;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+/* 强制停止按钮样式已移除，现在使用主录音按钮 */
 
 /* 输入框样式 */
 .message-input {
@@ -1000,9 +1420,15 @@ onMounted(() => {
   box-sizing: border-box;
   font-size: 14px;
   line-height: 1.6;
-  transition: all 0.2s ease;
   resize: none;
   flex-grow: 1; /* 占满容器宽度 */
+  position: relative; /* 确保输入框不会影响按钮定位 */
+  z-index: 0; /* 降低输入框层级 */
+}
+
+/* 有转录时调整输入框样式 */
+.message-input.with-transcript {
+  padding-top: 80px; /* 为转录区域留出空间 */
 }
 
 .message-input::placeholder {
@@ -1039,6 +1465,7 @@ onMounted(() => {
   border: none;
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
   transition: all 0.2s ease;
+  z-index: 50; /* 提高发送按钮的层级 */
 }
 
 .send-btn:hover {
@@ -1164,8 +1591,22 @@ onMounted(() => {
   }
 
   .chat-input {
-    height: 80px; /* 移动端输入区高度 */
+    min-height: 80px; /* 移动端输入区高度 */
     padding: 12px 16px;
+  }
+
+  .transcript-display {
+    padding: 10px 12px;
+    margin: 0 0 10px 70px; /* 移动端左边距稍微小一些 */
+    max-width: calc(100% - 84px);
+  }
+
+  .transcript-content {
+    font-size: 13px;
+  }
+
+  .transcript-hint {
+    font-size: 11px;
   }
 
   .message-content {
@@ -1191,9 +1632,19 @@ onMounted(() => {
   }
 
   .voice-btn {
-    width: 44px;
     height: 44px;
     left: 10px;
+    z-index: 10; /* 确保移动端按钮层级正确 */
+    min-width: 44px; /* 移动端最小宽度 */
+    padding: 0 8px !important; /* 移动端内边距稍小 */
+  }
+
+  .voice-btn.recording {
+    padding: 0 12px !important; /* 移动端录音状态内边距 */
+  }
+
+  .voice-btn-text {
+    font-size: 13px; /* 移动端文字稍小 */
   }
 }
 

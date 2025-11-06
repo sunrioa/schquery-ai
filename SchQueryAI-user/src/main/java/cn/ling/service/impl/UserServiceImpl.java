@@ -1,20 +1,24 @@
 package cn.ling.service.impl;
 
-import cn.ling.domain.Result;
+import cn.ling.Result;
 import cn.ling.domain.dto.UserDTO;
-import cn.ling.email.EmailUtils;
-import cn.ling.encode.BCryptUtils;
+import cn.ling.service.AIService;
+import cn.ling.utils.EmailUtils;
+import cn.ling.utils.BCryptUtils;
 import cn.ling.exception.CustomException;
-import cn.ling.jwt.JwtUtils;
-import cn.ling.random.NumberUtils;
+import cn.ling.utils.JwtUtils;
+import cn.ling.utils.NumberUtils;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import cn.ling.domain.pojo.User;
 import cn.ling.service.UserService;
 import cn.ling.mapper.UserMapper;
 import jakarta.annotation.Resource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
 import java.util.Date;
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
@@ -184,14 +188,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             throw CustomException.error("密码错误");
         }
 
-        // 登录成功，清空密码信息后返回
-        user.setPassWord(null);
-
         String token = JwtUtils.generateToken("用户信息", new HashMap<>(){
             {
                 put("userId", user.getId());
                 put("userName", user.getUserName());
-                put("role", "user");
+                put("role", user.getRole());
             }
         });
 
@@ -335,5 +336,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         } catch (Exception e) {
             throw CustomException.error("验证码发送失败：" + e.getMessage());
         }
+    }
+
+    @Autowired
+    private AIService aiService;
+
+    @Override
+    public Result<String> uploadAudioFile(MultipartFile radioFile) {
+        return aiService.audioToText(radioFile);
     }
 }

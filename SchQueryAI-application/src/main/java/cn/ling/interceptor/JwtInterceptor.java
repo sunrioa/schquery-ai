@@ -1,8 +1,8 @@
 package cn.ling.interceptor;
 
-import cn.ling.context.ContextUtils;
+import cn.ling.utils.ContextUtils;
 import cn.ling.exception.CustomException;
-import cn.ling.jwt.JwtUtils;
+import cn.ling.utils.JwtUtils;
 import cn.ling.role.UserInfo;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

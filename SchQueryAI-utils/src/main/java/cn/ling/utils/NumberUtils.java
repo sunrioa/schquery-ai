@@ -1,4 +1,4 @@
-package cn.ling.random;
+package cn.ling.utils;
 
 import org.springframework.stereotype.Component;
 

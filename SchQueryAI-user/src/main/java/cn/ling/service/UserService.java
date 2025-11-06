@@ -1,9 +1,10 @@
 package cn.ling.service;
 
-import cn.ling.domain.Result;
+import cn.ling.Result;
 import cn.ling.domain.pojo.User;
 import cn.ling.domain.dto.UserDTO;
 import com.baomidou.mybatisplus.extension.service.IService;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
 * @author Administrator
@@ -23,4 +24,6 @@ public interface UserService extends IService<User> {
     Result<String> findPassword(UserDTO userDTO);
 
     Result<String> sendFindPasswordCode(UserDTO userDTO);
+
+    Result<String> uploadAudioFile(MultipartFile radioFile);
 }

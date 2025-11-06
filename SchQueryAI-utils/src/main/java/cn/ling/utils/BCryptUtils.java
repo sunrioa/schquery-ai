@@ -1,4 +1,4 @@
-package cn.ling.encode;
+package cn.ling.utils;
 
 import org.mindrot.jbcrypt.BCrypt;
 

@@ -1,6 +1,6 @@
 package cn.ling.service;
 
-import cn.ling.domain.Result;
+import cn.ling.Result;
 import cn.ling.domain.dto.ChatSessionDTO;
 import cn.ling.domain.pojo.ChatSession;
 import cn.ling.domain.vo.ChatSessionVO;

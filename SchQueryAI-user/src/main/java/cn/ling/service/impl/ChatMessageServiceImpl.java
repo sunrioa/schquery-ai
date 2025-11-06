@@ -1,21 +1,17 @@
 package cn.ling.service.impl;
 
-import cn.ling.context.ContextUtils;
-import cn.ling.domain.Result;
+import cn.ling.Result;
 import cn.ling.domain.dto.ChatMessageDTO;
 import cn.ling.domain.pojo.ChatMessage;
 import cn.ling.domain.vo.ChatMessageVO;
 import cn.ling.mapper.ChatMessageMapper;
 import cn.ling.service.ChatMessageService;
 import cn.ling.service.ChatSessionService;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
-
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -38,11 +34,10 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
     @Override
     public Result<List<ChatMessageVO>> getMessage(Long sessionId) {
         // Validate session exists
-        LambdaQueryWrapper<ChatMessage> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(ChatMessage::getSessionId, sessionId)
-                   .orderByAsc(ChatMessage::getCreatedAt); // Order by creation time
-
-        List<ChatMessage> messages = list(queryWrapper);
+        List<ChatMessage> messages = lambdaQuery()
+                .eq(ChatMessage::getSessionId, sessionId)
+                .orderByAsc(ChatMessage::getCreatedAt)
+                .list();
 
         if (messages != null && !messages.isEmpty()) {
             // Convert to VO objects
@@ -66,8 +61,6 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
     @Override
     public Flux<String> sendMessage(ChatMessageDTO chatMessageDTO) {
         try {
-            // Get current user ID from thread local
-            Long userId = ContextUtils.getUserId();
 
             // Save user message first
             ChatMessage userMessage = new ChatMessage();
@@ -91,14 +84,13 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
             // 用于累积完整的AI回复
             StringBuilder fullResponse = new StringBuilder();
 
+            // 累积响应内容
+            // 处理错误
             return aiResponseStream
-                    .doOnNext(chunk -> {
-                        // 累积响应内容
-                        fullResponse.append(chunk);
-                    })
+                    .doOnNext(fullResponse::append)
                     .doOnComplete(() -> {
                         // 流式传输完成时，保存完整的AI回复到数据库
-                        if (fullResponse.length() > 0) {
+                        if (!fullResponse.isEmpty()) {
                             ChatMessage aiMessage = new ChatMessage();
                             aiMessage.setSessionId(chatMessageDTO.getSessionId());
                             aiMessage.setMessageType(1); // AI message
@@ -107,10 +99,7 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
                             this.save(aiMessage);
                         }
                     })
-                    .doOnError(error -> {
-                        // 处理错误
-                        error.printStackTrace();
-                    });
+                    .doOnError(Throwable::printStackTrace);
         } catch (Exception e) {
             return Flux.error(new RuntimeException("消息发送失败：" + e.getMessage()));
         }

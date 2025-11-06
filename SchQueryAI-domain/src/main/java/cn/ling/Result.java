@@ -1,4 +1,4 @@
-package cn.ling.domain;
+package cn.ling;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;

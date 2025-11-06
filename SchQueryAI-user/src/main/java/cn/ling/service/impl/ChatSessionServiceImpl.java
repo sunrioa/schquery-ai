@@ -1,13 +1,12 @@
 package cn.ling.service.impl;
 
-import cn.ling.context.ContextUtils;
-import cn.ling.domain.Result;
+import cn.ling.utils.ContextUtils;
+import cn.ling.Result;
 import cn.ling.domain.dto.ChatSessionDTO;
 import cn.ling.domain.pojo.ChatSession;
 import cn.ling.domain.vo.ChatSessionVO;
 import cn.ling.mapper.ChatSessionMapper;
 import cn.ling.service.ChatSessionService;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.stereotype.Service;
 
@@ -110,12 +109,10 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         Long userId = ContextUtils.getUserId();
 
         // Query all active sessions for current user
-        LambdaQueryWrapper<ChatSession> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(ChatSession::getUserId, userId)
-                   .eq(ChatSession::getStatus, 1) // Active status only
-                   .orderByDesc(ChatSession::getLastMessageAt); // Order by last message time
-
-        List<ChatSession> sessions = list(queryWrapper);
+        List<ChatSession> sessions = lambdaQuery()
+                .eq(ChatSession::getUserId, userId)
+                .eq(ChatSession::getStatus, 1) // Active status only
+                .orderByDesc(ChatSession::getLastMessageAt).list();
 
         if (sessions != null && !sessions.isEmpty()) {
             // Convert to VO objects

@@ -1,4 +1,4 @@
-package cn.ling.jwt;
+package cn.ling.utils;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;

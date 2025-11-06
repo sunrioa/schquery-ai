@@ -1,12 +1,13 @@
 package cn.ling.controller;
 
-import cn.ling.domain.Result;
+import cn.ling.Result;
 import cn.ling.domain.pojo.User;
 import cn.ling.domain.dto.UserDTO;
 import cn.ling.service.UserService;
 import jakarta.annotation.Resource;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/user")
@@ -51,6 +52,11 @@ public class UserController {
     @PostMapping("/sendFindPasswordCode")
     public Result<String> sendFindPasswordCode(@RequestBody UserDTO userDTO){
         return userService.sendFindPasswordCode(userDTO);
+    }
+
+    @PostMapping("/uploadAudioFile")
+    public Result<String> uploadAudioFile(@RequestBody MultipartFile radioFile){
+        return userService.uploadAudioFile(radioFile);
     }
 
 }

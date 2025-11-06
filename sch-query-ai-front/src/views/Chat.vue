@@ -214,6 +214,7 @@ const processor = ref(null)
 const recordingTimer = ref(null)
 const chunkBuffer = ref(new Int16Array(0))
 const realTimeTranscript = ref('')
+const streamingSessionToken = ref('') // 流式识别会话令牌
 
 // 检查登录状态，返回是否已登录
 const checkToken = () => {
@@ -493,7 +494,30 @@ const startRecording = async () => {
   if (isRecording.value) return
 
   try {
-    // 请求麦克风权限
+    // 1. 启动流式识别会话
+    const sessionId = currentSessionId.value || 'session_' + Date.now()
+    const response = await fetch('http://localhost:8080/user/streaming/start', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ sessionId: sessionId })
+    })
+
+    if (!response.ok) {
+      throw new Error('启动语音识别会话失败')
+    }
+
+    const result = await response.json()
+    if (result.code !== 200) {
+      throw new Error(result.msg || '启动语音识别会话失败')
+    }
+
+    streamingSessionToken.value = result.data
+    console.log('流式识别会话已启动，令牌：', streamingSessionToken.value)
+
+    // 2. 请求麦克风权限
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
@@ -505,12 +529,11 @@ const startRecording = async () => {
 
     mediaStream.value = stream
 
-    // 尝试使用Web Audio API进行实时处理
+    // 3. 开始音频录制和处理
     try {
       await startWebAudioRecording(stream)
     } catch (webAudioError) {
       console.warn('Web Audio API 失败，回退到 MediaRecorder API:', webAudioError)
-      // 回退到MediaRecorder方案
       await startMediaRecorderRecording(stream)
     }
 
@@ -524,7 +547,7 @@ const startRecording = async () => {
     } else if (error.name === 'NotFoundError') {
       ElMessage.error('未找到麦克风设备')
     } else {
-      ElMessage.error('无法访问麦克风，请检查权限设置')
+      ElMessage.error(error.message || '无法访问麦克风，请检查权限设置')
     }
     cleanupRecording()
   }
@@ -571,7 +594,7 @@ const startWebAudioRecording = async (stream) => {
   // 启动定时器，每1秒发送一次音频分片
   recordingTimer.value = setInterval(() => {
     if (chunkBuffer.value.length > 0) {
-      sendAudioChunk(chunkBuffer.value, actualSampleRate)
+      sendStreamingAudioChunk(chunkBuffer.value, actualSampleRate)
       chunkBuffer.value = new Int16Array(0)
     }
   }, 1000)
@@ -597,7 +620,7 @@ const startMediaRecorderRecording = async (stream) => {
   // 启动定时器，每1秒发送一次音频分片
   recordingTimer.value = setInterval(async () => {
     if (audioChunks.value.length > 0) {
-      await sendMediaRecorderChunk()
+      await sendStreamingMediaRecorderChunk()
     }
   }, 1000)
 
@@ -608,46 +631,170 @@ const startMediaRecorderRecording = async (stream) => {
 const stopRecording = async () => {
   if (!isRecording.value) return
 
-  console.log('立即停止录音...')
+  console.log('停止录音...')
 
-  // 立即设置录音状态为false，确保UI立即更新
+  // 保存当前的转录文本，避免后续被覆盖
+  const currentTranscript = realTimeTranscript.value.trim()
+
+  // 立即设置录音状态为false，确保UI立即更新显示麦克风图标
   isRecording.value = false
+
+  // 停止定时器，不再发送新的音频分片
+  if (recordingTimer.value) {
+    clearInterval(recordingTimer.value)
+    recordingTimer.value = null
+  }
 
   // 发送最后的音频片段（Web Audio API方案）
   if (chunkBuffer.value.length > 0 && audioContext.value) {
-    await sendAudioChunk(chunkBuffer.value, audioContext.value.sampleRate)
+    await sendStreamingAudioChunk(chunkBuffer.value, audioContext.value.sampleRate)
     chunkBuffer.value = new Int16Array(0)
   }
 
   // 发送最后的音频片段（MediaRecorder方案）
   if (audioChunks.value.length > 0) {
-    await sendMediaRecorderChunk()
+    await sendStreamingMediaRecorderChunk()
     audioChunks.value = []
   }
 
-  // 立即处理转录文本
-  if (realTimeTranscript.value && realTimeTranscript.value.trim()) {
-    const transcriptText = realTimeTranscript.value.trim()
+  // 延迟1.5秒后停止流式识别会话，确保最后一个音频分片的识别结果返回
+  setTimeout(async () => {
+    try {
+      console.log('发送停止请求到后端...')
+
+      // 停止流式识别会话并获取最终结果
+      if (streamingSessionToken.value) {
+        const response = await fetch('http://localhost:8080/user/streaming/stop', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ sessionToken: streamingSessionToken.value })
+        })
+
+        if (response.ok) {
+          const result = await response.json()
+          if (result.code === 200 && result.data) {
+            const finalTranscript = result.data.trim()
+            if (finalTranscript) {
+              // 使用最终识别结果
+              if (userMessage.value && !userMessage.value.endsWith(' ')) {
+                userMessage.value += ' '
+              }
+              userMessage.value += finalTranscript
+              ElMessage.success(`语音识别完成: ${finalTranscript}`)
+            } else {
+              // 如果最终结果为空，使用保存的实时转录结果
+              if (currentTranscript) {
+                if (userMessage.value && !userMessage.value.endsWith(' ')) {
+                  userMessage.value += ' '
+                }
+                userMessage.value += currentTranscript
+                ElMessage.success(`语音识别完成: ${currentTranscript}`)
+              }
+            }
+          } else {
+            console.warn('停止语音识别会话失败:', response.status)
+            // 失败时也使用保存的实时转录结果
+            if (currentTranscript) {
+              if (userMessage.value && !userMessage.value.endsWith(' ')) {
+                userMessage.value += ' '
+              }
+              userMessage.value += currentTranscript
+              ElMessage.success(`语音识别完成: ${currentTranscript}`)
+            }
+          }
+        } else {
+          console.warn('停止语音识别会话失败:', response.status)
+          // 失败时也使用保存的实时转录结果
+          if (currentTranscript) {
+            if (userMessage.value && !userMessage.value.endsWith(' ')) {
+              userMessage.value += ' '
+            }
+            userMessage.value += currentTranscript
+            ElMessage.success(`语音识别完成: ${currentTranscript}`)
+          }
+        }
+      } else {
+        // 没有会话令牌时使用保存的实时转录结果
+        if (currentTranscript) {
+          if (userMessage.value && !userMessage.value.endsWith(' ')) {
+            userMessage.value += ' '
+          }
+          userMessage.value += currentTranscript
+          ElMessage.success(`语音识别完成: ${currentTranscript}`)
+        }
+      }
+
+    } catch (error) {
+      console.error('停止录音时发生错误:', error)
+      // 发生错误时仍然尝试使用保存的实时转录结果
+      if (currentTranscript) {
+        if (userMessage.value && !userMessage.value.endsWith(' ')) {
+          userMessage.value += ' '
+        }
+        userMessage.value += currentTranscript
+        ElMessage.success(`语音识别完成: ${currentTranscript}`)
+      }
+    }
+
+    // 最终清理状态
     realTimeTranscript.value = ''
-    // 立即追加到输入框
-    userMessage.value += (userMessage.value && !userMessage.value.endsWith(' ') ? ' ' : '') + transcriptText
-    ElMessage.success(`语音识别完成: ${transcriptText}`)
-  }
+    streamingSessionToken.value = ''
 
-  // 立即清理录音资源
-  cleanupRecording()
+    // 清理录音资源
+    cleanupRecording()
 
-  console.log('录音已立即停止')
+    console.log('录音处理完成')
+  }, 1500) // 延迟1.5秒发送停止请求
 }
 
 // 强制停止录音（紧急情况使用）
-const forceStopRecording = () => {
+const forceStopRecording = async () => {
   console.log('强制停止录音...')
+
+  // 立即停止UI状态
+  isRecording.value = false
+
+  // 停止定时器
+  if (recordingTimer.value) {
+    clearInterval(recordingTimer.value)
+    recordingTimer.value = null
+  }
+
+  // 保存当前转录文本
+  const currentTranscript = realTimeTranscript.value.trim()
+
+  try {
+    // 立即强制停止后端流式识别会话
+    if (streamingSessionToken.value) {
+      await fetch('http://localhost:8080/user/streaming/forceStop', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ sessionToken: streamingSessionToken.value })
+      })
+    }
+  } catch (error) {
+    console.warn('强制停止后端会话失败:', error)
+  }
+
+  // 如果有转录文本，添加到输入框
+  if (currentTranscript) {
+    if (userMessage.value && !userMessage.value.endsWith(' ')) {
+      userMessage.value += ' '
+    }
+    userMessage.value += currentTranscript
+    ElMessage.success(`语音识别已保存: ${currentTranscript}`)
+  }
 
   // 立即清理所有资源
   cleanupRecording()
-  isRecording.value = false
   realTimeTranscript.value = ''
+  streamingSessionToken.value = ''
 
   ElMessage.warning('录音已强制停止')
 }
@@ -684,19 +831,20 @@ const cleanupRecording = () => {
   audioChunks.value = []
 }
 
-// 发送音频分片到后端（Web Audio API方案）
-const sendAudioChunk = async (audioData, sampleRate) => {
+// 发送音频分片到后端（Web Audio API方案）- 流式识别
+const sendStreamingAudioChunk = async (audioData, sampleRate) => {
   try {
-    // 检查录音状态，如果已经停止则不发送
-    if (!isRecording.value) return
+    // 检查录音状态和会话令牌
+    if (!isRecording.value || !streamingSessionToken.value) return
 
     // 将Int16Array转换为WAV格式的Blob
     const wavBlob = createWavBlob(audioData, sampleRate)
 
     const formData = new FormData()
-    formData.append('radioFile', wavBlob, 'chunk.wav')
+    formData.append('audioFile', wavBlob, 'chunk.wav')
+    formData.append('sessionToken', streamingSessionToken.value)
 
-    const response = await fetch('http://localhost:8080/user/uploadAudioFile', {
+    const response = await fetch('http://localhost:8080/user/streaming/audio', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -707,32 +855,22 @@ const sendAudioChunk = async (audioData, sampleRate) => {
     if (response.ok) {
       const result = await response.json()
       if (result.code === 200 && result.data && result.data.trim()) {
-        // 追加新的转录内容到现有的转录文本
-        const newTranscript = result.data.trim()
-        if (realTimeTranscript.value) {
-          // 如果已有内容，添加空格后追加新内容
-          realTimeTranscript.value += ' ' + newTranscript
-        } else {
-          // 如果没有内容，直接设置
-          realTimeTranscript.value = newTranscript
-        }
-      } else {
-        // 服务器返回空结果或无效数据，不更新转录文本
-        console.warn('服务器返回空结果或无效数据:', result)
+        // 更新实时转录文本（服务器返回的是累积结果）
+        realTimeTranscript.value = result.data.trim()
       }
     } else {
       console.warn('服务器响应错误:', response.status, response.statusText)
     }
   } catch (error) {
-    console.error('音频分片发送失败:', error)
+    console.error('流式音频分片发送失败:', error)
     // 不显示错误消息，避免频繁打扰用户
   }
 }
 
-// 发送音频分片到后端（MediaRecorder方案）
-const sendMediaRecorderChunk = async () => {
+// 发送音频分片到后端（MediaRecorder方案）- 流式识别
+const sendStreamingMediaRecorderChunk = async () => {
   try {
-    if (audioChunks.value.length === 0 || !isRecording.value) return
+    if (audioChunks.value.length === 0 || !isRecording.value || !streamingSessionToken.value) return
 
     // 合并所有音频块
     const combinedBlob = new Blob(audioChunks.value, {
@@ -740,9 +878,10 @@ const sendMediaRecorderChunk = async () => {
     })
 
     const formData = new FormData()
-    formData.append('radioFile', combinedBlob, 'chunk.webm')
+    formData.append('audioFile', combinedBlob, 'chunk.webm')
+    formData.append('sessionToken', streamingSessionToken.value)
 
-    const response = await fetch('http://localhost:8080/user/uploadAudioFile', {
+    const response = await fetch('http://localhost:8080/user/streaming/audio', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -753,18 +892,8 @@ const sendMediaRecorderChunk = async () => {
     if (response.ok) {
       const result = await response.json()
       if (result.code === 200 && result.data && result.data.trim()) {
-        // 追加新的转录内容到现有的转录文本
-        const newTranscript = result.data.trim()
-        if (realTimeTranscript.value) {
-          // 如果已有内容，添加空格后追加新内容
-          realTimeTranscript.value += ' ' + newTranscript
-        } else {
-          // 如果没有内容，直接设置
-          realTimeTranscript.value = newTranscript
-        }
-      } else {
-        // 服务器返回空结果或无效数据，不更新转录文本
-        console.warn('服务器返回空结果或无效数据:', result)
+        // 更新实时转录文本（服务器返回的是累积结果）
+        realTimeTranscript.value = result.data.trim()
       }
     } else {
       console.warn('服务器响应错误:', response.status, response.statusText)
@@ -773,7 +902,7 @@ const sendMediaRecorderChunk = async () => {
     // 清空已发送的音频块
     audioChunks.value = []
   } catch (error) {
-    console.error('MediaRecorder音频分片发送失败:', error)
+    console.error('MediaRecorder流式音频分片发送失败:', error)
     // 不显示错误消息，避免频繁打扰用户
   }
 }

@@ -9,6 +9,8 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/user")
 @Validated
@@ -57,6 +59,34 @@ public class UserController {
     @PostMapping("/uploadAudioFile")
     public Result<String> uploadAudioFile(@RequestBody MultipartFile radioFile){
         return userService.uploadAudioFile(radioFile);
+    }
+
+    // 流式语音识别 - 开始会话
+    @PostMapping("/streaming/start")
+    public Result<String> startStreamingRecognition(@RequestBody Map<String, String> request) {
+        String sessionId = request.get("sessionId");
+        return userService.startStreamingRecognition(sessionId);
+    }
+
+    // 流式语音识别 - 发送音频
+    @PostMapping("/streaming/audio")
+    public Result<String> sendStreamingAudio(@RequestParam("sessionToken") String sessionToken,
+                                           @RequestParam("audioFile") MultipartFile audioFile) {
+        return userService.sendStreamingAudio(sessionToken, audioFile);
+    }
+
+    // 流式语音识别 - 停止会话
+    @PostMapping("/streaming/stop")
+    public Result<String> stopStreamingRecognition(@RequestBody Map<String, String> request) {
+        String sessionToken = request.get("sessionToken");
+        return userService.stopStreamingRecognition(sessionToken);
+    }
+
+    // 流式语音识别 - 强制停止
+    @PostMapping("/streaming/forceStop")
+    public Result<String> forceStopStreamingRecognition(@RequestBody Map<String, String> request) {
+        String sessionToken = request.get("sessionToken");
+        return userService.forceStopStreamingRecognition(sessionToken);
     }
 
 }

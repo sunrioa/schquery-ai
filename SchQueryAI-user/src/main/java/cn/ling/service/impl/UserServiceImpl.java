@@ -345,4 +345,24 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     public Result<String> uploadAudioFile(MultipartFile radioFile) {
         return aiService.audioToText(radioFile);
     }
+
+    @Override
+    public Result<String> startStreamingRecognition(String sessionId) {
+        return aiService.startStreamingRecognition(sessionId);
+    }
+
+    @Override
+    public Result<String> sendStreamingAudio(String sessionToken, MultipartFile audioFile) {
+        return aiService.sendStreamingAudio(sessionToken, audioFile);
+    }
+
+    @Override
+    public Result<String> stopStreamingRecognition(String sessionToken) {
+        return aiService.stopStreamingRecognition(sessionToken);
+    }
+
+    @Override
+    public Result<String> forceStopStreamingRecognition(String sessionToken) {
+        return aiService.forceStopStreamingRecognition(sessionToken);
+    }
 }

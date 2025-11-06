@@ -26,4 +26,13 @@ public interface UserService extends IService<User> {
     Result<String> sendFindPasswordCode(UserDTO userDTO);
 
     Result<String> uploadAudioFile(MultipartFile radioFile);
+
+    // 流式语音识别接口
+    Result<String> startStreamingRecognition(String sessionId);
+
+    Result<String> sendStreamingAudio(String sessionToken, MultipartFile audioFile);
+
+    Result<String> stopStreamingRecognition(String sessionToken);
+
+    Result<String> forceStopStreamingRecognition(String sessionToken);
 }

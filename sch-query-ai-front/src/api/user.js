@@ -29,5 +29,42 @@ export const userApi = {
   // 发送找回密码验证码
   sendFindPasswordCode(userData) {
     return request.post('/user/sendFindPasswordCode', userData)
+  },
+
+  // 上传头像
+  uploadAvatar(avatarFile) {
+    const formData = new FormData()
+    formData.append('avatarFile', avatarFile)
+    return request.post('/user/uploadAvatar', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+  },
+
+  // 获取用户头像
+  getUserAvatar() {
+    return request.get('/user/getAvatar')
+  },
+
+  // 更新用户头像
+  updateAvatar(avatarFile) {
+    const formData = new FormData()
+    formData.append('avatarFile', avatarFile)
+    return request.post('/user/updateAvatar', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+  },
+
+  // 获取用户信息
+  getUserInfo() {
+    return request.get('/user/getUserInfo')
+  },
+
+  // 删除用户头像
+  deleteAvatar() {
+    return request.post('/user/deleteAvatar')
   }
 }

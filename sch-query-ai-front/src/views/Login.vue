@@ -135,7 +135,7 @@ const handleLogin = async () => {
 
         // 登录成功：提示+跳转
         ElMessage.success('登录成功！')
-        router.push('/home')
+        router.push('/chat')
       } catch (error) {
         console.error('登录失败:', error)
         ElMessage.error('登录失败，请检查用户名或密码是否正确')

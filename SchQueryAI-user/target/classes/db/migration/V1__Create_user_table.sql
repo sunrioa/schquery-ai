@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS `user` (
     `pass_word` VARCHAR(255) NOT NULL COMMENT '密码（采用BCrypt加密存储）',
     `email` VARCHAR(100) NOT NULL COMMENT '电子邮箱（用于登录验证或通知，唯一）',
     `role` VARCHAR(20) NOT NULL COMMENT '用户角色（如：user-普通用户、worker-客服、admin-管理员）',
+    `avatar` BIGINT COMMENT '头像',
     `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间',
     `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '记录最后更新时间',
     PRIMARY KEY (`id`),
@@ -39,3 +40,11 @@ CREATE TABLE chat_message (
                               created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '消息创建时间（发送时间）',
                               INDEX idx_session_id (session_id) COMMENT '会话ID索引（加速查询某会话下的所有消息）'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='会话中的消息记录表（存储用户、AI、客服的所有对话内容）';
+
+CREATE TABLE `image_store` (
+                               `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+                               `image_name` VARCHAR(255) DEFAULT NULL COMMENT '图片名称',
+                               `image_base64` MEDIUMTEXT NOT NULL COMMENT 'base64编码的图片数据（建议包含格式前缀，如data:image/png;base64,...）',
+                               `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '上传时间',
+                               PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='图片/头像存储表（base64直接存储）';

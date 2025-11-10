@@ -68,6 +68,8 @@ public class StreamingSttServiceImpl implements StreamingSttService {
         private final WebSocketSession webSocketSession;
         private final SttWebSocketHandler handler;
         private final long createTime;
+        private volatile boolean isSending = false; // 发送状态锁
+        private final Object sendLock = new Object(); // 同步锁
 
         public RecognitionSession(String sessionToken, String recognitionId,
                                 WebSocketSession webSocketSession, SttWebSocketHandler handler) {
@@ -84,6 +86,9 @@ public class StreamingSttServiceImpl implements StreamingSttService {
         public WebSocketSession getWebSocketSession() { return webSocketSession; }
         public SttWebSocketHandler getHandler() { return handler; }
         public long getCreateTime() { return createTime; }
+        public boolean isSending() { return isSending; }
+        public void setSending(boolean sending) { isSending = sending; }
+        public Object getSendLock() { return sendLock; }
     }
 
     @Override
@@ -152,8 +157,22 @@ public class StreamingSttServiceImpl implements StreamingSttService {
                 return "";
             }
 
-            // 分片发送音频数据
-            sendAudioChunks(wsSession, audioData);
+            // 使用同步锁确保音频数据按顺序发送
+            synchronized (session.getSendLock()) {
+                // 检查是否有其他线程正在发送
+                if (session.isSending()) {
+                    log.debug("音频发送繁忙，跳过本次发送，会话令牌：{}", sessionToken);
+                    return session.getHandler().getCompleteResult();
+                }
+
+                session.setSending(true);
+                try {
+                    // 分片发送音频数据
+                    sendAudioChunks(wsSession, audioData);
+                } finally {
+                    session.setSending(false);
+                }
+            }
 
             // 获取当前累积的识别结果
             String currentResult = session.getHandler().getCompleteResult();
@@ -164,6 +183,8 @@ public class StreamingSttServiceImpl implements StreamingSttService {
 
         } catch (Exception e) {
             log.error("发送音频数据失败，会话令牌：{}", sessionToken, e);
+            // 确保发送状态被重置
+            session.setSending(false);
             // 不抛出异常，避免中断录音流程
             return "";
         }
@@ -184,10 +205,24 @@ public class StreamingSttServiceImpl implements StreamingSttService {
             SttWebSocketHandler handler = session.getHandler();
 
             if (wsSession.isOpen()) {
-                // 发送结束消息
-                TextMessage endMsg = jsonUtils.buildEndMessage(session.getRecognitionId());
-                wsSession.sendMessage(endMsg);
-                log.debug("结束消息发送完成，会话令牌：{}", sessionToken);
+                // 等待当前音频发送完成
+                synchronized (session.getSendLock()) {
+                    while (session.isSending()) {
+                        log.debug("等待音频发送完成，会话令牌：{}", sessionToken);
+                        try {
+                            Thread.sleep(100); // 等待100ms
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            log.warn("等待音频发送被中断，会话令牌：{}", sessionToken);
+                            break;
+                        }
+                    }
+
+                    // 发送结束消息
+                    TextMessage endMsg = jsonUtils.buildEndMessage(session.getRecognitionId());
+                    wsSession.sendMessage(endMsg);
+                    log.debug("结束消息发送完成，会话令牌：{}", sessionToken);
+                }
 
                 // 等待最终识别结果
                 boolean isTimeout = !handler.getLatch().await(10, TimeUnit.SECONDS);
@@ -241,12 +276,23 @@ public class StreamingSttServiceImpl implements StreamingSttService {
         int sentBytes = 0;
 
         while (sentBytes < totalBytes) {
+            // 检查连接状态
+            if (!session.isOpen()) {
+                log.warn("WebSocket连接已关闭，停止发送音频数据");
+                break;
+            }
+
             int chunkSize = Math.min(BUFFER_SIZE, totalBytes - sentBytes);
             byte[] chunk = new byte[chunkSize];
             System.arraycopy(pcmData, sentBytes, chunk, 0, chunkSize);
 
-            session.sendMessage(new BinaryMessage(chunk));
-            sentBytes += chunkSize;
+            try {
+                session.sendMessage(new BinaryMessage(chunk));
+                sentBytes += chunkSize;
+            } catch (Exception e) {
+                log.error("发送音频分片失败，已发送：{}字节，总分片：{}字节", sentBytes, totalBytes, e);
+                throw new IOException("音频发送失败", e);
+            }
 
             // 控制发送速度
             try {

@@ -54,12 +54,43 @@
 
       <!-- 聊天主区域 -->
       <el-container class="chat-main">
-        <el-header class="chat-header" v-if="currentSession">
-          <div class="chat-title">
-            <h3>{{ currentSession.sessionName || '未命名会话' }}</h3>
-            <el-button type="text" size="small" @click="showRenameDialog = true">
-              <el-icon><Edit /></el-icon>
-            </el-button>
+        <el-header class="chat-header">
+          <div class="chat-header-left">
+            <div class="chat-title" v-if="currentSession">
+              <h3>{{ currentSession.sessionName || '未命名会话' }}</h3>
+              <el-button type="text" size="small" @click="showRenameDialog = true">
+                <el-icon><Edit /></el-icon>
+              </el-button>
+            </div>
+            <div class="chat-title" v-else>
+              <h3>SchQueryAI 智能聊天</h3>
+            </div>
+          </div>
+
+          <div class="chat-header-right">
+            <el-dropdown @command="handleUserCommand" trigger="click">
+              <span class="user-dropdown">
+                <el-avatar :size="32" :src="userStore.getDisplayAvatar()" />
+                <span class="username">{{ userStore.userInfo.userName || '用户' }}</span>
+                <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+              </span>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="profile">
+                    <el-icon><User /></el-icon>
+                    个人信息
+                  </el-dropdown-item>
+                  <el-dropdown-item command="password">
+                    <el-icon><Lock /></el-icon>
+                    修改密码
+                  </el-dropdown-item>
+                  <el-dropdown-item divided command="logout">
+                    <el-icon><SwitchButton /></el-icon>
+                    退出登录
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </el-header>
 
@@ -73,27 +104,32 @@
           <div v-else class="chat-messages" ref="messagesContainer">
             <div
                 v-for="message in messages"
-                :key="message.id"
+                :key="`msg-${message.id}-v${message.renderVersion || 0}`"
                 class="message-item"
                 :class="{ 'user-message': message.messageType === 0, 'ai-message': message.messageType === 1 }"
             >
               <div class="message-avatar">
                 <el-avatar
                     :size="40"
-                    :icon="message.messageType === 0 ? UserFilled : Service"
+                    :src="message.messageType === 0 ? userStore.getDisplayAvatar() : getAIAvatar()"
+                    :icon="null"
                     :class="{ 'user-avatar': message.messageType === 0, 'ai-avatar': message.messageType === 1 }"
                 />
               </div>
               <div class="message-content">
                 <div class="message-text" v-if="message.messageType === 0">{{ message.content }}</div>
-                <div class="message-text markdown-content" v-else v-html="renderMarkdown(message.content)"></div>
+                <div class="message-text" v-else-if="message.content">
+                  <!-- 流式传输时显示原始文本，完成后显示Markdown格式 -->
+                  <div v-if="streamingMessageIds.has(message.id)" class="streaming-text" v-text="message.content"></div>
+                  <div v-else class="markdown-content" :key="`md-${message.id}-${message.renderVersion || 0}`" v-html="renderMarkdown(message.content, message.renderVersion)"></div>
+                </div>
                 <div class="message-time">{{ formatTime(message.createdAt) }}</div>
               </div>
             </div>
 
             <div v-if="isTyping" class="message-item ai-message">
               <div class="message-avatar">
-                <el-avatar :size="40" :icon="Service" class="ai-avatar" />
+                <el-avatar :size="40" :src="getAIAvatar()" class="ai-avatar" />
               </div>
               <div class="message-content">
                 <div class="typing-indicator">
@@ -107,7 +143,7 @@
         </el-main>
 
         <el-footer class="chat-input" v-if="currentSession">
-                  <div class="input-container">
+          <div class="input-container">
             <!-- 录音按钮专用容器 -->
             <div class="voice-btn-container">
               <el-button
@@ -136,13 +172,13 @@
                 v-model="userMessage"
                 type="textarea"
                 :rows="2"
-            placeholder="输入您的消息..."
-            @keydown.enter.prevent="handleEnterKey"
-            :disabled="isTyping"
-            resize="none"
+                placeholder="输入您的消息..."
+                @keydown.enter.prevent="handleEnterKey"
+                :disabled="isTyping"
+                resize="none"
                 class="message-input"
                 :class="{ 'with-transcript': isRecording && realTimeTranscript }"
-                />
+            />
             <el-button
                 type="primary"
                 @click="sendMessage"
@@ -180,16 +216,22 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElEmpty, ElAvatar, ElDropdown, ElDropdownMenu, ElDropdownItem, ElButton, ElInput, ElDialog, ElForm, ElFormItem, ElIcon } from 'element-plus'
-import { Plus, Setting, Edit, Delete, UserFilled, Service, Upload, Microphone, Stop, Close } from '@element-plus/icons-vue'
+import { Plus, Setting, Edit, Delete, Service, Upload, Microphone, SwitchButton, User, Lock, ArrowDown } from '@element-plus/icons-vue'
 import { chatApi } from '../api/chat'
+import { userApi } from '../api/user'
+import { useUserStore } from '../stores/userStore'
+import { getAIAvatar } from '../utils/avatarUtils'
 import { marked } from 'marked'
+import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 
-// 路由实例
+// 路由实例和用户store
 const router = useRouter()
+const userStore = useUserStore()
+const instance = getCurrentInstance() // 添加实例引用用于强制更新
 
 // 状态变量
 const sessions = ref([])
@@ -209,12 +251,16 @@ const voiceLoading = ref(false)
 const mediaRecorder = ref(null)
 const audioChunks = ref([])
 const audioContext = ref(null)
+
+// 用户头像 - 从store获取
 const mediaStream = ref(null)
 const processor = ref(null)
 const recordingTimer = ref(null)
 const chunkBuffer = ref(new Int16Array(0))
 const realTimeTranscript = ref('')
 const streamingSessionToken = ref('') // 流式识别会话令牌
+let renderVersion = 0 // 渲染版本号，用于强制重新渲染
+const streamingMessageIds = ref(new Set()) // 用于标记正在流式传输的消息ID
 
 // 检查登录状态，返回是否已登录
 const checkToken = () => {
@@ -226,6 +272,8 @@ const checkToken = () => {
   }
   return true
 }
+
+
 
 // 格式化时间
 const formatTime = (time) => {
@@ -241,22 +289,58 @@ const formatTime = (time) => {
   return date.toLocaleDateString()
 }
 
-// Markdown渲染方法
-const renderMarkdown = (text) => {
+// 清理AI响应内容中的多余字符（简化版本）
+const cleanAIResponse = (text) => {
+  if (!text) return ''
+
+  // 只移除行首的 data: 前缀和基本清理
+  let cleaned = text.replace(/^data:\s*/gm, '')
+
+  // 基本格式清理
+  cleaned = cleaned
+      .replace(/\n{3,}/g, '\n\n') // 最多保留2个连续换行
+      .replace(/[ \t]+$/gm, '') // 移除行尾空白
+      .trim() // 去除首尾空白
+
+  return cleaned
+}
+
+// Markdown渲染方法（带版本标识，避免缓存问题）
+const renderMarkdown = (text, renderVersion) => {
   if (!text) return ''
 
   try {
+    // 重置 marked 配置（避免缓存影响）
     marked.setOptions({
       breaks: true,
       gfm: true,
-      highlight: (code) => `<pre><code class="hljs">${code}</code></pre>`
+      tables: true,
+      headerIds: false,
+      highlight: (code, lang) => {
+        if (lang && hljs.getLanguage(lang)) {
+          return `<pre><code class="hljs language-${lang}">${hljs.highlight(code, { language: lang }).value}</code></pre>`
+        }
+        return `<pre><code class="hljs">${hljs.highlightAuto(code).value}</code></pre>`
+      }
     })
-    return marked.parse(text)
+
+    const result = marked.parse(text)
+    // 返回带版本标识的 HTML，避免 v-html 缓存
+    return `<div data-render-version="${renderVersion || 0}">${result}</div>`
   } catch (error) {
     console.error('Markdown rendering error:', error)
     return text
   }
 }
+
+// 添加一个观察器来监视消息变化
+watch(messages, (newMessages, oldMessages) => {
+  console.log('Messages array changed, length:', newMessages.length)
+  // 深度监听消息变化，确保渲染更新
+  nextTick(() => {
+    console.log('Watch nextTick executed')
+  })
+}, { deep: true, immediate: false })
 
 // 加载会话列表
 const loadSessions = async () => {
@@ -304,9 +388,19 @@ const selectSession = async (session) => {
 // 加载消息历史
 const loadMessages = async (sessionId) => {
   try {
+    // 清理之前的流式标记
+    streamingMessageIds.value.clear()
+
     const response = await chatApi.getMessages(sessionId)
     if (response?.code === 200) {
-      messages.value = response.data || []
+      messages.value = (response.data || []).map(msg => {
+        // 清理AI消息内容中的多余字符
+        if (msg.messageType === 1 && msg.content) {
+          msg.content = cleanAIResponse(msg.content)
+          msg.renderVersion = ++renderVersion // 关键添加
+        }
+        return msg
+      })
       nextTick(() => {
         if (messagesContainer.value) {
           messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
@@ -336,6 +430,15 @@ const sendMessage = async () => {
   }
   messages.value.push(userMessageObj)
 
+  // 创建AI消息对象，提前定义以便在catch块中访问
+  const aiMessageObj = {
+    id: Date.now() + 1,
+    content: '',
+    messageType: 1,
+    createdAt: new Date().toISOString(),
+    renderVersion: ++renderVersion // 添加版本号字段
+  }
+
   // 显示输入状态
   isTyping.value = true
   nextTick(() => {
@@ -361,13 +464,10 @@ const sendMessage = async () => {
     let aiMessageText = ''
 
     isTyping.value = false
-    const aiMessageObj = {
-      id: Date.now() + 1,
-      content: '',
-      messageType: 1,
-      createdAt: new Date().toISOString()
-    }
     messages.value.push(aiMessageObj)
+
+    // 标记此消息为流式传输状态
+    streamingMessageIds.value.add(aiMessageObj.id)
 
     // 读取流式数据
     let isReading = true
@@ -379,17 +479,22 @@ const sendMessage = async () => {
         break
       }
 
-      let chunk = decoder.decode(value)
-      chunk = chunk.replace(/^data:\s*/, '')
-      const cleanChunk = chunk.replace(/\n+/g, ' ').replace(/\r+/g, '').replace(/\s+/g, ' ').trim()
+      // 解码时保留原始换行和格式
+      let chunk = decoder.decode(value, { stream: true })
+      // 只清理行首的data:前缀，保留其他格式
+      chunk = chunk.replace(/^data:\s*/gm, '')
+      const cleanChunk = chunk.trimEnd() // 只去除块末尾空白，保留内部格式
 
       if (cleanChunk) {
+        // 直接拼接，不额外添加换行（Markdown格式由AI输出本身控制）
         aiMessageText += cleanChunk
       }
 
+      // 流式传输时实时更新显示内容
       const aiMsgIndex = messages.value.findIndex(msg => msg.id === aiMessageObj.id)
       if (aiMsgIndex > -1) {
         messages.value[aiMsgIndex].content = aiMessageText
+        await nextTick()
       }
 
       nextTick(() => {
@@ -399,16 +504,52 @@ const sendMessage = async () => {
       })
     }
 
+    // 流式数据读取完成后，一次性更新完整的Markdown内容
+    const aiMsgIndex = messages.value.findIndex(msg => msg.id === aiMessageObj.id)
+    if (aiMsgIndex > -1) {
+      // 清理最终收集到的完整内容
+      const cleanedContent = cleanAIResponse(aiMessageText)
+
+      console.log('流式完成，内容长度:', cleanedContent.length, '开始渲染Markdown')
+
+      // 移除流式传输标记，触发Markdown渲染
+      streamingMessageIds.value.delete(aiMessageObj.id)
+
+      // 直接更新内容和版本号
+      messages.value[aiMsgIndex].content = cleanedContent
+      messages.value[aiMsgIndex].renderVersion = ++renderVersion
+
+      console.log('内容更新完成，开始强制渲染')
+
+      // 强制更新
+      await nextTick()
+      if (instance && instance.proxy) {
+        instance.proxy.$forceUpdate()
+      }
+      await nextTick()
+
+      console.log('Markdown渲染完成')
+    }
+
     await loadSessions()
   } catch (error) {
     console.error('Send message error:', error)
     isTyping.value = false
 
+    // 确保清理流式标记
+    streamingMessageIds.value.delete(aiMessageObj.id)
+
     if (error.code !== 401) ElMessage.error(error.message || '发送消息失败')
     const index = messages.value.findIndex(msg => msg.id === userMessageObj.id)
     if (index > -1) messages.value.splice(index, 1)
+
+    // 也清理AI消息
+    const aiIndex = messages.value.findIndex(msg => msg.id === aiMessageObj.id)
+    if (aiIndex > -1) messages.value.splice(aiIndex, 1)
   } finally {
     isTyping.value = false
+    // 确保在所有情况下都清理流式状态
+    streamingMessageIds.value.delete(aiMessageObj.id)
     nextTick(() => {
       if (messagesContainer.value) {
         messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
@@ -452,6 +593,37 @@ const handleSessionCommand = async (command, session) => {
         }
       } catch (error) {
         if (error !== 'cancel' && error.code !== 401) ElMessage.error('删除失败')
+      }
+      break
+  }
+}
+
+// 处理用户下拉菜单命令
+const handleUserCommand = async (command) => {
+  switch (command) {
+    case 'profile':
+      router.push('/profile')
+      break
+    case 'password':
+      router.push('/password')
+      break
+    case 'logout':
+      try {
+        await ElMessageBox.confirm(
+            '确定要退出登录吗？',
+            '提示',
+            {
+              confirmButtonText: '确定',
+              cancelButtonText: '取消',
+              type: 'warning'
+            }
+        )
+        localStorage.removeItem('token')
+        userStore.clearUserInfo()
+        ElMessage.success('退出登录成功')
+        router.push('/login')
+      } catch {
+        // 用户取消操作
       }
       break
   }
@@ -945,16 +1117,27 @@ const createWavBlob = (audioData, sampleRate) => {
 }
 
 
+// 加载用户信息（包含头像）
+const loadUserInfo = async () => {
+  try {
+    await userStore.fetchUserInfo()
+  } catch (error) {
+    console.error('获取用户信息失败:', error)
+  }
+}
+
 // 挂载时加载
 onMounted(() => {
   if (checkToken()) {
     loadSessions()
+    loadUserInfo()
   }
 })
 
 // 组件卸载时清理资源
 onUnmounted(() => {
   cleanupRecording()
+  console.log('Component unmounted, cleanup completed')
 })
 </script>
 
@@ -1118,9 +1301,19 @@ onUnmounted(() => {
   padding: 0 24px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   height: 64px; /* 固定高度 */
   flex-shrink: 0; /* 禁止收缩 */
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.chat-header-left {
+  flex: 1;
+}
+
+.chat-header-right {
+  display: flex;
+  align-items: center;
 }
 
 .chat-title {
@@ -1143,6 +1336,37 @@ onUnmounted(() => {
 
 .chat-title .el-button:hover {
   color: #3b82f6;
+}
+
+/* 用户下拉菜单 */
+.user-dropdown {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: background-color 0.2s ease;
+}
+
+.user-dropdown:hover {
+  background-color: #f3f4f6;
+}
+
+.username {
+  margin: 0 8px;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.user-dropdown .el-icon--right {
+  color: #9ca3af;
+  font-size: 12px;
+  transition: transform 0.2s ease;
+}
+
+.user-dropdown:hover .el-icon--right {
+  transform: rotate(180deg);
 }
 
 /* 聊天内容区域 - 精确高度控制（解决挤压问题核心） */
@@ -1209,6 +1433,15 @@ onUnmounted(() => {
   font-size: 18px !important;
   border-radius: 8px !important;
   transition: all 0.2s ease;
+  background-color: transparent !important;
+  overflow: hidden;
+}
+
+.el-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .el-avatar:hover {
@@ -1216,15 +1449,11 @@ onUnmounted(() => {
 }
 
 .user-avatar {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: white;
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  border: 1px solid #e5e7eb;
 }
 
 .ai-avatar {
-  background-color: #10b981;
-  color: white;
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  border: 1px solid #e5e7eb;
 }
 
 /* 消息气泡 */
@@ -1646,6 +1875,135 @@ onUnmounted(() => {
   40% {
     transform: scale(1);
   }
+}
+
+/* 流式文本样式 */
+.streaming-text {
+  color: #374151;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.6;
+  font-family: inherit;
+  background-color: #f8fafc;
+  border-radius: 8px;
+  padding: 12px 16px;
+  border-left: 3px solid #3b82f6;
+}
+
+/* Markdown表格样式修复 */
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+  background-color: #ffffff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.markdown-content th,
+.markdown-content td {
+  padding: 12px 16px;
+  border: 1px solid #e5e7eb;
+  text-align: left;
+  line-height: 1.5;
+}
+
+.markdown-content th {
+  background-color: #f9fafb;
+  font-weight: 600;
+  color: #111827;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.markdown-content tr:nth-child(even) {
+  background-color: #f8fafc;
+}
+
+.markdown-content tr:hover {
+  background-color: #f3f4f6;
+}
+
+/* 修复代码块样式 */
+.markdown-content pre {
+  background-color: #f8fafc;
+  border-radius: 8px;
+  padding: 0;
+  margin: 16px 0;
+  overflow-x: auto;
+  border: 1px solid #e5e7eb;
+}
+
+.markdown-content pre code {
+  display: block;
+  padding: 16px;
+  overflow-x: auto;
+  line-height: 1.6;
+  font-size: 13px;
+  color: #374151;
+  background: none;
+  border: none;
+}
+
+.markdown-content code:not(pre code) {
+  background-color: #f3f4f6;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #d97706;
+  border: 1px solid #e5e7eb;
+}
+
+/* 列表样式优化 */
+.markdown-content ul,
+.markdown-content ol {
+  margin: 12px 0;
+  padding-left: 24px;
+}
+
+.markdown-content li {
+  margin: 6px 0;
+  line-height: 1.6;
+}
+
+/* 标题样式优化 */
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+  margin: 20px 0 12px;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.3;
+}
+
+.markdown-content h1 {
+  font-size: 24px;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 8px;
+}
+
+.markdown-content h2 {
+  font-size: 20px;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 6px;
+}
+
+.markdown-content h3 {
+  font-size: 18px;
+}
+
+/* 引用块样式 */
+.markdown-content blockquote {
+  margin: 16px 0;
+  padding: 12px 20px;
+  border-left: 4px solid #3b82f6;
+  background-color: #f8fafc;
+  color: #4b5563;
+  font-style: italic;
 }
 
 /* 对话框样式 */

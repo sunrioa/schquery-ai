@@ -2,12 +2,11 @@ package cn.ling.service.impl;
 
 import cn.ling.Result;
 import cn.ling.domain.dto.UserDTO;
+import cn.ling.domain.pojo.ImageStore;
 import cn.ling.service.AIService;
-import cn.ling.utils.EmailUtils;
-import cn.ling.utils.BCryptUtils;
+import cn.ling.service.ImageStoreService;
+import cn.ling.utils.*;
 import cn.ling.exception.CustomException;
-import cn.ling.utils.JwtUtils;
-import cn.ling.utils.NumberUtils;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import cn.ling.domain.pojo.User;
 import cn.ling.service.UserService;
@@ -35,6 +34,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
+
+    @Resource
+    private ImageStoreService imageStoreService;
 
     private final static String REGISTER_CODE_KEY = "register_code:";
     private final static String FIND_PASSWORD_CODE_KEY = "find_password_code:";
@@ -202,10 +204,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     //修改密码
     @Override
     public Result<String> updatePassword(UserDTO userDTO) {
-        // 参数校验
-        if (userDTO.getUserName() == null || userDTO.getUserName().trim().isEmpty()) {
-            throw CustomException.error("用户名不能为空");
-        }
         if (userDTO.getPassword() == null || userDTO.getPassword().trim().isEmpty()) {
             throw CustomException.error("原密码不能为空");
         }
@@ -213,30 +211,28 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             throw CustomException.error("新密码不能为空");
         }
 
-        try {
-            // 查询用户
-            User user = lambdaQuery().eq(User::getUserName, userDTO.getUserName()).one();
-            if (user == null) {
-                throw CustomException.error("用户不存在");
-            }
+        Long userId = ContextUtils.getUserId();
 
-            // 验证原密码
-            if (!BCryptUtils.judge(userDTO.getPassword(), user.getPassWord())) {
-                throw CustomException.error("原密码错误");
-            }
+        // 查询用户
+        User user = lambdaQuery().eq(User::getId, userId).one();
+        if (user == null) {
+            throw CustomException.error("用户不存在");
+        }
 
-            // 更新密码
-            user.setPassWord(BCryptUtils.encode(userDTO.getRePassword()));
-            user.setUpdateTime(new Date());
-            boolean update = updateById(user);
+        // 验证原密码
+        if (!BCryptUtils.judge(userDTO.getPassword(), user.getPassWord())) {
+            throw CustomException.error("原密码错误");
+        }
 
-            if (update) {
-                return Result.success("密码修改成功");
-            } else {
-                throw CustomException.error("密码修改失败");
-            }
-        } catch (Exception e) {
-            throw CustomException.error("密码修改失败：" + e.getMessage());
+        // 更新密码
+        user.setPassWord(BCryptUtils.encode(userDTO.getRePassword()));
+        user.setUpdateTime(new Date());
+        boolean update = updateById(user);
+
+        if (update) {
+            return Result.success("密码修改成功");
+        } else {
+            throw CustomException.error("密码修改失败");
         }
     }
 
@@ -364,5 +360,202 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     @Override
     public Result<String> forceStopStreamingRecognition(String sessionToken) {
         return aiService.forceStopStreamingRecognition(sessionToken);
+    }
+
+    @Override
+    @Transactional
+    public Result<Long> uploadAvatar(MultipartFile avatarFile) {
+        try {
+            // 参数校验
+            if (avatarFile == null || avatarFile.isEmpty()) {
+                throw CustomException.error("请选择要上传的头像文件");
+            }
+
+            // 检查文件大小（限制为5MB）
+            if (avatarFile.getSize() > 5 * 1024 * 1024) {
+                throw CustomException.error("头像文件大小不能超过5MB");
+            }
+
+            // 检查文件类型
+            String contentType = avatarFile.getContentType();
+            if (contentType == null || !contentType.startsWith("image/")) {
+                throw CustomException.error("请上传图片格式的文件");
+            }
+
+            // 转换为base64
+            String base64Image = Base64Utils.imageToBase64(avatarFile);
+            if (base64Image == null) {
+                throw CustomException.error("头像文件转换失败");
+            }
+
+            // 创建图片存储记录
+            ImageStore imageStore = new ImageStore();
+            imageStore.setImageName(avatarFile.getOriginalFilename());
+            imageStore.setImageBase64(base64Image);
+            imageStore.setCreatedAt(new Date());
+
+            // 保存到数据库
+            boolean saved = imageStoreService.save(imageStore);
+            if (!saved) {
+                throw CustomException.error("头像保存失败");
+            }
+
+            return Result.success(imageStore.getId(), "头像上传成功");
+
+        } catch (Exception e) {
+            if (e instanceof CustomException) {
+                throw e;
+            }
+            throw CustomException.error("头像上传失败：" + e.getMessage());
+        }
+    }
+
+    @Override
+    public Result<String> getUserAvatar() {
+         Long userId = ContextUtils.getUserId();
+         User currentUser = getById(userId);
+
+         // 如果用户没有头像，返回空字符串
+         if (currentUser.getAvatar() == null) {
+             return Result.success("");
+         }
+
+         // 获取头像信息
+         ImageStore imageStore = imageStoreService.getById(currentUser.getAvatar());
+         if (imageStore == null) {
+             return Result.success("");
+         }
+
+         return Result.success(imageStore.getImageBase64());
+    }
+
+    @Override
+    @Transactional
+    public Result<Long> updateAvatar(MultipartFile avatarFile) {
+        try {
+            // 参数校验
+            if (avatarFile == null || avatarFile.isEmpty()) {
+                throw CustomException.error("请选择要上传的头像文件");
+            }
+
+            // 检查文件大小（限制为5MB）
+            if (avatarFile.getSize() > 5 * 1024 * 1024) {
+                throw CustomException.error("头像文件大小不能超过5MB");
+            }
+
+            // 检查文件类型
+            String contentType = avatarFile.getContentType();
+            if (contentType == null || !contentType.startsWith("image/")) {
+                throw CustomException.error("请上传图片格式的文件");
+            }
+
+            // 从ThreadLocal获取当前用户信息
+            Long userId = ContextUtils.getUserId();
+
+            User currentUser = getById(userId);
+            if (currentUser == null) {
+                throw CustomException.error("用户未登录");
+            }
+
+            // 转换为base64
+            String base64Image = Base64Utils.imageToBase64(avatarFile);
+            if (base64Image == null) {
+                throw CustomException.error("头像文件转换失败");
+            }
+
+            // 创建新的图片存储记录
+            ImageStore imageStore = new ImageStore();
+            imageStore.setImageName(avatarFile.getOriginalFilename());
+            imageStore.setImageBase64(base64Image);
+            imageStore.setCreatedAt(new Date());
+
+            // 保存新头像到数据库
+            boolean saved = imageStoreService.save(imageStore);
+            if (!saved) {
+                throw CustomException.error("头像保存失败");
+            }
+
+            // 删除旧头像（如果存在）
+            if (currentUser.getAvatar() != null) {
+                imageStoreService.removeById(currentUser.getAvatar());
+            }
+
+            // 更新用户头像信息
+            currentUser.setAvatar(imageStore.getId());
+            boolean updated = this.updateById(currentUser);
+            if (!updated) {
+                throw CustomException.error("用户头像更新失败");
+            }
+
+            return Result.success(imageStore.getId(), "头像更新成功");
+
+        } catch (Exception e) {
+            if (e instanceof CustomException) {
+                throw e;
+            }
+            throw CustomException.error("头像更新失败：" + e.getMessage());
+        }
+    }
+
+    @Override
+    public Result<User> getUserInfo() {
+        try {
+            Long userId = ContextUtils.getUserId();
+            User currentUser = getById(userId);
+
+            if (currentUser == null) {
+                throw CustomException.error("用户信息不存在");
+            }
+
+            // 清除密码等敏感信息
+            currentUser.setPassWord(null);
+
+            return Result.success(currentUser, "获取用户信息成功");
+
+        } catch (Exception e) {
+            if (e instanceof CustomException) {
+                throw e;
+            }
+            throw CustomException.error("获取用户信息失败：" + e.getMessage());
+        }
+    }
+
+    @Override
+    @Transactional
+    public Result<String> deleteAvatar() {
+        try {
+            Long userId = ContextUtils.getUserId();
+            User currentUser = getById(userId);
+
+            if (currentUser == null) {
+                throw CustomException.error("用户信息不存在");
+            }
+
+            // 如果用户没有头像，直接返回成功
+            if (currentUser.getAvatar() == null) {
+                return Result.success("用户暂未设置头像");
+            }
+
+            // 删除图片存储记录
+            boolean deleted = imageStoreService.removeById(currentUser.getAvatar());
+            if (!deleted) {
+                throw CustomException.error("头像删除失败");
+            }
+
+            // 更新用户头像信息为null
+            currentUser.setAvatar(null);
+            boolean updated = this.updateById(currentUser);
+            if (!updated) {
+                throw CustomException.error("用户信息更新失败");
+            }
+
+            return Result.success("头像删除成功");
+
+        } catch (Exception e) {
+            if (e instanceof CustomException) {
+                throw e;
+            }
+            throw CustomException.error("删除头像失败：" + e.getMessage());
+        }
     }
 }

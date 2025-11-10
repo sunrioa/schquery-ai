@@ -2,8 +2,11 @@ package cn.ling.controller;
 
 import cn.ling.Result;
 import cn.ling.domain.pojo.User;
+import cn.ling.domain.pojo.ImageStore;
 import cn.ling.domain.dto.UserDTO;
 import cn.ling.service.UserService;
+import cn.ling.service.ImageStoreService;
+import cn.ling.utils.Base64Utils;
 import jakarta.annotation.Resource;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +21,9 @@ public class UserController {
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private ImageStoreService imageStoreService;
 
     //注册
     @PostMapping("/register")
@@ -87,6 +93,36 @@ public class UserController {
     public Result<String> forceStopStreamingRecognition(@RequestBody Map<String, String> request) {
         String sessionToken = request.get("sessionToken");
         return userService.forceStopStreamingRecognition(sessionToken);
+    }
+
+    // 上传头像
+    @PostMapping("/uploadAvatar")
+    public Result<Long> uploadAvatar(@RequestParam("avatarFile") MultipartFile avatarFile) {
+        return userService.uploadAvatar(avatarFile);
+    }
+
+    // 获取用户头像
+    @GetMapping("/getAvatar")
+    public Result<String> getAvatar() {
+        return userService.getUserAvatar();
+    }
+
+    // 更新用户头像
+    @PostMapping("/updateAvatar")
+    public Result<Long> updateAvatar(@RequestParam("avatarFile") MultipartFile avatarFile) {
+        return userService.updateAvatar(avatarFile);
+    }
+
+    // 获取用户信息
+    @GetMapping("/getUserInfo")
+    public Result<User> getUserInfo() {
+        return userService.getUserInfo();
+    }
+
+    // 删除用户头像
+    @PostMapping("/deleteAvatar")
+    public Result<String> deleteAvatar() {
+        return userService.deleteAvatar();
     }
 
 }

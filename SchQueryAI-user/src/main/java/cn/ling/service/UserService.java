@@ -35,4 +35,15 @@ public interface UserService extends IService<User> {
     Result<String> stopStreamingRecognition(String sessionToken);
 
     Result<String> forceStopStreamingRecognition(String sessionToken);
+
+    // 头像相关接口
+    Result<Long> uploadAvatar(MultipartFile avatarFile);
+
+    Result<String> getUserAvatar();
+
+    Result<Long> updateAvatar(MultipartFile avatarFile);
+
+Result<User> getUserInfo();
+
+Result<String> deleteAvatar();
 }

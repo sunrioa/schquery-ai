@@ -54,5 +54,9 @@ public class User {
      */
     private String role;
 
+    /**
+     * 头像
+     */
+    private Long avatar;
 
 }

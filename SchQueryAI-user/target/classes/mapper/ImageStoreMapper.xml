@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.ling.mapper.ImageStoreMapper">
+
+    <resultMap id="BaseResultMap" type="cn.ling.domain.pojo.ImageStore">
+            <id property="id" column="id" jdbcType="BIGINT"/>
+            <result property="imageName" column="image_name" jdbcType="VARCHAR"/>
+            <result property="imageBase64" column="image_base64" jdbcType="VARCHAR"/>
+            <result property="createdAt" column="created_at" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,image_name,image_base64,
+        created_at
+    </sql>
+</mapper>

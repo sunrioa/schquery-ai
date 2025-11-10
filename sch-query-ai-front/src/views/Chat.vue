@@ -119,9 +119,11 @@
               <div class="message-content">
                 <div class="message-text" v-if="message.messageType === 0">{{ message.content }}</div>
                 <div class="message-text" v-else-if="message.content">
-                  <!-- 流式传输时显示原始文本，完成后显示Markdown格式 -->
+                  <!-- 流式传输时显示预处理文本，完成后显示Markdown格式 -->
                   <div v-if="streamingMessageIds.has(message.id)" class="streaming-text" v-text="message.content"></div>
-                  <div v-else class="markdown-content" :key="`md-${message.id}-${message.renderVersion || 0}`" v-html="renderMarkdown(message.content, message.renderVersion)"></div>
+                  <div v-else class="markdown-content"
+                       :key="`md-${message.id}-${message.renderVersion || 0}`"
+                       v-html="renderMarkdown(message.content)"></div>
                 </div>
                 <div class="message-time">{{ formatTime(message.createdAt) }}</div>
               </div>
@@ -289,48 +291,404 @@ const formatTime = (time) => {
   return date.toLocaleDateString()
 }
 
-// 清理AI响应内容中的多余字符（简化版本）
+// 统一API错误处理函数
+const handleApiError = (error, defaultMessage = '请求失败') => {
+  console.error('API Error:', error)
+
+  // 检查是否是401错误（令牌过期或无效）
+  const isTokenExpired =
+    error.code === 401 ||
+    error.response?.status === 401 ||
+    error.message?.includes('TOKEN_EXPIRED') ||
+    error.message?.includes('JWT expired') ||
+    (error.msg && error.msg.includes('TOKEN_EXPIRED')) ||
+    (error.data?.msg && error.data.msg.includes('TOKEN_EXPIRED'))
+
+  if (isTokenExpired) {
+    // 清除本地令牌
+    localStorage.removeItem('token')
+
+    // 清除用户信息
+    userStore.clearUserInfo()
+
+    // 显示提示信息
+    ElMessage.error('登录已过期，请重新登录')
+
+    // 重定向到登录页面
+    router.push('/login')
+    return
+  }
+
+  // 对于其他错误，显示默认错误信息
+  if (defaultMessage) {
+    ElMessage.error(defaultMessage)
+  }
+}
+
+// 清理AI响应内容中的多余字符
 const cleanAIResponse = (text) => {
   if (!text) return ''
 
-  // 只移除行首的 data: 前缀和基本清理
+  // 移除所有的data:前缀，包括全局匹配
   let cleaned = text.replace(/^data:\s*/gm, '')
 
   // 基本格式清理
   cleaned = cleaned
       .replace(/\n{3,}/g, '\n\n') // 最多保留2个连续换行
       .replace(/[ \t]+$/gm, '') // 移除行尾空白
+      .replace(/\r+/g, '') // 移除回车符
+      .replace(/[ \t]+/g, ' ') // 合并多个空格和制表符
       .trim() // 去除首尾空白
 
   return cleaned
 }
 
-// Markdown渲染方法（带版本标识，避免缓存问题）
-const renderMarkdown = (text, renderVersion) => {
+// 高质量语法高亮处理
+const highlightCode = (code, lang) => {
+  if (!code) return ''
+
+  // 检测语言类型
+  const detectedLang = detectLanguage(code, lang)
+  const cleanLang = detectedLang.toLowerCase().replace(/[^a-z0-9]/g, '')
+
+  // 应用语法高亮
+  let highlightedCode = escapeHtml(code)
+
+  // SQL特殊处理
+  if (cleanLang === 'sql' || isSQLCode(code)) {
+    highlightedCode = highlightSQL(code)
+  }
+  // JavaScript/TypeScript处理
+  else if (cleanLang === 'javascript' || cleanLang === 'js' || cleanLang === 'typescript' || cleanLang === 'ts') {
+    highlightedCode = highlightJavaScript(code)
+  }
+  // Python处理
+  else if (cleanLang === 'python' || cleanLang === 'py') {
+    highlightedCode = highlightPython(code)
+  }
+  // Java处理
+  else if (cleanLang === 'java') {
+    highlightedCode = highlightJava(code)
+  }
+  // CSS处理
+  else if (cleanLang === 'css') {
+    highlightedCode = highlightCSS(code)
+  }
+  // 通用处理
+  else {
+    highlightedCode = highlightGeneric(code)
+  }
+
+  return highlightedCode
+}
+
+// 检测语言类型
+const detectLanguage = (code, lang) => {
+  if (lang && lang !== 'text') return lang
+
+  // SQL检测
+  if (isSQLCode(code)) return 'sql'
+
+  // JavaScript检测
+  if (/function\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=|=>|import\s+/.test(code)) return 'javascript'
+
+  // Python检测
+  if (/def\s+\w+|import\s+\w+|from\s+\w+|print\s*\(/.test(code)) return 'python'
+
+  // Java检测
+  if (/public\s+class|private\s+class|System\.out\.println|import\s+java\./.test(code)) return 'java'
+
+  // CSS检测
+  if (/\{[^}]*\}|#[a-zA-Z-]+\s*\{|\.color|background-color|font-size/.test(code)) return 'css'
+
+  return 'text'
+}
+
+// 检测是否为SQL代码
+const isSQLCode = (code) => {
+  const sqlKeywords = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'ALTER', 'DROP', 'FROM', 'WHERE', 'GROUP BY', 'ORDER BY', 'HAVING', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN']
+  const upperCode = code.toUpperCase()
+  return sqlKeywords.some(keyword => upperCode.includes(keyword))
+}
+
+// SQL语法高亮
+const highlightSQL = (code) => {
+  const sqlPatterns = [
+    // 关键字
+    { pattern: /\b(SELECT|FROM|WHERE|GROUP BY|ORDER BY|HAVING|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TABLE|INDEX|VIEW|DATABASE|SCHEMA|PRIMARY|KEY|FOREIGN|REFERENCES|UNIQUE|NOT NULL|DEFAULT|AUTO_INCREMENT|VARCHAR|INT|BIGINT|TEXT|DATETIME|TIMESTAMP|BOOLEAN|CHAR|FLOAT|DOUBLE|DECIMAL|AS|ON|AND|OR|IN|EXISTS|BETWEEN|LIKE|IS|NULL|TRUE|FALSE|CASE|WHEN|THEN|ELSE|END|UNION|ALL|DISTINCT|COUNT|SUM|AVG|MIN|MAX|CAST|CONCAT|SUBSTRING|LENGTH|UPPER|LOWER|TRIM|COALESCE|IFNULL|ROUND|FLOOR|CEIL|MOD|ABS|POWER|SQRT)\b/gi, replacement: '<span class="sql-keyword">$1</span>' },
+
+    // 函数名
+    { pattern: /\b(COUNT|SUM|AVG|MIN|MAX|CAST|CONCAT|SUBSTRING|LENGTH|UPPER|LOWER|TRIM|COALESCE|IFNULL|ROUND|FLOOR|CEIL|MOD|ABS|POWER|SQRT|DATE_FORMAT|NOW|CURDATE|CURTIME)\s*\(/gi, replacement: '<span class="sql-function">$1</span>(' },
+
+    // 字符串
+    { pattern: /'([^']*)'/g, replacement: '<span class="sql-string">\'$1\'</span>' },
+    { pattern: /"([^"]*)"/g, replacement: '<span class="sql-string">"$1"</span>' },
+
+    // 数字
+    { pattern: /\b(\d+)\b/g, replacement: '<span class="sql-number">$1</span>' },
+
+    // 表名和列名
+    { pattern: /\b([a-zA-Z_][a-zA-Z0-9_]*)\s*(?=\.|\s*(?:AS\s+|FROM|WHERE|GROUP|ORDER|HAVING|JOIN|$))/gi, replacement: '<span class="sql-identifier">$1</span>' },
+
+    // 表别名
+    { pattern: /\b([a-zA-Z_][a-zA-Z0-9_]*)\s+AS\s+/gi, replacement: '<span class="sql-identifier">$1</span> AS ' },
+
+    // 操作符
+    { pattern: /(=|!=|<>|<=|>=|<|>|\+|-|\*|\/|%) /g, replacement: ' <span class="sql-operator">$1</span> ' },
+    { pattern: / (=|!=|<>|<=|>=|<|>|\+|-|\*|\/|%)$/g, replacement: ' <span class="sql-operator">$1</span>' },
+
+    // 逗号
+    { pattern: /,/g, replacement: '<span class="sql-comma">,</span>' },
+
+    // 括号
+    { pattern: /\(/g, replacement: '<span class="sql-bracket">(</span>' },
+    { pattern: /\)/g, replacement: '<span class="sql-bracket">)</span>' }
+  ]
+
+  let highlightedCode = code
+  sqlPatterns.forEach(({ pattern, replacement }) => {
+    highlightedCode = highlightedCode.replace(pattern, replacement)
+  })
+
+  return highlightedCode
+}
+
+// JavaScript语法高亮
+const highlightJavaScript = (code) => {
+  const jsPatterns = [
+    { pattern: /\b(function|const|let|var|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|new|class|extends|import|export|default|async|await|yield|this|super)\b/g, replacement: '<span class="js-keyword">$1</span>' },
+    { pattern: /'([^']*)'/g, replacement: '<span class="js-string">\'$1\'</span>' },
+    { pattern: /"([^"]*)"/g, replacement: '<span class="js-string">"$1"</span>' },
+    { pattern: /`([^`]*)`/g, replacement: '<span class="js-template">`$1`</span>' },
+    { pattern: /\b(\d+)\b/g, replacement: '<span class="js-number">$1</span>' },
+    { pattern: /\b(true|false|null|undefined)\b/g, replacement: '<span class="js-boolean">$1</span>' },
+    { pattern: /\/\/(.*)$/gm, replacement: '<span class="js-comment">//$1</span>' },
+    { pattern: /\/\*([\s\S]*?)\*\//g, replacement: '<span class="js-comment">/*$1*/</span>' }
+  ]
+
+  let highlightedCode = code
+  jsPatterns.forEach(({ pattern, replacement }) => {
+    highlightedCode = highlightedCode.replace(pattern, replacement)
+  })
+
+  return highlightedCode
+}
+
+// Python语法高亮
+const highlightPython = (code) => {
+  const pyPatterns = [
+    { pattern: /\b(def|class|if|elif|else|for|while|try|except|finally|return|yield|import|from|as|global|nonlocal|lambda|with|pass|break|continue|and|or|not|in|is|None|True|False)\b/g, replacement: '<span class="py-keyword">$1</span>' },
+    { pattern: /'([^']*)'/g, replacement: '<span class="py-string">\'$1\'</span>' },
+    { pattern: /"([^"]*)"/g, replacement: '<span class="py-string">"$1"</span>' },
+    { pattern: /\b(\d+)\b/g, replacement: '<span class="py-number">$1</span>' },
+    { pattern: /#(.*)$/gm, replacement: '<span class="py-comment">#$1</span>' }
+  ]
+
+  let highlightedCode = code
+  pyPatterns.forEach(({ pattern, replacement }) => {
+    highlightedCode = highlightedCode.replace(pattern, replacement)
+  })
+
+  return highlightedCode
+}
+
+// Java语法高亮
+const highlightJava = (code) => {
+  const javaPatterns = [
+    { pattern: /\b(public|private|protected|static|final|abstract|synchronized|volatile|transient|native|strictfp|class|interface|enum|extends|implements|import|package|void|boolean|byte|char|short|int|long|float|double|String|Object|System|out|print|println|return|if|else|for|while|do|try|catch|finally|throw|new|this|super)\b/g, replacement: '<span class="java-keyword">$1</span>' },
+    { pattern: /@Override|@Deprecated|@SuppressWarnings/g, replacement: '<span class="java-annotation">$1</span>' },
+    { pattern: /"([^"]*)"/g, replacement: '<span class="java-string">"$1"</span>' },
+    { pattern: /'([^']*)'/g, replacement: '<span class="java-char">\'$1\'</span>' },
+    { pattern: /\b(\d+)\b/g, replacement: '<span class="java-number">$1</span>' },
+    { pattern: /\/\/(.*)$/gm, replacement: '<span class="java-comment">//$1</span>' },
+    { pattern: /\/\*([\s\S]*?)\*\//g, replacement: '<span class="java-comment">/*$1*/</span>' }
+  ]
+
+  let highlightedCode = code
+  javaPatterns.forEach(({ pattern, replacement }) => {
+    highlightedCode = highlightedCode.replace(pattern, replacement)
+  })
+
+  return highlightedCode
+}
+
+// CSS语法高亮
+const highlightCSS = (code) => {
+  const cssPatterns = [
+    { pattern: /([a-zA-Z-]+)\s*:/g, replacement: '<span class="css-property">$1</span>:' },
+    { pattern: /#[a-zA-Z0-9_-]+/g, replacement: '<span class="css-id">$1</span>' },
+    { pattern: /\.[a-zA-Z0-9_-]+/g, replacement: '<span class="css-class">$1</span>' },
+    { pattern: /:([a-zA-Z-]+)(?=\s*[;{])/g, replacement: ':<span class="css-pseudo">$1</span>' },
+    { pattern: /"([^"]*)"/g, replacement: '<span class="css-string">"$1"</span>' },
+    { pattern: /'([^']*)'/g, replacement: '<span class="css-string">\'$1\'</span>' },
+    { pattern: /\b(\d+\.?\d*(px|em|rem|%|vh|vw|pt|pc|in|cm|mm|ex|ch|vw|vh|vmin|vmax))\b/g, replacement: '<span class="css-number">$1$2</span>' },
+    { pattern: /#[0-9a-fA-F]{3,6}\b/g, replacement: '<span class="css-color">$&</span>' },
+    { pattern: /rgb\((\d+,\s*\d+,\s*\d+)\)/g, replacement: 'rgb(<span class="css-number">$1</span>, <span class="css-number">$2</span>, <span class="css-number">$3</span>)' },
+    { pattern: /rgba\((\d+,\s*\d+,\s*\d+,\s*[\d.]+)\)/g, replacement: 'rgba(<span class="css-number">$1</span>, <span class="css-number">$2</span>, <span class="css-number">$3</span>, <span class="css-number">$4</span>)' },
+    { pattern: /\/\*([\s\S]*?)\*\//g, replacement: '<span class="css-comment">/*$1*/</span>' }
+  ]
+
+  let highlightedCode = code
+  cssPatterns.forEach(({ pattern, replacement }) => {
+    highlightedCode = highlightedCode.replace(pattern, replacement)
+  })
+
+  return highlightedCode
+}
+
+// 通用语法高亮
+const highlightGeneric = (code) => {
+  const genericPatterns = [
+    { pattern: /'([^']*)'/g, replacement: '<span class="code-string">\'$1\'</span>' },
+    { pattern: /"([^"]*)"/g, replacement: '<span class="code-string">"$1"</span>' },
+    { pattern: /\b(\d+)\b/g, replacement: '<span class="code-number">$1</span>' },
+    { pattern: /\/\/(.*)$/gm, replacement: '<span class="code-comment">//$1</span>' },
+    { pattern: /\/\*([\s\S]*?)\*\//g, replacement: '<span class="code-comment">/*$1*/</span>' }
+  ]
+
+  let highlightedCode = code
+  genericPatterns.forEach(({ pattern, replacement }) => {
+    highlightedCode = highlightedCode.replace(pattern, replacement)
+  })
+
+  return highlightedCode
+}
+
+// 改进的Markdown渲染方法
+const renderMarkdown = (text) => {
   if (!text) return ''
 
   try {
-    // 重置 marked 配置（避免缓存影响）
+    // 基本文本清理
+    let processedText = text.trim()
+
+    // 简单检查：如果文本很短且没有明显Markdown特征，直接返回纯文本
+    if (processedText.length < 50 &&
+        !processedText.includes('```') &&
+        !processedText.includes('#') &&
+        !processedText.includes('**') &&
+        !processedText.includes('* ') &&
+        !processedText.includes('|')) {
+      return `<div class="plain-text">${escapeHtml(processedText)}</div>`
+    }
+
+    // 预处理文本
+    processedText = preprocessMarkdown(processedText)
+
     marked.setOptions({
       breaks: true,
       gfm: true,
-      tables: true,
-      headerIds: false,
+      headerIds: false, // 禁用header id避免冲突
+      mangle: false,  // 禁用email mangling
+      sanitize: false, // 允许HTML
       highlight: (code, lang) => {
-        if (lang && hljs.getLanguage(lang)) {
-          return `<pre><code class="hljs language-${lang}">${hljs.highlight(code, { language: lang }).value}</code></pre>`
+        try {
+          const highlightedCode = highlightCode(code, lang)
+          const detectedLang = detectLanguage(code, lang)
+          const cleanLang = detectedLang.toLowerCase().replace(/[^a-z0-9]/g, '')
+          const displayLang = detectedLang || 'text'
+          const escapedCode = escapeHtml(code).replace(/"/g, '&quot;')
+
+          return `<div class="code-block-wrapper" data-language="${cleanLang}" data-code="${escapedCode}">
+            <div class="code-block-header">
+              <div class="code-language">
+                <span class="code-language-dot"></span>
+                ${displayLang}
+              </div>
+              <div class="code-actions">
+                <button class="copy-btn" onclick="copyCode(this, '${escapedCode}')">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                  </svg>
+                  <span>复制</span>
+                </button>
+              </div>
+            </div>
+            <pre class="code-block ${cleanLang ? `language-${cleanLang}` : ''}"><code class="code-content">${highlightedCode}</code></pre>
+          </div>`
+        } catch (e) {
+          return `<pre><code>${escapeHtml(code)}</code></pre>`
         }
-        return `<pre><code class="hljs">${hljs.highlightAuto(code).value}</code></pre>`
       }
     })
 
-    const result = marked.parse(text)
-    // 返回带版本标识的 HTML，避免 v-html 缓存
-    return `<div data-render-version="${renderVersion || 0}">${result}</div>`
+    const result = marked.parse(processedText)
+    return result
   } catch (error) {
     console.error('Markdown rendering error:', error)
-    return text
+    // 如果Markdown解析失败，返回安全的HTML文本
+    return `<div class="plain-text">${escapeHtml(text)}</div>`
   }
+}
+
+// 预处理Markdown文本，修复流式传输问题
+const preprocessMarkdown = (text) => {
+  const backtick3 = '```'
+  const pipe = '|'
+
+  return text
+    // 修复代码块格式
+    .replace(/```(\s*[a-zA-Z0-9]+)?/g, (match, lang) => {
+      const cleanLang = lang ? lang.trim() : ''
+      return cleanLang ? `${backtick3}${cleanLang}\n` : `${backtick3}\n`
+    })
+    // 修复SQL关键字和变量之间的空格问题
+    .replace(/(\w+)(\n+[A-Z_]+)/g, '$1 $2')
+    // 修复变量名和运算符之间的空格
+    .replace(/([a-zA-Z_])([<>=!])/g, '$1 $2')
+    .replace(/([<>=!])([a-zA-Z_])/g, '$1 $2')
+    // 修复数字和关键字之间的空格
+    .replace(/(\d+)([A-Za-z_]+)/g, '$1 $2')
+    // 修复SQL中的特殊字符问题
+    .replace(/COALESCE\(SUM\(CASE WHEN([^)]+)THEN(\d+) ELSE(\d+) END\), (\d+)\)/g,
+      'COALESCE(SUM(CASE WHEN$1THEN $2 ELSE $3 END), $4)')
+    // 修复表格格式，确保表格分隔符存在
+    .replace(/\|([^|]+)\|/g, (match, content, offset, string) => {
+      const nextLineIndex = string.indexOf('\n', offset)
+      if (nextLineIndex === -1) return match
+
+      const currentLine = string.substring(offset, nextLineIndex)
+      const hasSeparator = currentLine.includes('---') || currentLine.includes('===')
+
+      // 如果当前行是表头且下一行没有分隔符，添加分隔符
+      if (!hasSeparator && offset > 0 && string[offset - 1] === '\n') {
+        const columnCount = (match.match(/\|/g) || []).length - 1
+        const separator = '\n' + Array(columnCount).fill('---').join('|') + '|\n'
+        return match + separator
+      }
+
+      return match
+    })
+    // 修复标题格式
+    .replace(/^(#{1,6})\s*/gm, '$1 ')
+    // 修复多余的空格和换行
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+$/gm, '')
+}
+
+// 增强的文本渲染，处理基本的格式
+const renderEnhancedText = (text) => {
+  return text
+    // HTML转义
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    // 保留换行
+    .replace(/\n/g, '<br>')
+    // 处理粗体（已完成的）
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    // 处理斜体（已完成的）
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    // 处理行内代码（已完成的）
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+}
+
+// HTML转义函数
+const escapeHtml = (text) => {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
 }
 
 // 添加一个观察器来监视消息变化
@@ -354,8 +712,7 @@ const loadSessions = async () => {
       console.log('Sessions loaded:', sessions.value)
     }
   } catch (error) {
-    console.error('Load sessions error:', error)
-    if (error.code !== 401) ElMessage.error('加载会话列表失败')
+    handleApiError(error, '加载会话列表失败')
   } finally {
     sessionsLoading.value = false
   }
@@ -408,7 +765,7 @@ const loadMessages = async (sessionId) => {
       })
     }
   } catch (error) {
-    if (error.code !== 401) ElMessage.error('加载消息失败')
+    handleApiError(error, '加载消息失败')
   }
 }
 
@@ -464,10 +821,13 @@ const sendMessage = async () => {
     let aiMessageText = ''
 
     isTyping.value = false
+    const aiMessageObj = {
+      id: Date.now() + 1,
+      content: '',
+      messageType: 1,
+      createdAt: new Date().toISOString()
+    }
     messages.value.push(aiMessageObj)
-
-    // 标记此消息为流式传输状态
-    streamingMessageIds.value.add(aiMessageObj.id)
 
     // 读取流式数据
     let isReading = true
@@ -479,22 +839,20 @@ const sendMessage = async () => {
         break
       }
 
-      // 解码时保留原始换行和格式
-      let chunk = decoder.decode(value, { stream: true })
-      // 只清理行首的data:前缀，保留其他格式
+      let chunk = decoder.decode(value)
+      // 移除所有的data:前缀，包括全局匹配
       chunk = chunk.replace(/^data:\s*/gm, '')
-      const cleanChunk = chunk.trimEnd() // 只去除块末尾空白，保留内部格式
+      // 保留换行符以支持Markdown格式，只清理多余的空白字符
+      const cleanChunk = chunk.replace(/\r+/g, '').replace(/[ \t]+/g, ' ').trim()
 
       if (cleanChunk) {
-        // 直接拼接，不额外添加换行（Markdown格式由AI输出本身控制）
         aiMessageText += cleanChunk
       }
 
-      // 流式传输时实时更新显示内容
       const aiMsgIndex = messages.value.findIndex(msg => msg.id === aiMessageObj.id)
       if (aiMsgIndex > -1) {
+        // 在流式传输过程中也更新内容，但保持流式标记
         messages.value[aiMsgIndex].content = aiMessageText
-        await nextTick()
       }
 
       nextTick(() => {
@@ -504,31 +862,23 @@ const sendMessage = async () => {
       })
     }
 
-    // 流式数据读取完成后，一次性更新完整的Markdown内容
-    const aiMsgIndex = messages.value.findIndex(msg => msg.id === aiMessageObj.id)
-    if (aiMsgIndex > -1) {
+    // 流式数据读取完成后，处理最终内容
+    const finalMsgIndex = messages.value.findIndex(msg => msg.id === aiMessageObj.id)
+    if (finalMsgIndex > -1) {
       // 清理最终收集到的完整内容
       const cleanedContent = cleanAIResponse(aiMessageText)
 
-      console.log('流式完成，内容长度:', cleanedContent.length, '开始渲染Markdown')
+      console.log('流式完成，内容长度:', cleanedContent.length)
 
-      // 移除流式传输标记，触发Markdown渲染
+      // 移除流式传输标记，切换到Markdown渲染
       streamingMessageIds.value.delete(aiMessageObj.id)
 
-      // 直接更新内容和版本号
-      messages.value[aiMsgIndex].content = cleanedContent
-      messages.value[aiMsgIndex].renderVersion = ++renderVersion
+      // 最终更新内容（触发Markdown渲染）
+      messages.value[finalMsgIndex].content = cleanedContent
+      messages.value[finalMsgIndex].renderVersion = ++renderVersion
 
-      console.log('内容更新完成，开始强制渲染')
-
-      // 强制更新
+      // 等待Vue更新完成
       await nextTick()
-      if (instance && instance.proxy) {
-        instance.proxy.$forceUpdate()
-      }
-      await nextTick()
-
-      console.log('Markdown渲染完成')
     }
 
     await loadSessions()
@@ -539,7 +889,7 @@ const sendMessage = async () => {
     // 确保清理流式标记
     streamingMessageIds.value.delete(aiMessageObj.id)
 
-    if (error.code !== 401) ElMessage.error(error.message || '发送消息失败')
+    handleApiError(error, error.message || '发送消息失败')
     const index = messages.value.findIndex(msg => msg.id === userMessageObj.id)
     if (index > -1) messages.value.splice(index, 1)
 
@@ -592,7 +942,9 @@ const handleSessionCommand = async (command, session) => {
           }
         }
       } catch (error) {
-        if (error !== 'cancel' && error.code !== 401) ElMessage.error('删除失败')
+        if (error !== 'cancel') {
+          handleApiError(error, '删除失败')
+        }
       }
       break
   }
@@ -648,7 +1000,7 @@ const renameSession = async () => {
       showRenameDialog.value = false
     }
   } catch (error) {
-    if (error.code !== 401) ElMessage.error('重命名失败')
+    handleApiError(error, '重命名失败')
   }
 }
 
@@ -1126,6 +1478,85 @@ const loadUserInfo = async () => {
   }
 }
 
+// 全局复制代码函数
+window.copyCode = async function(button, code) {
+  try {
+    // 解码HTML实体
+    const decodedCode = code
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&#x2F;/g, '/')
+
+    // 使用现代剪贴板API
+    await navigator.clipboard.writeText(decodedCode)
+
+    // 按钮状态更新
+    const originalHTML = button.innerHTML
+    button.classList.add('copied')
+    button.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+      <span>已复制</span>
+    `
+
+    // 按钮动画
+    button.classList.add('copy-animation')
+
+    // 2秒后恢复原状态
+    setTimeout(() => {
+      button.classList.remove('copied', 'copy-animation')
+      button.innerHTML = originalHTML
+    }, 2000)
+
+  } catch (err) {
+    console.error('复制失败:', err)
+
+    // 降级方案：创建临时textarea
+    const textArea = document.createElement('textarea')
+    textArea.value = code
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&#x2F;/g, '/')
+
+    textArea.style.position = 'fixed'
+    textArea.style.left = '-999999px'
+    textArea.style.top = '-999999px'
+    document.body.appendChild(textArea)
+    textArea.focus()
+    textArea.select()
+
+    try {
+      document.execCommand('copy')
+
+      // 复制成功的视觉反馈
+      const originalHTML = button.innerHTML
+      button.classList.add('copied')
+      button.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span>已复制</span>
+      `
+
+      setTimeout(() => {
+        button.classList.remove('copied')
+        button.innerHTML = originalHTML
+      }, 2000)
+    } catch (fallbackErr) {
+      console.error('降级复制也失败:', fallbackErr)
+    }
+
+    document.body.removeChild(textArea)
+  }
+}
+
 // 挂载时加载
 onMounted(() => {
   if (checkToken()) {
@@ -1456,37 +1887,161 @@ onUnmounted(() => {
   border: 1px solid #e5e7eb;
 }
 
-/* 消息气泡 */
+/* 消息气泡 - 现代化样式 */
 .message-content {
   max-width: 70%;
-  padding: 14px 18px;
+  padding: 16px 20px;
   position: relative;
   line-height: 1.6;
-  font-size: 14px;
-  border-radius: 12px;
-  transition: all 0.2s ease;
+  font-size: 15px;
+  border-radius: 18px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: messageSlideIn 0.3s ease-out;
+  /* backdrop-filter: blur(10px); 临时禁用以测试文本选择问题 */
+}
+
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .message-content:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
 }
 
 .user-message .message-content {
-  margin-right: 12px;
+  margin-right: 16px;
   margin-left: auto;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
   color: white;
-  border-radius: 12px 12px 0 12px;
+  border-radius: 18px 18px 4px 18px;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.user-message .message-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 100%);
+  border-radius: inherit;
+  pointer-events: none; /* 允许文本选择穿透伪元素 */
 }
 
 .ai-message .message-content {
-  margin-left: 12px;
+  margin-left: 16px;
   margin-right: auto;
-  background-color: #ffffff;
-  color: #111827;
-  border-radius: 12px 12px 12px 0;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
-  border: 1px solid #f3f4f6;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  color: #1f2937;
+  border-radius: 18px 18px 18px 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(229, 231, 235, 0.8);
+}
+
+.ai-message .message-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.02) 0%, transparent 100%);
+  border-radius: inherit;
+  pointer-events: none; /* 允许文本选择穿透伪元素 */
+}
+
+/* 消息时间样式优化 */
+.message-time {
+  font-size: 11px;
+  opacity: 0.6;
+  margin-top: 8px;
+  text-align: right;
+  color: #6b7280;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+.user-message .message-time {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* 消息头像优化 */
+.message-avatar {
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.message-avatar:hover {
+  transform: scale(1.05);
+}
+
+/* 消息输入指示器优化 */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 0;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  animation: typing 1.4s infinite ease-in-out both;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
+.dot:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.dot:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes typing {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* 流式文本动画优化 */
+.streaming-text {
+  color: #374151;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.7;
+  font-family: inherit;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-radius: 12px;
+  padding: 16px 20px;
+  border-left: 4px solid #3b82f6;
+  animation: streamingPulse 2s ease-in-out infinite;
+}
+
+@keyframes streamingPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.1);
+  }
 }
 
 /* 消息文本 */
@@ -1499,20 +2054,426 @@ onUnmounted(() => {
   font-size: 14px;
 }
 
-.markdown-content pre {
-  background-color: #f9fafb;
-  border-radius: 6px;
-  padding: 12px;
-  margin: 8px 0;
-  overflow-x: auto;
-  color: #111827;
+/* 代码块容器 */
+.code-block-wrapper {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  border-radius: 12px;
+  margin: 16px 0;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid #475569;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
-.markdown-content code {
-  background-color: #f3f4f6;
-  padding: 2px 4px;
-  border-radius: 4px;
+.markdown-content pre {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  position: relative;
+  border: none;
+  box-shadow: none;
+}
+
+/* 代码块头部 */
+.code-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid #475569;
+  min-height: 44px;
+}
+
+.code-language {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.code-language-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.code-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.copy-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.copy-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #e2e8f0;
+  transform: translateY(-1px);
+}
+
+.copy-btn.copied {
+  background: #10b981;
+  border-color: #10b981;
+  color: white;
+}
+
+/* 代码内容区域 */
+.markdown-content pre code {
+  display: block;
+  padding: 20px;
+  background: transparent;
+  color: #e2e8f0;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-x: auto;
+  border-radius: 0;
+  white-space: pre;
+  word-wrap: normal;
+}
+
+/* 内联代码 */
+.markdown-content :not(pre) > code {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  border: 1px solid #cbd5e1;
+  padding: 3px 6px;
+  border-radius: 6px;
   font-size: 13px;
+  color: #1e293b;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* SQL语法高亮 */
+.sql-keyword {
+  color: #f472b6;
+  font-weight: 600;
+  text-shadow: 0 0 8px rgba(244, 114, 182, 0.3);
+}
+
+.sql-function {
+  color: #60a5fa;
+  font-weight: 500;
+}
+
+.sql-string {
+  color: #34d399;
+  font-style: italic;
+}
+
+.sql-number {
+  color: #fbbf24;
+  font-weight: 500;
+}
+
+.sql-operator {
+  color: #a78bfa;
+  font-weight: 600;
+}
+
+.sql-comment {
+  color: #64748b;
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.sql-type {
+  color: #fb923c;
+  font-weight: 500;
+}
+
+/* JavaScript语法高亮 */
+.js-keyword {
+  color: #c084fc;
+  font-weight: 600;
+  text-shadow: 0 0 8px rgba(192, 132, 252, 0.3);
+}
+
+.js-function {
+  color: #60a5fa;
+  font-weight: 500;
+}
+
+.js-string {
+  color: #34d399;
+  font-style: italic;
+}
+
+.js-number {
+  color: #fbbf24;
+  font-weight: 500;
+}
+
+.js-comment {
+  color: #64748b;
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.js-regexp {
+  color: #f87171;
+  font-style: italic;
+}
+
+/* Python语法高亮 */
+.python-keyword {
+  color: #c084fc;
+  font-weight: 600;
+  text-shadow: 0 0 8px rgba(192, 132, 252, 0.3);
+}
+
+.python-function {
+  color: #60a5fa;
+  font-weight: 500;
+}
+
+.python-string {
+  color: #34d399;
+  font-style: italic;
+}
+
+.python-number {
+  color: #fbbf24;
+  font-weight: 500;
+}
+
+.python-comment {
+  color: #64748b;
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.python-builtin {
+  color: #fb923c;
+  font-weight: 500;
+}
+
+/* Java语法高亮 */
+.java-keyword {
+  color: #c084fc;
+  font-weight: 600;
+  text-shadow: 0 0 8px rgba(192, 132, 252, 0.3);
+}
+
+.java-annotation {
+  color: #f472b6;
+  font-weight: 500;
+}
+
+.java-string {
+  color: #34d399;
+  font-style: italic;
+}
+
+.java-number {
+  color: #fbbf24;
+  font-weight: 500;
+}
+
+.java-comment {
+  color: #64748b;
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.java-type {
+  color: #60a5fa;
+  font-weight: 500;
+}
+
+/* CSS语法高亮 */
+.css-selector {
+  color: #f472b6;
+  font-weight: 600;
+}
+
+.css-property {
+  color: #60a5fa;
+  font-weight: 500;
+}
+
+.css-value {
+  color: #34d399;
+  font-style: italic;
+}
+
+.css-unit {
+  color: #fbbf24;
+  font-weight: 500;
+}
+
+.css-important {
+  color: #f87171;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+/* 通用语法高亮 */
+.syntax-bracket {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.syntax-punctuation {
+  color: #64748b;
+}
+
+.syntax-variable {
+  color: #38bdf8;
+  font-weight: 500;
+}
+
+.syntax-class {
+  color: #fb923c;
+  font-weight: 500;
+}
+
+.syntax-method {
+  color: #60a5fa;
+  font-weight: 500;
+}
+
+/* 代码块动画效果 */
+.code-block-wrapper {
+  animation: codeBlockFadeIn 0.4s ease-out;
+}
+
+@keyframes codeBlockFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 代码块内容增强效果 */
+.markdown-content pre code {
+  position: relative;
+  z-index: 1;
+}
+
+.markdown-content pre code::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.02) 0%, transparent 100%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* 代码块头部增强 */
+.code-block-header {
+  backdrop-filter: blur(8px);
+}
+
+/* 语言指示点动画 */
+.code-language-dot {
+  animation: pulseDot 2s ease-in-out infinite;
+}
+
+@keyframes pulseDot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+/* 复制按钮动画 */
+.copy-animation {
+  animation: copySuccess 0.3s ease-out;
+}
+
+@keyframes copySuccess {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* 代码块滚动条美化 */
+.markdown-content pre code::-webkit-scrollbar {
+  height: 8px;
+}
+
+.markdown-content pre code::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+.markdown-content pre code::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.markdown-content pre code::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* 代码块hover效果 */
+.code-block-wrapper:hover {
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+  transform: translateY(-2px);
+  transition: all 0.2s ease;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .code-block-wrapper {
+    margin: 12px -8px;
+    border-radius: 8px;
+  }
+
+  .code-block-header {
+    padding: 10px 12px;
+  }
+
+  .markdown-content pre code {
+    padding: 16px 12px;
+    font-size: 13px;
+  }
+
+  .copy-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
 }
 
 .markdown-content h1,
@@ -1890,120 +2851,373 @@ onUnmounted(() => {
   border-left: 3px solid #3b82f6;
 }
 
-/* Markdown表格样式修复 */
-.markdown-content table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 16px 0;
-  font-size: 14px;
-  background-color: #ffffff;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
+/* ===== 现代化Markdown样式 ===== */
 
-.markdown-content th,
-.markdown-content td {
-  padding: 12px 16px;
-  border: 1px solid #e5e7eb;
-  text-align: left;
-  line-height: 1.5;
-}
-
-.markdown-content th {
-  background-color: #f9fafb;
-  font-weight: 600;
-  color: #111827;
-  border-bottom: 2px solid #e5e7eb;
-}
-
-.markdown-content tr:nth-child(even) {
-  background-color: #f8fafc;
-}
-
-.markdown-content tr:hover {
-  background-color: #f3f4f6;
-}
-
-/* 修复代码块样式 */
-.markdown-content pre {
-  background-color: #f8fafc;
-  border-radius: 8px;
-  padding: 0;
-  margin: 16px 0;
-  overflow-x: auto;
-  border: 1px solid #e5e7eb;
-}
-
-.markdown-content pre code {
-  display: block;
-  padding: 16px;
-  overflow-x: auto;
-  line-height: 1.6;
-  font-size: 13px;
+/* 基础文本样式 */
+.markdown-content {
+  line-height: 1.7;
   color: #374151;
-  background: none;
-  border: none;
+  font-size: 15px;
+  word-wrap: break-word;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
 }
 
-.markdown-content code:not(pre code) {
-  background-color: #f3f4f6;
-  padding: 3px 6px;
-  border-radius: 4px;
-  font-size: 13px;
-  color: #d97706;
-  border: 1px solid #e5e7eb;
+.markdown-content p {
+  margin: 16px 0;
+  line-height: 1.7;
 }
 
-/* 列表样式优化 */
-.markdown-content ul,
-.markdown-content ol {
-  margin: 12px 0;
-  padding-left: 24px;
-}
-
-.markdown-content li {
-  margin: 6px 0;
-  line-height: 1.6;
-}
-
-/* 标题样式优化 */
+/* 标题样式 - 渐变效果 */
 .markdown-content h1,
 .markdown-content h2,
 .markdown-content h3,
 .markdown-content h4,
 .markdown-content h5,
 .markdown-content h6 {
-  margin: 20px 0 12px;
-  font-weight: 600;
-  color: #111827;
+  margin: 24px 0 16px;
+  font-weight: 700;
   line-height: 1.3;
+  position: relative;
+  scroll-margin-top: 20px;
 }
 
 .markdown-content h1 {
-  font-size: 24px;
-  border-bottom: 2px solid #e5e7eb;
-  padding-bottom: 8px;
+  font-size: 28px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  padding-bottom: 12px;
+  margin-bottom: 24px;
+}
+
+.markdown-content h1::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 60px;
+  height: 3px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 2px;
 }
 
 .markdown-content h2 {
-  font-size: 20px;
-  border-bottom: 1px solid #e5e7eb;
-  padding-bottom: 6px;
+  font-size: 22px;
+  color: #1f2937;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e5e7eb;
+  position: relative;
+}
+
+.markdown-content h2::before {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 40px;
+  height: 2px;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  border-radius: 1px;
 }
 
 .markdown-content h3 {
   font-size: 18px;
+  color: #374151;
+  display: flex;
+  align-items: center;
 }
 
-/* 引用块样式 */
-.markdown-content blockquote {
-  margin: 16px 0;
-  padding: 12px 20px;
-  border-left: 4px solid #3b82f6;
+.markdown-content h3::before {
+  content: '▸';
+  color: #3b82f6;
+  margin-right: 8px;
+  font-size: 16px;
+}
+
+.markdown-content h4 {
+  font-size: 16px;
+  color: #4b5563;
+}
+
+.markdown-content h5 {
+  font-size: 15px;
+  color: #6b7280;
+}
+
+.markdown-content h6 {
+  font-size: 14px;
+  color: #9ca3af;
+}
+
+/* 现代化代码块样式 */
+.markdown-content pre {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  border-radius: 12px;
+  padding: 0;
+  margin: 20px 0;
+  overflow: hidden;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  border: 1px solid #475569;
+  position: relative;
+}
+
+.markdown-content pre::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+}
+
+.markdown-content pre code {
+  display: block;
+  padding: 20px;
+  overflow-x: auto;
+  line-height: 1.6;
+  font-size: 14px;
+  color: #e2e8f0;
+  background: transparent;
+  border: none;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+/* 行内代码样式 */
+.markdown-content code:not(pre code) {
+  background: linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%);
+  color: #92400e;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid #f59e0b;
+  box-shadow: 0 1px 2px rgba(245, 158, 11, 0.2);
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+/* SQL代码块特殊样式 */
+.markdown-content pre code[class*="language-sql"],
+.markdown-content pre code:has("SELECT"),
+.markdown-content pre code:has("INSERT"),
+.markdown-content pre code:has("UPDATE"),
+.markdown-content pre code:has("DELETE") {
+  color: #86efac;
+}
+
+/* SQL关键字高亮 */
+.markdown-content pre code:has("SELECT") span,
+.markdown-content pre code:has("INSERT") span,
+.markdown-content pre code:has("UPDATE") span,
+.markdown-content pre code:has("DELETE") span {
+  color: #fbbf24;
+  font-weight: bold;
+}
+
+/* 现代化表格样式 */
+.markdown-content table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 24px 0;
+  font-size: 14px;
+  background: #ffffff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e5e7eb;
+}
+
+.markdown-content th,
+.markdown-content td {
+  padding: 16px;
+  text-align: left;
+  line-height: 1.5;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.markdown-content th {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  font-weight: 700;
+  color: #1f2937;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.markdown-content tr:last-child td {
+  border-bottom: none;
+}
+
+.markdown-content tr:nth-child(even) {
+  background-color: #fafbfc;
+}
+
+.markdown-content tr:hover {
   background-color: #f8fafc;
+  transition: background-color 0.2s ease;
+}
+
+/* 现代化列表样式 */
+.markdown-content ul,
+.markdown-content ol {
+  margin: 16px 0;
+  padding-left: 0;
+}
+
+.markdown-content ul {
+  list-style: none;
+}
+
+.markdown-content ul li {
+  position: relative;
+  padding: 8px 0 8px 28px;
+  line-height: 1.7;
+  margin: 4px 0;
+}
+
+.markdown-content ul li::before {
+  content: '•';
+  position: absolute;
+  left: 8px;
+  color: #3b82f6;
+  font-size: 18px;
+  font-weight: bold;
+  top: 8px;
+}
+
+.markdown-content ol {
+  padding-left: 24px;
+}
+
+.markdown-content ol li {
+  padding: 8px 0 8px 8px;
+  line-height: 1.7;
+  margin: 4px 0;
+  position: relative;
+}
+
+.markdown-content ol li::marker {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+/* 嵌套列表 */
+.markdown-content ul ul,
+.markdown-content ol ol,
+.markdown-content ul ol,
+.markdown-content ol ul {
+  margin: 8px 0;
+}
+
+.markdown-content ul ul li::before {
+  color: #10b981;
+  font-size: 14px;
+}
+
+/* 现代化引用块样式 */
+.markdown-content blockquote {
+  margin: 24px 0;
+  padding: 20px 24px;
+  border-left: 5px solid;
+  border-image: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) 1;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  color: #1e40af;
+  font-style: normal;
+  border-radius: 0 12px 12px 0;
+  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.1);
+  position: relative;
+}
+
+.markdown-content blockquote p {
+  margin: 0;
+}
+
+.markdown-content blockquote::before {
+  content: '"';
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  font-size: 48px;
+  color: #3b82f6;
+  opacity: 0.2;
+  font-family: Georgia, serif;
+}
+
+/* 链接样式 */
+.markdown-content a {
+  color: #3b82f6;
+  text-decoration: none;
+  font-weight: 500;
+  border-bottom: 1px solid transparent;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.markdown-content a:hover {
+  color: #1d4ed8;
+  border-bottom-color: #1d4ed8;
+}
+
+.markdown-content a::after {
+  content: '↗';
+  font-size: 12px;
+  margin-left: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.markdown-content a:hover::after {
+  opacity: 1;
+}
+
+/* 粗体和斜体 */
+.markdown-content strong {
+  color: #1f2937;
+  font-weight: 700;
+}
+
+.markdown-content em {
   color: #4b5563;
   font-style: italic;
+}
+
+/* 水平分割线 */
+.markdown-content hr {
+  border: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #e5e7eb, transparent);
+  margin: 32px 0;
+  border-radius: 2px;
+}
+
+/* 纯文本样式 */
+.plain-text {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.6;
+  color: #374151;
+  margin: 16px 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* 防止文本选中 - 保持原有行为 */
+.markdown-content * {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+/* 段落间距优化 */
+.markdown-content p:first-child {
+  margin-top: 0;
+}
+
+.markdown-content p:last-child {
+  margin-bottom: 0;
 }
 
 /* 对话框样式 */

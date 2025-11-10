@@ -2,7 +2,9 @@ package cn.ling.config;
 
 import cn.ling.interceptor.JwtInterceptor;
 import cn.ling.interceptor.PowerInterceptor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -12,10 +14,13 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
+
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         // 注册JWT拦截器
-        registry.addInterceptor(new JwtInterceptor())
+        registry.addInterceptor(new JwtInterceptor(stringRedisTemplate))
                 // 拦截所有路径（/** 表示所有请求）
                 .addPathPatterns("/**")
                 // 排除不需要拦截的路径（根据实际业务调整）

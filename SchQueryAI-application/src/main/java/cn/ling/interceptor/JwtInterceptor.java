@@ -6,6 +6,7 @@ import cn.ling.utils.JwtUtils;
 import cn.ling.role.UserInfo;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.util.HashMap;
@@ -14,6 +15,15 @@ import java.util.HashMap;
  * JWT令牌校验拦截器
  */
 public class JwtInterceptor implements HandlerInterceptor {
+
+    private StringRedisTemplate stringRedisTemplate;
+
+    private static final String TOKEN_BLACKLIST_KEY = "token_blacklist:";
+    private static final long TOKEN_BLACKLIST_TTL = 2 * 60 * 60; // 2小时，与JWT过期时间一致
+
+    public JwtInterceptor(StringRedisTemplate stringRedisTemplate) {
+        this.stringRedisTemplate = stringRedisTemplate;
+    }
 
     /**
      * 请求处理前执行（拦截请求）
@@ -40,24 +50,48 @@ public class JwtInterceptor implements HandlerInterceptor {
         String token = authHeader.substring(7).trim();
 
         try {
-            // 4. 校验令牌有效性（调用之前的JwtUtils）
+            // 5. 校验令牌有效性（调用之前的JwtUtils）
             HashMap<String, Object> allClaimsAsMap = JwtUtils.getAllClaimsAsMap(token);
-            // 5. 令牌有效：可以将用户信息存入请求属性（方便后续Controller获取）
+
+            // 6. 检查该用户是否被强制下线（密码重置等操作）
+            Long userId = Long.parseLong(allClaimsAsMap.get("userId").toString());
+            String userBlacklistKey = TOKEN_BLACKLIST_KEY + userId;
+
+            if (stringRedisTemplate.hasKey(userBlacklistKey)) {
+                // 检查当前令牌是否在用户黑名单时间之后签发的
+                String blacklistedTime = stringRedisTemplate.opsForValue().get(userBlacklistKey);
+                long tokenIssuedAt = ((Number) allClaimsAsMap.get("iat")).longValue();
+                long blacklistedTimestamp = Long.parseLong(blacklistedTime);
+
+                if (tokenIssuedAt < blacklistedTimestamp) {
+                    handleError(response, "用户信息已更新，请重新登录");
+                    return false;
+                }
+            }
+
+            // 7. 令牌有效：可以将用户信息存入请求属性（方便后续Controller获取）
             UserInfo userInfo = new UserInfo();
-            userInfo.setUserId(Long.parseLong(allClaimsAsMap.get("userId").toString()));
+            userInfo.setUserId(userId);
             userInfo.setUsername(allClaimsAsMap.get("userName").toString());
             userInfo.setRole(allClaimsAsMap.get("role").toString());
             ContextUtils.setUserInfo(userInfo);
 
-            // 6. 放行请求
+            // 8. 放行请求
             return true;
 
-        } catch (Exception e) {
+              } catch (Exception e) {
             // 校验过程中发生异常（如签名错误、格式错误等）
-            handleError(response, "令牌校验失败：" + e.getMessage());
+            String errorMessage = e.getMessage();
+
+            // 检查是否是令牌过期
+            if (errorMessage != null && errorMessage.contains("JWT expired")) {
+                handleError(response, "TOKEN_EXPIRED");
+            } else {
+                handleError(response, "令牌校验失败：" + errorMessage);
+            }
         }
 
-        return true;
+        return false; // 令牌验证失败，不应该继续处理请求
     }
 
     /**

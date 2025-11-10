@@ -8,7 +8,7 @@ import cn.ling.mapper.ChatMessageMapper;
 import cn.ling.service.ChatMessageService;
 import cn.ling.service.ChatSessionService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -26,7 +26,7 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
     implements ChatMessageService{
 
     @Autowired
-    private ChatModel chatModel;
+    private ChatClient chatClient;
 
     @Autowired
     private ChatSessionService chatSessionService;
@@ -78,8 +78,11 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
             // Update session last message time
             chatSessionService.updateLastMessageTime(chatMessageDTO.getSessionId());
 
-            // Generate AI response using streaming
-            Flux<String> aiResponseStream = chatModel.stream(chatMessageDTO.getContent());
+            // Generate AI response using streaming with system prompt
+            Flux<String> aiResponseStream = chatClient.prompt()
+                    .user(chatMessageDTO.getContent())
+                    .stream()
+                    .content();
 
             // 用于累积完整的AI回复
             StringBuilder fullResponse = new StringBuilder();

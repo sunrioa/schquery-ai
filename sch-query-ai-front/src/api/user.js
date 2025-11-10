@@ -66,5 +66,20 @@ export const userApi = {
   // 删除用户头像
   deleteAvatar() {
     return request.post('/user/deleteAvatar')
+  },
+
+  // 发送重置密码验证码
+  sendResetCode(email) {
+    return request.post('/user/sendFindPasswordCode', { email })
+  },
+
+  // 检查邮箱是否存在 (通过发送验证码接口来验证)
+  checkEmailExists(email) {
+    return request.post('/user/sendFindPasswordCode', { email })
+  },
+
+  // 验证重置密码验证码并重置密码
+  resetPassword(data) {
+    return request.post('/user/findPassword', data)
   }
 }

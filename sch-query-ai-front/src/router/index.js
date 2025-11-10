@@ -4,6 +4,7 @@ import Register from '../views/Register.vue'
 import Home from '../views/Home.vue'
 import PasswordManager from '../views/PasswordManager.vue'
 import Password from '../views/Password.vue'
+import ForgotPassword from '../views/ForgotPassword.vue'
 import Profile from '../views/Profile.vue'
 import Chat from '../views/Chat.vue'
 import NotFound from '../views/NotFound.vue'
@@ -33,6 +34,11 @@ const routes = [
     path: '/password',
     name: 'Password',
     component: Password
+  },
+  {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: ForgotPassword
   },
   {
     path: '/profile',

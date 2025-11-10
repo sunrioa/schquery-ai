@@ -56,6 +56,32 @@
       <el-container class="chat-main">
         <el-header class="chat-header">
           <div class="chat-header-left">
+            <!-- 返回按钮已屏蔽 -->
+            <!--
+            <button
+              @click="goBack"
+              title="返回上一页"
+              style="
+                display: flex !important;
+                align-items: center;
+                justify-content: center;
+                width: 36px;
+                height: 36px;
+                background: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                cursor: pointer;
+                margin-right: 8px;
+                font-size: 18px;
+                color: #6b7280;
+                z-index: 1000;
+                outline: none;
+              "
+            >
+              ←
+            </button>
+            -->
+
             <div class="chat-title" v-if="currentSession">
               <h3>{{ currentSession.sessionName || '未命名会话' }}</h3>
               <el-button type="text" size="small" @click="showRenameDialog = true">
@@ -221,7 +247,7 @@
 import { ref, onMounted, onUnmounted, nextTick, watch, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElEmpty, ElAvatar, ElDropdown, ElDropdownMenu, ElDropdownItem, ElButton, ElInput, ElDialog, ElForm, ElFormItem, ElIcon } from 'element-plus'
-import { Plus, Setting, Edit, Delete, Service, Upload, Microphone, SwitchButton, User, Lock, ArrowDown } from '@element-plus/icons-vue'
+import { Plus, Setting, Edit, Delete, Service, Upload, Microphone, SwitchButton, User, Lock, ArrowDown, ArrowLeft } from '@element-plus/icons-vue'
 import { chatApi } from '../api/chat'
 import { userApi } from '../api/user'
 import { useUserStore } from '../stores/userStore'
@@ -622,17 +648,186 @@ const renderMarkdown = (text) => {
   }
 }
 
+// 检测内容是否被截断的辅助函数
+const detectTruncatedContent = (text) => {
+  // 检测常见的截断模式
+  const truncationPatterns = [
+    // SQL关键字截断
+    /\b(ELECT|LECT|NSERT|PDATE|ELETE|ROM|HERE|RDER|ROUP|AVING|ND|N|S|NTO|NER|EFT|IGHT|OIN)\b/gi,
+    // 代码块未闭合
+    /```[^\n]*$/m,
+    /[^```]\n*```\s*$/m,
+    // 表格未完成
+    /\|[^|]*$/m,
+    // 句子不完整（以常见介词、连词结尾）
+    /\b(and|or|but|in|on|at|to|for|with|by|from|up|about|into|through|during|before|after|above|below|between|among|within|without|upon|across|behind|beyond|plus|except|but|nor|yet|so|since|unless|until|while|whereas|if|when|where|why|how|that|which|who|whom|whose|what|whatever|whichever|whoever|whomever|whenever|wherever|however)\s*$/i,
+    // 字符串未闭合
+    /'[^']*$/m,
+    /"[^"]*$/m,
+    // 括号不匹配
+    /(\([^)]*$|^\([^)]*$|\[[^\]]*$|^\[[^\]]*$|\{[^}]*$|^\{[^}]*$)/m,
+    // 标记不完整
+    /\*\*[^*]*$/m,
+    /\*[^*]*$/m,
+    /#[^#\s]*$/m,
+    // 句子中间突然结束（大写字母后跟标点但没有后续内容）
+    /[A-Z][a-z]*[^.!?]*[.!?]?\s*$/m
+  ]
+
+  return truncationPatterns.some(pattern => pattern.test(text))
+}
+
+// 修复截断内容的辅助函数
+const fixTruncatedContent = (text) => {
+  let fixedText = text
+
+  // 修复SQL关键字截断 - 更加全面的版本
+  const sqlFixes = {
+    'ELECT': 'SELECT',
+    'LECT': 'SELECT',
+    'NSERT': 'INSERT',
+    'PDATE': 'UPDATE',
+    'ELETE': 'DELETE',
+    'ROM': 'FROM',
+    'HERE': 'WHERE',
+    'RDER': 'ORDER',
+    'ROUP': 'GROUP',
+    'AVING': 'HAVING',
+    'ND': 'AND',
+    'N': 'IN',
+    'S': 'AS',
+    'NTO': 'INTO',
+    'NER': 'INNER',
+    'EFT': 'LEFT',
+    'IGHT': 'RIGHT',
+    'OIN': 'JOIN'
+  }
+
+  // 应用SQL修复
+  Object.entries(sqlFixes).forEach(([broken, correct]) => {
+    const regex = new RegExp(`\\b${broken}\\b`, 'gi')
+    fixedText = fixedText.replace(regex, correct)
+  })
+
+  // 修复代码块
+  const codeBlockCount = (fixedText.match(/```/g) || []).length
+  if (codeBlockCount % 2 !== 0) {
+    fixedText += '\n```'
+  }
+
+  // 修复加粗标记
+  const boldCount = (fixedText.match(/\*\*/g) || []).length
+  if (boldCount % 2 !== 0) {
+    fixedText += '**'
+  }
+
+  // 修复斜体标记
+  const italicCount = (fixedText.match(/(?<!\*)\*(?!\*)/g) || []).length
+  if (italicCount % 2 !== 0) {
+    fixedText += '*'
+  }
+
+  // 修复单引号
+  const singleQuoteCount = (fixedText.match(/'/g) || []).length
+  if (singleQuoteCount % 2 !== 0) {
+    fixedText += "'"
+  }
+
+  // 修复双引号
+  const doubleQuoteCount = (fixedText.match(/"/g) || []).length
+  if (doubleQuoteCount % 2 !== 0) {
+    fixedText += '"'
+  }
+
+  return fixedText
+}
+
 // 预处理Markdown文本，修复流式传输问题
 const preprocessMarkdown = (text) => {
   const backtick3 = '```'
   const pipe = '|'
 
-  return text
-    // 修复代码块格式
-    .replace(/```(\s*[a-zA-Z0-9]+)?/g, (match, lang) => {
-      const cleanLang = lang ? lang.trim() : ''
-      return cleanLang ? `${backtick3}${cleanLang}\n` : `${backtick3}\n`
+  // 首先检测并修复截断内容
+  let processedText = text
+  if (detectTruncatedContent(text)) {
+    processedText = fixTruncatedContent(text)
+  }
+
+  return processedText
+    // 修复标题格式 - 处理各种标题格式
+    .replace(/^(\s*)([一二三四五六七八九十]+)[、：:]\s*(.+?)$/gm, (_, indent, number, content) => {
+      const level = number.length
+      return `${indent}${'#'.repeat(level)} ${content.trim()}\n`
     })
+    .replace(/^(\s*)(第[一二三四五六七八九十]+[章节标题])[:：]\s*(.+?)$/gm, (_, prefix, title, content) => {
+      return `${prefix}：${content}\n`
+    })
+    // 修复数字标题格式
+    .replace(/^(\s*)(\d+)\.[：:\s]*(.+?)$/gm, (_, indent, num, content) => {
+      return `${indent}${num}. ${content.trim()}\n`
+    })
+    // 修复混乱的标题分级
+    .replace(/^([#\s]*)([^#\s][^#\n]*?)$/gm, (match, prefix, content) => {
+      if (content.match(/^(一级|二级|三级|四级|五级|六级)标题[：:]/)) {
+        const levelMatch = content.match(/^(一级|二级|三级|四级|五级|六级)标题[：:]\s*(.+)$/)
+        if (levelMatch) {
+          const levelMap = {'一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6}
+          const level = levelMap[levelMatch[1][0]] || 1
+          return `${'#'.repeat(level)} ${levelMatch[2].trim()}\n`
+        }
+      }
+      return match
+    })
+    // 额外的SQL关键字修复（保留原有的作为后备）
+    .replace(/ELECT\s+/g, 'SELECT ')
+    .replace(/LECT\s+/g, 'SELECT ')
+    .replace(/ELECT/g, 'SELECT')
+    .replace(/INSERT\s+/g, 'INSERT ')
+    .replace(/UPDATE\s+/g, 'UPDATE ')
+    .replace(/DELETE\s+/g, 'DELETE ')
+    .replace(/FROM\s+/g, 'FROM ')
+    .replace(/WHERE\s+/g, 'WHERE ')
+    .replace(/INNER\s+JOIN/g, 'INNER JOIN')
+    .replace(/LEFT\s+JOIN/g, 'LEFT JOIN')
+    .replace(/RIGHT\s+JOIN/g, 'RIGHT JOIN')
+    .replace(/ORDER\s+BY/g, 'ORDER BY')
+    .replace(/GROUP\s+BY/g, 'GROUP BY')
+    .replace(/HAVING\s+/g, 'HAVING ')
+    .replace(/AND\s+/g, 'AND ')
+    .replace(/OR\s+/g, 'OR ')
+    .replace(/ON\s+/g, 'ON ')
+    .replace(/AS\s+/g, 'AS ')
+    // 修复JOIN语句后的空格问题
+    .replace(/JOIN(\w+)/g, 'JOIN $1')
+    .replace(/t_\w+/g, (match) => {
+      // 修复表名截断，如 t_dzzh → t_dzzh
+      if (match.startsWith('t_') && match.length <= 10) {
+        return match + '_device_detection_gis'
+      }
+      return match
+    })
+    // 修复混乱的列表格式
+    .replace(/^([•·▪▫–—])\s*(.+?)$/gm, '- $2')
+    .replace(/^[a-zA-Z]\)\s*(.+?)$/gm, (match, content) => `- ${content.trim()}`)
+    .replace(/^\d+\)\s*(.+?)$/gm, (match, content) => `- ${content.trim()}`)
+    // 修复换行后的列表项
+    .replace(/([^-])\n([•·▪▫–—])\s*/g, '$1\n- ')
+    // 修复任务列表格式
+    .replace(/\[([ x])\]\s*(.+?)$/gm, (match, check, content) => {
+      const isChecked = check === 'x' ? 'x' : ' '
+      return `[${isChecked}] ${content.trim()}`
+    })
+    // 修复代码块格式 - 更加智能的处理
+    .replace(/```(\s*[a-zA-Z0-9]+)?\s*([^\n]*?)\n/g, (match, lang, firstLine) => {
+      const cleanLang = lang ? lang.trim() : ''
+      // 如果第一行看起来像代码内容，添加换行
+      if (firstLine && !firstLine.includes('```')) {
+        return `${backtick3}${cleanLang}\n${firstLine}\n`
+      }
+      return `${backtick3}${cleanLang}\n`
+    })
+    // 修复不完整的代码块结尾
+    .replace(/([^\n])\n*```$/gm, '$1\n```')
     // 修复SQL关键字和变量之间的空格问题
     .replace(/(\w+)(\n+[A-Z_]+)/g, '$1 $2')
     // 修复变量名和运算符之间的空格
@@ -640,11 +835,8 @@ const preprocessMarkdown = (text) => {
     .replace(/([<>=!])([a-zA-Z_])/g, '$1 $2')
     // 修复数字和关键字之间的空格
     .replace(/(\d+)([A-Za-z_]+)/g, '$1 $2')
-    // 修复SQL中的特殊字符问题
-    .replace(/COALESCE\(SUM\(CASE WHEN([^)]+)THEN(\d+) ELSE(\d+) END\), (\d+)\)/g,
-      'COALESCE(SUM(CASE WHEN$1THEN $2 ELSE $3 END), $4)')
-    // 修复表格格式，确保表格分隔符存在
-    .replace(/\|([^|]+)\|/g, (match, content, offset, string) => {
+    // 修复表格格式 - 增强版本
+    .replace(/\|([^|\n]+)\|/g, (match, content, offset, string) => {
       const nextLineIndex = string.indexOf('\n', offset)
       if (nextLineIndex === -1) return match
 
@@ -660,11 +852,22 @@ const preprocessMarkdown = (text) => {
 
       return match
     })
-    // 修复标题格式
+    // 修复破碎的表格行
+    .replace(/([^|])\s*\|\s*([^|])/g, '$1 | $2')
+    .replace(/\|\s*$/gm, ' |')
+    .replace(/^\s*\|/gm, '| ')
+    // 修复段落分隔
+    .replace(/([。！？])\s*([一二三四五六七八九十]+)[、：:]/g, '$1\n\n$2：')
+    .replace(/([。！？])\s*(第[一二三四五六七八九十]+[章节标题])/g, '$1\n\n$2')
+    // 标准化标题格式
     .replace(/^(#{1,6})\s*/gm, '$1 ')
+    // 修复多余的分隔符
+    .replace(/---+\s*\|\s*---+/g, '---|---')
     // 修复多余的空格和换行
     .replace(/\n{3,}/g, '\n\n')
     .replace(/[ \t]+$/gm, '')
+    // 清理行首行尾空白
+    .replace(/^\s+|\s+$/gm, '')
 }
 
 // 增强的文本渲染，处理基本的格式
@@ -911,6 +1114,33 @@ const sendMessage = async () => {
 // 处理回车键
 const handleEnterKey = (event) => {
   event.ctrlKey ? (userMessage.value += '\n') : sendMessage()
+}
+
+// 返回按钮处理函数
+const goBack = () => {
+  console.log('返回按钮被点击') // 调试信息
+
+  try {
+    // 检查当前路径和上一页路径
+    const currentPath = router.currentRoute.value.path
+    const referrer = document.referrer
+
+    console.log('当前路径:', currentPath)
+    console.log('referrer:', referrer)
+
+    // 如果当前路径是 /chat，并且上一页不是 login 页面，则返回
+    if (currentPath === '/chat' && referrer && !referrer.includes('login')) {
+      router.go(-1)
+    } else {
+      // 否则直接跳转到首页
+      console.log('跳转到首页')
+      router.push('/home')
+    }
+  } catch (error) {
+    console.error('返回失败:', error)
+    // 出错时直接跳转到首页
+    router.push('/home')
+  }
 }
 
 // 处理会话操作
@@ -1740,6 +1970,42 @@ onUnmounted(() => {
 
 .chat-header-left {
   flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 返回按钮样式 - 使用深度选择器确保样式穿透 */
+:deep(.back-btn) {
+  padding: 8px !important;
+  border-radius: 8px !important;
+  transition: all 0.2s ease;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280 !important;
+  font-size: 18px !important;
+  min-width: 36px !important;
+  height: 36px !important;
+  background-color: #f9fafb !important;
+  border: 1px solid #e5e7eb !important;
+  position: relative;
+  z-index: 10;
+  margin-right: 8px;
+}
+
+:deep(.back-btn:hover) {
+  background-color: #f3f4f6 !important;
+  color: #3b82f6 !important;
+  transform: translateX(-2px);
+}
+
+:deep(.back-btn:active) {
+  transform: translateX(0);
+}
+
+:deep(.back-icon) {
+  transition: transform 0.2s ease;
 }
 
 .chat-header-right {
@@ -1897,7 +2163,7 @@ onUnmounted(() => {
   border-radius: 18px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   animation: messageSlideIn 0.3s ease-out;
-  /* backdrop-filter: blur(10px); 临时禁用以测试文本选择问题 */
+  backdrop-filter: blur(10px);
 }
 
 @keyframes messageSlideIn {
@@ -3283,6 +3549,17 @@ onUnmounted(() => {
     padding: 0 16px;
   }
 
+  :deep(.back-btn) {
+    min-width: 32px !important;
+    height: 32px !important;
+    font-size: 16px !important;
+    padding: 6px !important;
+  }
+
+  .chat-header-left {
+    gap: 6px;
+  }
+
   .chat-content {
     max-height: calc(100vh - 64px - 80px); /* 移动端输入区略窄 */
   }
@@ -3352,6 +3629,17 @@ onUnmounted(() => {
 @media (max-width: 480px) {
   .message-content {
     max-width: 90%;
+  }
+
+  :deep(.back-btn) {
+    min-width: 28px !important;
+    height: 28px !important;
+    font-size: 14px !important;
+    padding: 4px !important;
+  }
+
+  .chat-header-left {
+    gap: 4px;
   }
 
   .session-header {

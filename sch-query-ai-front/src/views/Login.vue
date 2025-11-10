@@ -56,7 +56,7 @@
             <el-form-item>
               <div class="form-options">
                 <el-checkbox v-model="rememberMe">记住我</el-checkbox>
-                <el-link type="primary" @click="$router.push('/password')">忘记密码？</el-link>
+                <el-link type="primary" @click="$router.push('/forgot-password')">忘记密码？</el-link>
               </div>
             </el-form-item>
 
@@ -298,6 +298,8 @@ if (rememberedUser) {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 5px;
+  width: 100%;
+  padding: 0 5px;
 }
 
 :deep(.el-checkbox__label) {
@@ -349,6 +351,10 @@ if (rememberedUser) {
   .login-form-wrapper {
     min-width: auto;
     padding: 30px 20px;
+  }
+
+  .form-options {
+    padding: 0 2px;
   }
 
   .brand-name {

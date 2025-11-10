@@ -40,6 +40,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
     private final static String REGISTER_CODE_KEY = "register_code:";
     private final static String FIND_PASSWORD_CODE_KEY = "find_password_code:";
+    private final static String TOKEN_BLACKLIST_KEY = "token_blacklist:";
 
     @Override
     public Result<String> sendRegisterCode(UserDTO userDTO) {
@@ -275,6 +276,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             if (update) {
                 // 删除已使用的验证码
                 stringRedisTemplate.delete(redisKey);
+
+                // 将该用户的所有现有令牌加入黑名单（强制所有设备重新登录）
+                String userBlacklistKey = TOKEN_BLACKLIST_KEY + user.getId();
+                long currentTime = System.currentTimeMillis() / 1000; // Unix时间戳（秒）
+
+                // 设置黑名单记录，TTL为2小时（与JWT过期时间一致）
+                stringRedisTemplate.opsForValue().set(userBlacklistKey, String.valueOf(currentTime), 7200, TimeUnit.SECONDS);
+
                 return Result.success("密码重置成功");
             } else {
                 throw CustomException.error("密码重置失败");
@@ -303,9 +312,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             throw CustomException.error("该邮箱未注册");
         }
 
-        if (!user.getUserName().equals(userDTO.getUserName())) {
-            throw CustomException.error("邮箱绑定的账号不是"+userDTO.getUserName()+"!");
-        }
+        // 忘记密码功能不需要验证用户名，用户通常只记得邮箱
 
 
         try {

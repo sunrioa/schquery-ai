@@ -55,15 +55,17 @@ application-dev.properties
 .env.*.local
 
 # Node.js相关（如果前端项目）
-node_modules/
+# 仅排除根目录下的 node_modules，不影响子目录
+/node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-dist/
-build/
+# 仅排除根目录下的 dist，不影响子目录
+/dist/
+/build/
 
 # 缓存
-.cache/
+/.cache/
 .parcel-cache/
 
 # 其他工具

@@ -218,6 +218,13 @@ const pageSize = ref(100) // 每页显示100个分词
 // 筛选状态：'all', 'enabled', 'disabled'
 const statusFilter = ref('all')
 
+// 统计数据
+const stats = ref({
+  total: 0,
+  enabled: 0,
+  disabled: 0
+})
+
 // 右键菜单相关
 const contextMenuVisible = ref(false)
 const contextMenuStyle = ref({})
@@ -275,11 +282,11 @@ const filteredWords = computed(() => {
 })
 
 const enabledWordsCount = computed(() => {
-  return wordsData.value.filter(word => word.status === 1).length
+  return stats.value.enabled
 })
 
 const disabledWordsCount = computed(() => {
-  return wordsData.value.filter(word => word.status === 0).length
+  return stats.value.disabled
 })
 
 // 分页显示的分词
@@ -288,6 +295,37 @@ const paginatedWords = computed(() => {
   const end = start + pageSize.value
   return filteredWords.value.slice(start, end)
 })
+
+// 获取统计数据
+const getSegmentationWordsStats = async () => {
+  try {
+    const response = await http.get('/admin/UGC/segmentation/stats')
+
+    if (response.code === 200) {
+      stats.value = {
+        total: response.data.total || 0,
+        enabled: response.data.enabled || 0,
+        disabled: response.data.disabled || 0
+      }
+    } else {
+      console.warn('获取统计数据失败:', response.message)
+      // 如果获取失败，使用前端计算
+      const total = wordsData.value.length
+      const enabled = wordsData.value.filter(word => word.status === 1).length
+      const disabled = wordsData.value.filter(word => word.status === 0).length
+
+      stats.value = { total, enabled, disabled }
+    }
+  } catch (error) {
+    console.error('获取统计数据失败:', error)
+    // 如果接口失败，使用前端计算
+    const total = wordsData.value.length
+    const enabled = wordsData.value.filter(word => word.status === 1).length
+    const disabled = wordsData.value.filter(word => word.status === 0).length
+
+    stats.value = { total, enabled, disabled }
+  }
+}
 
 // 获取分词列表
 const getSegmentationWordsList = async () => {
@@ -336,7 +374,11 @@ const getSegmentationWordsList = async () => {
     })
 
     wordsData.value = allWords
+    stats.value.total = allWords.length
     console.log(`获取到 ${allWords.length} 个分词`)
+
+    // 获取详细统计数据
+    await getSegmentationWordsStats()
   } catch (error) {
     console.error('获取分词列表失败:', error)
     ElMessage.error('获取分词列表失败')
@@ -388,6 +430,7 @@ const handleAdd = async () => {
       ElMessage.success(`成功添加 ${words.length} 个分词`)
       showAddDialog.value = false
       addForm.wordInput = ''
+      // 重新获取数据以确保统计准确
       getSegmentationWordsList()
     } else {
       ElMessage.error(response.message || '添加分词失败')
@@ -484,6 +527,14 @@ const toggleWordStatus = async (word) => {
 
     if (response.code === 200) {
       word.status = newStatus
+      // 更新统计数据
+      if (newStatus === 1) {
+        stats.value.enabled++
+        stats.value.disabled--
+      } else {
+        stats.value.enabled--
+        stats.value.disabled++
+      }
       ElMessage.success(newStatus === 1 ? '分词已启用' : '分词已禁用')
     } else {
       ElMessage.error(response.message || '状态更新失败')
@@ -554,6 +605,7 @@ const deleteWord = async () => {
 
     if (response.code === 200) {
       ElMessage.success('删除成功')
+      // 重新获取数据以确保统计准确
       getSegmentationWordsList()
     } else {
       ElMessage.error(response.message || '删除失败')

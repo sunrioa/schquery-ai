@@ -11,6 +11,7 @@ import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/admin/UGC")
@@ -57,6 +58,16 @@ public class UGCController {
     @GetMapping("/segmentation/query")
     public Result<IPage<SegmentationWordsVO>> querySegmentationWords(SegmentationWordsDTO segmentationWordsDTO){
         return ugcService.querySegmentationWords(segmentationWordsDTO);
+    }
+
+    @GetMapping("/sensitive/stats")
+    public Result<Map<String, Object>> getSensitiveWordsStats() {
+        return ugcService.getSensitiveWordsStats();
+    }
+
+    @GetMapping("/segmentation/stats")
+    public Result<Map<String, Object>> getSegmentationWordsStats() {
+        return ugcService.getSegmentationWordsStats();
     }
 
 }

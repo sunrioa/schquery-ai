@@ -8,6 +8,7 @@ import cn.ling.domain.vo.SensitiveWordsVO;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 
 import java.util.List;
+import java.util.Map;
 
 public interface UGCService {
     Result<String> addSensitiveWords(List<String> words);
@@ -25,4 +26,8 @@ public interface UGCService {
     Result<String> updateSegmentationWords(List<SegmentationWordsDTO> segmentationWordsDTOList);
 
     Result<IPage<SegmentationWordsVO>> querySegmentationWords(SegmentationWordsDTO segmentationWordsDTO);
+
+    Result<Map<String, Object>> getSensitiveWordsStats();
+
+    Result<Map<String, Object>> getSegmentationWordsStats();
 }

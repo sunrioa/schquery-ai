@@ -7,4 +7,7 @@ public class SegmentationWordsVO {
     private Long id;
 
     private String word;
+
+    private Integer status;
+
 }

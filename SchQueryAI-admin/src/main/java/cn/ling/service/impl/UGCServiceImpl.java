@@ -17,12 +17,15 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -250,6 +253,7 @@ public class UGCServiceImpl implements UGCService {
                         SensitiveWordsVO vo = new SensitiveWordsVO();
                         vo.setId(sw.getId());
                         vo.setWord(sw.getWord());
+                        vo.setStatus(sw.getStatus());
                         return vo;
                     })
                     .collect(Collectors.toList());
@@ -420,6 +424,7 @@ public class UGCServiceImpl implements UGCService {
                         SegmentationWordsVO vo = new SegmentationWordsVO();
                         vo.setId(sw.getId());
                         vo.setWord(sw.getWord());
+                        vo.setStatus(sw.getStatus());
                         return vo;
                     })
                     .collect(Collectors.toList());
@@ -430,6 +435,66 @@ public class UGCServiceImpl implements UGCService {
         } catch (Exception e) {
             log.error("查询分词失败", e);
             throw CustomException.error("查询分词失败：" + e.getMessage());
+        }
+    }
+
+    @Override
+    public Result<Map<String, Object>> getSensitiveWordsStats() {
+        try {
+            // 查询总记录数
+            LambdaQueryWrapper<SensitiveWords> queryWrapper = new LambdaQueryWrapper<>();
+            Long totalCount = sensitiveWordsMapper.selectCount(queryWrapper);
+
+            // 查询启用状态的记录数
+            LambdaQueryWrapper<SensitiveWords> enabledWrapper = new LambdaQueryWrapper<>();
+            enabledWrapper.eq(SensitiveWords::getStatus, 1);
+            Long enabledCount = sensitiveWordsMapper.selectCount(enabledWrapper);
+
+            // 查询禁用状态的记录数
+            LambdaQueryWrapper<SensitiveWords> disabledWrapper = new LambdaQueryWrapper<>();
+            disabledWrapper.eq(SensitiveWords::getStatus, 0);
+            Long disabledCount = sensitiveWordsMapper.selectCount(disabledWrapper);
+
+            // 构建统计结果
+            Map<String, Object> stats = new HashMap<>();
+            stats.put("total", totalCount != null ? totalCount : 0L);
+            stats.put("enabled", enabledCount != null ? enabledCount : 0L);
+            stats.put("disabled", disabledCount != null ? disabledCount : 0L);
+
+            return Result.success(stats);
+        } catch (Exception e) {
+            log.error("获取敏感词统计数据失败", e);
+            throw CustomException.error("获取敏感词统计数据失败：" + e.getMessage());
+        }
+    }
+
+    @Override
+    public Result<Map<String, Object>> getSegmentationWordsStats() {
+        try {
+            // 查询总记录数
+            LambdaQueryWrapper<SegmentationWords> queryWrapper = new LambdaQueryWrapper<>();
+            Long totalCount = segmentationWordsMapper.selectCount(queryWrapper);
+
+            // 查询启用状态的记录数
+            LambdaQueryWrapper<SegmentationWords> enabledWrapper = new LambdaQueryWrapper<>();
+            enabledWrapper.eq(SegmentationWords::getStatus, 1);
+            Long enabledCount = segmentationWordsMapper.selectCount(enabledWrapper);
+
+            // 查询禁用状态的记录数
+            LambdaQueryWrapper<SegmentationWords> disabledWrapper = new LambdaQueryWrapper<>();
+            disabledWrapper.eq(SegmentationWords::getStatus, 0);
+            Long disabledCount = segmentationWordsMapper.selectCount(disabledWrapper);
+
+            // 构建统计结果
+            Map<String, Object> stats = new HashMap<>();
+            stats.put("total", totalCount != null ? totalCount : 0L);
+            stats.put("enabled", enabledCount != null ? enabledCount : 0L);
+            stats.put("disabled", disabledCount != null ? disabledCount : 0L);
+
+            return Result.success(stats);
+        } catch (Exception e) {
+            log.error("获取分词统计数据失败", e);
+            throw CustomException.error("获取分词统计数据失败：" + e.getMessage());
         }
     }
 }

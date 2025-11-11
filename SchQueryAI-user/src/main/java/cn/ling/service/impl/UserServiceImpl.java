@@ -38,6 +38,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     @Resource
     private ImageStoreService imageStoreService;
 
+    @Resource
+    private AIService aiService;
+
     private final static String REGISTER_CODE_KEY = "register_code:";
     private final static String FIND_PASSWORD_CODE_KEY = "find_password_code:";
     private final static String TOKEN_BLACKLIST_KEY = "token_blacklist:";
@@ -339,14 +342,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         } catch (Exception e) {
             throw CustomException.error("验证码发送失败：" + e.getMessage());
         }
-    }
-
-    @Autowired
-    private AIService aiService;
-
-    @Override
-    public Result<String> uploadAudioFile(MultipartFile radioFile) {
-        return aiService.audioToText(radioFile);
     }
 
     @Override

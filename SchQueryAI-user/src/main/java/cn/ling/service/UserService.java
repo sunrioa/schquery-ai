@@ -25,8 +25,6 @@ public interface UserService extends IService<User> {
 
     Result<String> sendFindPasswordCode(UserDTO userDTO);
 
-    Result<String> uploadAudioFile(MultipartFile radioFile);
-
     // 流式语音识别接口
     Result<String> startStreamingRecognition(String sessionId);
 
@@ -43,7 +41,7 @@ public interface UserService extends IService<User> {
 
     Result<Long> updateAvatar(MultipartFile avatarFile);
 
-Result<User> getUserInfo();
+    Result<User> getUserInfo();
 
-Result<String> deleteAvatar();
+    Result<String> deleteAvatar();
 }

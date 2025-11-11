@@ -62,11 +62,6 @@ public class UserController {
         return userService.sendFindPasswordCode(userDTO);
     }
 
-    @PostMapping("/uploadAudioFile")
-    public Result<String> uploadAudioFile(@RequestBody MultipartFile radioFile){
-        return userService.uploadAudioFile(radioFile);
-    }
-
     // 流式语音识别 - 开始会话
     @PostMapping("/streaming/start")
     public Result<String> startStreamingRecognition(@RequestBody Map<String, String> request) {

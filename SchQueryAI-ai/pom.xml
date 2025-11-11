@@ -28,6 +28,13 @@
             <artifactId>SchQueryAI-utils</artifactId>
             <version>1.0.0</version>
         </dependency>
+
+
+        <dependency>
+            <groupId>com.dtflys.forest</groupId>
+            <artifactId>forest-spring-boot3-starter</artifactId>
+            <version>1.7.3</version>
+        </dependency>
     </dependencies>
 
     <dependencyManagement>

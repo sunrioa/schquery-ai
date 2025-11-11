@@ -116,6 +116,18 @@
               </span>
               <template #dropdown>
                 <el-dropdown-menu>
+                  <!-- 员工对话管理功能 -->
+                  <el-dropdown-item v-if="isWorker()" command="conversation-management">
+                    <el-icon><ChatDotRound /></el-icon>
+                    对话管理
+                  </el-dropdown-item>
+
+                  <!-- 管理员系统管理功能 -->
+                  <el-dropdown-item v-if="isAdmin()" command="system-management">
+                    <el-icon><Tools /></el-icon>
+                    系统管理
+                  </el-dropdown-item>
+
                   <el-dropdown-item command="profile">
                     <el-icon><User /></el-icon>
                     个人信息
@@ -261,12 +273,18 @@
 import { ref, onMounted, onUnmounted, nextTick, watch, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElEmpty, ElAvatar, ElDropdown, ElDropdownMenu, ElDropdownItem, ElButton, ElInput, ElDialog, ElForm, ElFormItem, ElIcon } from 'element-plus'
-import { Plus, Setting, Edit, Delete, Service, Upload, Microphone, SwitchButton, User, Lock, ArrowDown, ArrowLeft, Moon, Sunny } from '@element-plus/icons-vue'
+import { Plus, Setting, Edit, Delete, Service, Upload, Microphone, SwitchButton, User, Lock, ArrowDown, ArrowLeft, Moon, Sunny, ChatDotRound, Tools } from '@element-plus/icons-vue'
 import { chatApi } from '../api/chat'
 import { userApi } from '../api/user'
 import { useUserStore } from '../stores/userStore'
 import { getAIAvatar } from '../utils/avatarUtils'
 import { marked } from 'marked'
+import {
+  isAdmin,
+  isWorker,
+  hasAnyRole,
+  getCurrentUser
+} from '../utils/auth'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 
@@ -1232,6 +1250,14 @@ const handleSessionCommand = async (command, session) => {
 // 处理用户下拉菜单命令
 const handleUserCommand = async (command) => {
   switch (command) {
+    case 'conversation-management':
+      // 员工对话管理功能
+      router.push('/worker/conversation-management')
+      break
+    case 'system-management':
+      // 管理员系统管理功能
+      router.push('/admin/system-management')
+      break
     case 'profile':
       router.push('/profile')
       break

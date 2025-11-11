@@ -4,6 +4,7 @@ import cn.ling.Result;
 import cn.ling.domain.pojo.User;
 import cn.ling.domain.pojo.ImageStore;
 import cn.ling.domain.dto.UserDTO;
+import cn.ling.domain.vo.LoginResponse;
 import cn.ling.service.UserService;
 import cn.ling.service.ImageStoreService;
 import cn.ling.utils.Base64Utils;
@@ -39,7 +40,7 @@ public class UserController {
 
     //登录
     @PostMapping("/login")
-    public Result<String> login(@RequestBody UserDTO userDTO){
+    public Result<LoginResponse> login(@RequestBody UserDTO userDTO){
         return userService.login(userDTO);
     }
 

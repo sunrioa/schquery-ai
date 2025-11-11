@@ -3,6 +3,7 @@ package cn.ling.service;
 import cn.ling.Result;
 import cn.ling.domain.pojo.User;
 import cn.ling.domain.dto.UserDTO;
+import cn.ling.domain.vo.LoginResponse;
 import com.baomidou.mybatisplus.extension.service.IService;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -15,7 +16,7 @@ public interface UserService extends IService<User> {
 
     Result<User> register(UserDTO userDTO);
 
-    Result<String> login(UserDTO userDTO);
+    Result<LoginResponse> login(UserDTO userDTO);
 
     Result<String> sendRegisterCode(UserDTO userDTO);
 

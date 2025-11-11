@@ -119,8 +119,25 @@ const handleLogin = async () => {
 
         // 处理登录结果
         if (result.data) {
-          console.log('Login successful, token received:', result.data)
-          localStorage.setItem('token', result.data)
+          console.log('Login successful, login data received:', result.data)
+
+          // 保存token
+          localStorage.setItem('token', result.data.token)
+
+          // 保存用户角色信息
+          if (result.data.role) {
+            localStorage.setItem('userRole', result.data.role)
+            console.log('User role stored in localStorage:', result.data.role)
+          }
+
+          // 保存用户信息（可选）
+          if (result.data.userName) {
+            localStorage.setItem('userName', result.data.userName)
+          }
+          if (result.data.userId) {
+            localStorage.setItem('userId', result.data.userId)
+          }
+
           console.log('Token stored in localStorage:', localStorage.getItem('token'))
         } else {
           throw new Error('登录返回数据格式异常')

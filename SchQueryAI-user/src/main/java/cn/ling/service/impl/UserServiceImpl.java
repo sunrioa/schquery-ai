@@ -3,6 +3,7 @@ package cn.ling.service.impl;
 import cn.ling.Result;
 import cn.ling.domain.dto.UserDTO;
 import cn.ling.domain.pojo.ImageStore;
+import cn.ling.domain.vo.LoginResponse;
 import cn.ling.service.AIService;
 import cn.ling.service.ImageStoreService;
 import cn.ling.utils.*;
@@ -173,7 +174,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     }
 
     @Override
-    public Result<String> login(UserDTO userDTO) {
+    public Result<LoginResponse> login(UserDTO userDTO) {
         // 参数校验
         if (userDTO.getUserName() == null || userDTO.getUserName().trim().isEmpty()) {
             throw CustomException.error("用户名不能为空");
@@ -202,7 +203,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             }
         });
 
-        return Result.success(token);
+        // 构建登录响应
+        LoginResponse loginResponse = LoginResponse.builder()
+                .token(token)
+                .role(user.getRole())
+                .userId(user.getId())
+                .userName(user.getUserName())
+                .avatar(user.getAvatar())
+                .build();
+
+        return Result.success(loginResponse);
     }
 
     //修改密码

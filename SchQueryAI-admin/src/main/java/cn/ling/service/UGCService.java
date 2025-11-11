@@ -5,6 +5,7 @@ import cn.ling.domain.dto.SegmentationWordsDTO;
 import cn.ling.domain.dto.SensitiveWordsDTO;
 import cn.ling.domain.vo.SegmentationWordsVO;
 import cn.ling.domain.vo.SensitiveWordsVO;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 
 import java.util.List;
 
@@ -15,7 +16,7 @@ public interface UGCService {
 
     Result<String> updateSensitiveWords(List<SensitiveWordsDTO> sensitiveWordsDTOList);
 
-    Result<List<SensitiveWordsVO>> querySensitiveWords(SensitiveWordsDTO sensitiveWordsDTO);
+    Result<IPage<SensitiveWordsVO>> querySensitiveWords(SensitiveWordsDTO sensitiveWordsDTO);
 
     Result<String> addSegmentationWords(List<String> words);
 
@@ -23,5 +24,5 @@ public interface UGCService {
 
     Result<String> updateSegmentationWords(List<SegmentationWordsDTO> segmentationWordsDTOList);
 
-    Result<List<SegmentationWordsVO>> querySegmentationWords(SegmentationWordsDTO sensitiveWordsDTO);
+    Result<IPage<SegmentationWordsVO>> querySegmentationWords(SegmentationWordsDTO segmentationWordsDTO);
 }

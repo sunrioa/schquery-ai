@@ -6,6 +6,7 @@ import cn.ling.domain.dto.SensitiveWordsDTO;
 import cn.ling.domain.vo.SegmentationWordsVO;
 import cn.ling.domain.vo.SensitiveWordsVO;
 import cn.ling.service.UGCService;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.*;
 
@@ -34,7 +35,7 @@ public class UGCController {
     }
 
     @GetMapping("/sensitive/query")
-    public Result<List<SensitiveWordsVO>> querySensitiveWords(SensitiveWordsDTO sensitiveWordsDTO){
+    public Result<IPage<SensitiveWordsVO>> querySensitiveWords(SensitiveWordsDTO sensitiveWordsDTO){
         return ugcService.querySensitiveWords(sensitiveWordsDTO);
     }
 
@@ -54,8 +55,8 @@ public class UGCController {
     }
 
     @GetMapping("/segmentation/query")
-    public Result<List<SegmentationWordsVO>> querySegmentationWords(SegmentationWordsDTO sensitiveWordsDTO){
-        return ugcService.querySegmentationWords(sensitiveWordsDTO);
+    public Result<IPage<SegmentationWordsVO>> querySegmentationWords(SegmentationWordsDTO segmentationWordsDTO){
+        return ugcService.querySegmentationWords(segmentationWordsDTO);
     }
 
 }

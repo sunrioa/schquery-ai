@@ -7,8 +7,9 @@ import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-
+import org.springframework.util.CollectionUtils;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 敏感词过滤工具类
@@ -66,11 +67,11 @@ public class WordsFilterUtils {
     @AllArgsConstructor
     @NoArgsConstructor
     static class Tree {
-        private HashMap<Character, Tree> map; // 子节点映射（字符到节点的映射）
+        private ConcurrentHashMap<Character, Tree> map; // 子节点映射（字符到节点的映射）
         private boolean isFinal; // 标记当前节点是否为某个敏感词的结尾
     }
 
-    private static final HashMap<Character, Tree> sensitiveWordsTree = new HashMap<>(); // 敏感词前缀树根节点
+    private static final ConcurrentHashMap<Character, Tree> sensitiveWordsTree = new ConcurrentHashMap<>(); // 敏感词前缀树根节点
 
     /**
      * 初始化敏感词库
@@ -93,7 +94,7 @@ public class WordsFilterUtils {
             return; // 忽略空字符串
         }
 
-        HashMap<Character, Tree> currentMap = sensitiveWordsTree; // 从根节点开始
+        ConcurrentHashMap<Character, Tree> currentMap = sensitiveWordsTree; // 从根节点开始
         for (int i = 0; i < word.length(); i++) {
             char c = word.charAt(i);
             Tree node = currentMap.get(c);
@@ -101,7 +102,7 @@ public class WordsFilterUtils {
             if (node == null) {
                 // 若当前字符对应的节点不存在，则创建新节点
                 boolean isFinal = (i == word.length() - 1); // 最后一个字符标记为敏感词结尾
-                node = new Tree(new HashMap<>(), isFinal);
+                node = new Tree(new ConcurrentHashMap<>(), isFinal);
                 currentMap.put(c, node);
             } else {
                 // 若节点已存在，更新结尾标记（处理更长的敏感词覆盖短敏感词的情况）
@@ -126,7 +127,7 @@ public class WordsFilterUtils {
         int length = chars.length;
 
         for (int i = 0; i < length; i++) {
-            HashMap<Character, Tree> currentTree = sensitiveWordsTree;
+            ConcurrentHashMap<Character, Tree> currentTree = sensitiveWordsTree;
             StringBuilder currentWord = new StringBuilder();
             int maxMatchEnd = -1; // 记录最长匹配的结束位置
 
@@ -164,7 +165,7 @@ public class WordsFilterUtils {
      * @param node 前缀树节点（从根节点开始）
      * @return 敏感词总数
      */
-    private int countSensitiveWords(HashMap<Character, Tree> node) {
+    private int countSensitiveWords(ConcurrentHashMap<Character, Tree> node) {
         int count = 0;
         for (Tree tree : node.values()) {
             if (tree.isFinal()) {
@@ -173,5 +174,246 @@ public class WordsFilterUtils {
             count += countSensitiveWords(tree.getMap()); // 递归统计子节点
         }
         return count;
+    }
+
+    /**
+     * 启用敏感词（在前缀树中标记为敏感词结尾）
+     * 通过设置isFinal=true来启用敏感词检测
+     * @param word 待启用的敏感词
+     */
+    public void enableSensitiveWord(String word) {
+        if (word == null || word.trim().isEmpty()) {
+            return;
+        }
+
+        word = word.trim();
+        Tree node = findWordNode(word);
+        if (node != null) {
+            node.setFinal(true);
+            isEmpty = false;
+            log.info("启用敏感词：{}", word);
+        } else {
+            // 如果节点不存在，需要构建完整的节点路径
+            buildSensitiveWordsTree(word);
+            log.info("添加并启用敏感词：{}", word);
+        }
+    }
+
+    /**
+     * 禁用敏感词（在前缀树中取消标记为敏感词结尾）
+     * 通过设置isFinal=false来禁用敏感词检测，但保留节点结构
+     * @param word 待禁用的敏感词
+     */
+    public void disableSensitiveWord(String word) {
+        if (word == null || word.trim().isEmpty()) {
+            return;
+        }
+
+        word = word.trim();
+        Tree node = findWordNode(word);
+        if (node != null && node.isFinal()) {
+            node.setFinal(false);
+            log.info("禁用敏感词：{}", word);
+
+            // 检查是否还有其他启用的敏感词
+            int wordCount = countSensitiveWords(sensitiveWordsTree);
+            isEmpty = wordCount == 0;
+        }
+    }
+
+    /**
+     * 更新敏感词（禁用旧词，启用新词）
+     * @param oldWord 原敏感词
+     * @param newWord 新敏感词
+     */
+    public void updateSensitiveWord(String oldWord, String newWord) {
+        if (oldWord == null || newWord == null || oldWord.trim().isEmpty() || newWord.trim().isEmpty()) {
+            return;
+        }
+
+        oldWord = oldWord.trim();
+        newWord = newWord.trim();
+
+        // 禁用旧敏感词
+        disableSensitiveWord(oldWord);
+
+        // 启用新敏感词
+        enableSensitiveWord(newWord);
+
+        log.info("更新敏感词：{} -> {}", oldWord, newWord);
+    }
+
+    /**
+     * 批量启用敏感词
+     * @param words 待启用的敏感词列表
+     */
+    public void enableSensitiveWords(List<String> words) {
+        if (CollectionUtils.isEmpty(words)) {
+            return;
+        }
+
+        int enabledCount = 0;
+        for (String word : words) {
+            if (word != null && !word.trim().isEmpty()) {
+                String trimmedWord = word.trim();
+                Tree node = findWordNode(trimmedWord);
+                if (node == null) {
+                    buildSensitiveWordsTree(trimmedWord);
+                    enabledCount++;
+                } else if (!node.isFinal()) {
+                    node.setFinal(true);
+                    enabledCount++;
+                }
+            }
+        }
+
+        if (enabledCount > 0) {
+            isEmpty = false;
+            log.info("批量启用敏感词，启用数量：{}", enabledCount);
+        }
+    }
+
+    /**
+     * 批量禁用敏感词
+     * @param words 待禁用的敏感词列表
+     */
+    public void disableSensitiveWords(List<String> words) {
+        if (CollectionUtils.isEmpty(words)) {
+            return;
+        }
+
+        int disabledCount = 0;
+        for (String word : words) {
+            if (word != null && !word.trim().isEmpty()) {
+                String trimmedWord = word.trim();
+                Tree node = findWordNode(trimmedWord);
+                if (node != null && node.isFinal()) {
+                    node.setFinal(false);
+                    disabledCount++;
+                }
+            }
+        }
+
+        if (disabledCount > 0) {
+            int wordCount = countSensitiveWords(sensitiveWordsTree);
+            isEmpty = wordCount == 0;
+            log.info("批量禁用敏感词，禁用数量：{}，剩余数量：{}", disabledCount, wordCount);
+        }
+    }
+
+    /**
+     * 查找敏感词在前缀树中的节点
+     * @param word 待查找的敏感词
+     * @return 敏感词对应的节点，不存在则返回null
+     */
+    private Tree findWordNode(String word) {
+        if (word == null || word.isEmpty()) {
+            return null;
+        }
+
+        ConcurrentHashMap<Character, Tree> currentMap = sensitiveWordsTree;
+        Tree node = null;
+
+        for (int i = 0; i < word.length(); i++) {
+            char c = word.charAt(i);
+            node = currentMap.get(c);
+            if (node == null) {
+                return null;
+            }
+            if (i == word.length() - 1) {
+                return node; // 返回最后一个字符对应的节点
+            }
+            currentMap = node.getMap();
+        }
+
+        return node;
+    }
+
+    /**
+     * 检查敏感词是否存在于前缀树中并且处于启用状态
+     * @param word 待检查的敏感词
+     * @return true-存在且启用，false-不存在或禁用
+     */
+    public boolean containsSensitiveWord(String word) {
+        if (word == null || word.isEmpty() || isEmpty) {
+            return false;
+        }
+
+        ConcurrentHashMap<Character, Tree> currentMap = sensitiveWordsTree;
+        for (int i = 0; i < word.length(); i++) {
+            char c = word.charAt(i);
+            Tree node = currentMap.get(c);
+            if (node == null) {
+                return false;
+            }
+
+            // 如果是最后一个字符，检查是否为敏感词结尾
+            if (i == word.length() - 1) {
+                return node.isFinal();
+            }
+
+            currentMap = node.getMap();
+        }
+
+        return false;
+    }
+
+    /**
+     * 重新构建整个前缀树
+     * 用于大批量操作时的性能优化
+     * @param words 新的敏感词列表
+     */
+    public void rebuildTree(List<String> words) {
+        // 清空现有前缀树
+        sensitiveWordsTree.clear();
+
+        // 重新构建前缀树
+        if (!CollectionUtils.isEmpty(words)) {
+            for (String word : words) {
+                if (word != null && !word.trim().isEmpty()) {
+                    buildSensitiveWordsTree(word.trim());
+                }
+            }
+        }
+
+        int wordCount = countSensitiveWords(sensitiveWordsTree);
+        isEmpty = wordCount == 0;
+        log.info("重新构建敏感词前缀树，敏感词数量：{}", wordCount);
+    }
+
+    /**
+     * 获取前缀树中所有启用状态的敏感词
+     * 用于调试和管理
+     * @return 所有启用的敏感词列表
+     */
+    public List<String> getAllSensitiveWords() {
+        List<String> words = new ArrayList<>();
+        collectWords(sensitiveWordsTree, new StringBuilder(), words);
+        return words;
+    }
+
+    /**
+     * 递归收集前缀树中的所有启用状态的敏感词
+     * @param node 当前节点
+     * @param currentWord 当前构建的单词
+     * @param words 结果列表
+     */
+    private void collectWords(ConcurrentHashMap<Character, Tree> node, StringBuilder currentWord, List<String> words) {
+        for (Map.Entry<Character, Tree> entry : node.entrySet()) {
+            char c = entry.getKey();
+            Tree tree = entry.getValue();
+
+            currentWord.append(c);
+
+            if (tree.isFinal()) {
+                words.add(currentWord.toString());
+            }
+
+            if (!tree.getMap().isEmpty()) {
+                collectWords(tree.getMap(), currentWord, words);
+            }
+
+            currentWord.deleteCharAt(currentWord.length() - 1);
+        }
     }
 }

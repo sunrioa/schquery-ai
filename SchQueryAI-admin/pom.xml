@@ -24,5 +24,11 @@
             <version>1.0.0</version>
             <scope>compile</scope>
         </dependency>
+
+        <dependency>
+            <groupId>cn.ling</groupId>
+            <artifactId>SchQueryAI-domain</artifactId>
+            <version>1.0.0</version>
+        </dependency>
     </dependencies>
 </project>

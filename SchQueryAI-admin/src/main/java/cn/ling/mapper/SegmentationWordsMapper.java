@@ -1,6 +1,6 @@
 package cn.ling.mapper;
 
-import cn.ling.domain.SegmentationWords;
+import cn.ling.domain.pojo.SegmentationWords;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 

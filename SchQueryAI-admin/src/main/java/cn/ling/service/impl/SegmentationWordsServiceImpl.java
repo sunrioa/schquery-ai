@@ -1,6 +1,6 @@
 package cn.ling.service.impl;
 
-import cn.ling.domain.SegmentationWords;
+import cn.ling.domain.pojo.SegmentationWords;
 import cn.ling.mapper.SegmentationWordsMapper;
 import cn.ling.service.SegmentationWordsService;
 import cn.ling.utils.SegmentationUtils;

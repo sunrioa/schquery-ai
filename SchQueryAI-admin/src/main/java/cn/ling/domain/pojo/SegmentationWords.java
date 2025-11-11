@@ -1,4 +1,4 @@
-package cn.ling.domain;
+package cn.ling.domain.pojo;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -7,13 +7,13 @@ import lombok.Builder;
 import lombok.Data;
 
 /**
- * 敏感词实体类
- * 对应数据库表 sensitive_words，用于存储系统中的敏感词信息及状态
+ * 分词词库实体类
+ * 对应数据库表 segmentation_words，用于存储分词相关的词汇信息
  */
-@TableName(value = "sensitive_words")
+@TableName(value = "segmentation_words")
 @Data
 @Builder
-public class SensitiveWords {
+public class SegmentationWords {
     /**
      * 主键ID，自增生成
      */
@@ -21,14 +21,14 @@ public class SensitiveWords {
     private Long id;
 
     /**
-     * 敏感词内容
-     * 如"垃圾"、"违规"等需要被过滤的词汇
+     * 分词词内容
+     * 用于辅助文本分词处理，提升敏感词检测的准确性
      */
     private String word;
 
     /**
      * 状态标识
-     * 1-启用（该敏感词参与过滤检测），0-禁用（暂不参与过滤检测）
+     * 1-启用（该分词词参与分词处理），0-禁用（暂不参与分词处理）
      */
     private Integer status;
 }

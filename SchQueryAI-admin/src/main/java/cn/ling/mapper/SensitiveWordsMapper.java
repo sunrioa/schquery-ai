@@ -1,6 +1,6 @@
 package cn.ling.mapper;
 
-import cn.ling.domain.SensitiveWords;
+import cn.ling.domain.pojo.SensitiveWords;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 

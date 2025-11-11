@@ -1,6 +1,6 @@
 package cn.ling.service.impl;
 
-import cn.ling.domain.SensitiveWords;
+import cn.ling.domain.pojo.SensitiveWords;
 import cn.ling.mapper.SensitiveWordsMapper;
 import cn.ling.service.SensitiveWordsService;
 import cn.ling.utils.WordsFilterUtils;

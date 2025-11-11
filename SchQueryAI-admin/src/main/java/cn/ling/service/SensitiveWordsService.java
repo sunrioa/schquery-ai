@@ -1,6 +1,6 @@
 package cn.ling.service;
 
-import cn.ling.domain.SensitiveWords;
+import cn.ling.domain.pojo.SensitiveWords;
 import com.baomidou.mybatisplus.extension.service.IService;
 
 import java.util.List;

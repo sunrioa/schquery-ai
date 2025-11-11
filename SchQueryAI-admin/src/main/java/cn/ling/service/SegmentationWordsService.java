@@ -1,6 +1,6 @@
 package cn.ling.service;
 
-import cn.ling.domain.SegmentationWords;
+import cn.ling.domain.pojo.SegmentationWords;
 import com.baomidou.mybatisplus.extension.service.IService;
 
 import java.util.List;

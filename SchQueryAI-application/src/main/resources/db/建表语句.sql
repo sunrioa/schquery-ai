@@ -48,3 +48,18 @@ CREATE TABLE `image_store` (
                                `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '上传时间',
                                PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='图片/头像存储表（base64直接存储）';
+
+CREATE TABLE `sensitive_words` (
+                                   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+                                   `word` varchar(255) NOT NULL COMMENT '敏感词内容（如“垃圾”“违规”）',
+                                   `status` tinyint NOT NULL DEFAULT '1' COMMENT '状态：1-启用 0-禁用（临时下架）',
+                                   PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=48594 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='敏感词词库';
+
+
+CREATE TABLE `segmentation_words` (
+                                      `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+                                      `word` varchar(255) NOT NULL COMMENT '敏感词',
+                                      `status` tinyint NOT NULL DEFAULT '1' COMMENT '状态（1-启用，0-禁用）',
+                                      PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=48594 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='分词词库';

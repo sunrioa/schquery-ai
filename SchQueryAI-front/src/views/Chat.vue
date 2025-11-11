@@ -94,6 +94,20 @@
           </div>
 
           <div class="chat-header-right">
+            <!-- 黑夜模式切换按钮 -->
+            <el-button
+              @click="toggleDarkMode"
+              circle
+              size="small"
+              :title="isDarkMode ? '切换到日间模式' : '切换到夜间模式'"
+              class="dark-mode-toggle"
+            >
+              <el-icon>
+                <Sunny v-if="isDarkMode" />
+                <Moon v-else />
+              </el-icon>
+            </el-button>
+
             <el-dropdown @command="handleUserCommand" trigger="click">
               <span class="user-dropdown">
                 <el-avatar :size="32" :src="userStore.getDisplayAvatar()" />
@@ -247,7 +261,7 @@
 import { ref, onMounted, onUnmounted, nextTick, watch, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElEmpty, ElAvatar, ElDropdown, ElDropdownMenu, ElDropdownItem, ElButton, ElInput, ElDialog, ElForm, ElFormItem, ElIcon } from 'element-plus'
-import { Plus, Setting, Edit, Delete, Service, Upload, Microphone, SwitchButton, User, Lock, ArrowDown, ArrowLeft } from '@element-plus/icons-vue'
+import { Plus, Setting, Edit, Delete, Service, Upload, Microphone, SwitchButton, User, Lock, ArrowDown, ArrowLeft, Moon, Sunny } from '@element-plus/icons-vue'
 import { chatApi } from '../api/chat'
 import { userApi } from '../api/user'
 import { useUserStore } from '../stores/userStore'
@@ -289,6 +303,41 @@ const realTimeTranscript = ref('')
 const streamingSessionToken = ref('') // 流式识别会话令牌
 let renderVersion = 0 // 渲染版本号，用于强制重新渲染
 const streamingMessageIds = ref(new Set()) // 用于标记正在流式传输的消息ID
+
+// 黑夜模式状态
+const isDarkMode = ref(localStorage.getItem('darkMode') === 'true')
+
+// 切换黑夜模式
+const toggleDarkMode = () => {
+  isDarkMode.value = !isDarkMode.value
+  localStorage.setItem('darkMode', isDarkMode.value)
+  document.documentElement.setAttribute('data-theme', isDarkMode.value ? 'dark' : 'light')
+
+  // 强制应用输入框样式
+  nextTick(() => {
+    forceInputStyling()
+  })
+}
+
+// 强制应用输入框样式的函数
+const forceInputStyling = () => {
+  const textareas = document.querySelectorAll('textarea.el-textarea__inner')
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+
+  textareas.forEach(textarea => {
+    if (isDark) {
+      textarea.style.backgroundColor = '#374151'
+      textarea.style.color = '#e5e7eb'
+      textarea.style.borderColor = '#4b5563'
+      textarea.style.backgroundImage = 'none'
+    } else {
+      textarea.style.backgroundColor = '#ffffff'
+      textarea.style.color = '#374151'
+      textarea.style.borderColor = '#e5e7eb'
+      textarea.style.backgroundImage = 'none'
+    }
+  })
+}
 
 // 检查登录状态，返回是否已登录
 const checkToken = () => {
@@ -1793,11 +1842,53 @@ onMounted(() => {
     loadSessions()
     loadUserInfo()
   }
+  // 初始化黑夜模式
+  document.documentElement.setAttribute('data-theme', isDarkMode.value ? 'dark' : 'light')
+
+  // 强制应用输入框样式
+  nextTick(() => {
+    forceInputStyling()
+  })
+
+  // 监听DOM变化，确保动态创建的输入框也有正确的样式
+  const observer = new MutationObserver((mutations) => {
+    let shouldUpdate = false
+    mutations.forEach((mutation) => {
+      if (mutation.type === 'childList') {
+        const addedNodes = Array.from(mutation.addedNodes)
+        if (addedNodes.some(node =>
+          node.nodeType === Node.ELEMENT_NODE &&
+          (node.querySelector?.('textarea.el-textarea__inner') || node.tagName === 'TEXTAREA')
+        )) {
+          shouldUpdate = true
+        }
+      }
+    })
+
+    if (shouldUpdate) {
+      setTimeout(() => forceInputStyling(), 50)
+    }
+  })
+
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  })
+
+  // 保存observer实例以便清理
+  window._styleObserver = observer
 })
 
 // 组件卸载时清理资源
 onUnmounted(() => {
   cleanupRecording()
+
+  // 清理样式监听器
+  if (window._styleObserver) {
+    window._styleObserver.disconnect()
+    window._styleObserver = null
+  }
+
   console.log('Component unmounted, cleanup completed')
 })
 </script>
@@ -2162,24 +2253,12 @@ onUnmounted(() => {
   font-size: 15px;
   border-radius: 18px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  animation: messageSlideIn 0.3s ease-out;
   backdrop-filter: blur(10px);
 }
 
-@keyframes messageSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
 
 .message-content:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
 }
 
 .user-message .message-content {
@@ -3657,5 +3736,638 @@ onUnmounted(() => {
   .message-item {
     margin-bottom: 12px;
   }
+}
+
+/* ===== 黑夜模式样式 ===== */
+
+/* 基础黑夜模式变量定义 */
+[data-theme="dark"] .chat-container {
+  background-color: #1f2937;
+  color: #f9fafb;
+}
+
+/* 侧边栏黑夜模式 */
+[data-theme="dark"] .session-sidebar {
+  background-color: #111827;
+  border-right-color: #374151;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .session-header {
+  border-bottom-color: #374151;
+}
+
+[data-theme="dark"] .session-header h3 {
+  color: #f9fafb;
+}
+
+[data-theme="dark"] .new-session-btn {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+}
+
+[data-theme="dark"] .new-session-btn:hover {
+  background: linear-gradient(135deg, #4338ca 0%, #3730a3 100%);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+}
+
+[data-theme="dark"] .session-item:hover {
+  background-color: #374151;
+}
+
+[data-theme="dark"] .session-item.active {
+  background-color: #1e40af;
+  border-left-color: #60a5fa;
+}
+
+[data-theme="dark"] .session-name {
+  color: #f9fafb;
+}
+
+[data-theme="dark"] .session-time {
+  color: #9ca3af;
+}
+
+/* 聊天头部黑夜模式 */
+[data-theme="dark"] .chat-header {
+  background-color: #111827;
+  border-bottom-color: #374151;
+}
+
+[data-theme="dark"] .chat-title h3 {
+  color: #f9fafb;
+}
+
+[data-theme="dark"] .chat-title .el-button {
+  color: #9ca3af;
+}
+
+[data-theme="dark"] .chat-title .el-button:hover {
+  color: #60a5fa;
+}
+
+[data-theme="dark"] .user-dropdown:hover {
+  background-color: #374151;
+}
+
+[data-theme="dark"] .username {
+  color: #e5e7eb;
+}
+
+[data-theme="dark"] .user-dropdown .el-icon--right {
+  color: #6b7280;
+}
+
+[data-theme="dark"] .dark-mode-toggle {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #e5e7eb !important;
+}
+
+[data-theme="dark"] .dark-mode-toggle:hover {
+  background-color: #4b5563 !important;
+  border-color: #6b7280 !important;
+  color: #f9fafb !important;
+}
+
+/* 聊天内容区域黑夜模式 */
+[data-theme="dark"] .chat-content {
+  background-color: #1f2937;
+}
+
+/* 消息气泡黑夜模式 */
+[data-theme="dark"] .ai-message .message-content {
+  background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
+  color: #e5e7eb;
+  border-color: #4b5563;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .ai-message .message-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.02) 0%, transparent 100%);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+[data-theme="dark"] .user-message .message-content {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  color: white !important;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
+}
+
+[data-theme="dark"] .user-message .message-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 100%);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* 消息文字样式修复 */
+[data-theme="dark"] .message-text {
+  color: inherit !important;
+}
+
+[data-theme="dark"] .user-message .message-text {
+  color: white !important;
+}
+
+[data-theme="dark"] .ai-message .message-text {
+  color: #e5e7eb !important;
+}
+
+/* Markdown内容样式修复 */
+[data-theme="dark"] .markdown-content {
+  color: #e5e7eb !important;
+}
+
+[data-theme="dark"] .user-message .markdown-content {
+  color: white !important;
+}
+
+[data-theme="dark"] .ai-message .markdown-content {
+  color: #e5e7eb !important;
+}
+
+/* 流式文本样式 */
+[data-theme="dark"] .streaming-text {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%) !important;
+  border-left-color: #60a5fa !important;
+  color: #e5e7eb !important;
+}
+
+[data-theme="dark"] .plain-text {
+  color: #e5e7eb !important;
+}
+
+[data-theme="dark"] .user-message .plain-text {
+  color: white !important;
+}
+
+[data-theme="dark"] .ai-message .plain-text {
+  color: #e5e7eb !important;
+}
+
+[data-theme="dark"] .message-time {
+  color: #9ca3af !important;
+}
+
+[data-theme="dark"] .user-message .message-time {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* 输入区域黑夜模式 */
+[data-theme="dark"] .chat-input {
+  background-color: #111827;
+  border-top-color: #374151;
+}
+
+
+/* 按钮黑夜模式 */
+[data-theme="dark"] .voice-btn {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #e5e7eb !important;
+}
+
+[data-theme="dark"] .voice-btn:hover {
+  background-color: #4b5563 !important;
+  border-color: #6b7280 !important;
+  color: #f9fafb !important;
+}
+
+[data-theme="dark"] .voice-btn.recording {
+  background-color: #ef4444 !important;
+  border-color: #dc2626 !important;
+  color: white !important;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4) !important;
+}
+
+/* 发送按钮黑夜模式修复 */
+[data-theme="dark"] .send-btn {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%) !important;
+  border: none !important;
+  color: white !important;
+}
+
+[data-theme="dark"] .send-btn:hover {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+  box-shadow: 0 4px 12px rgba(96, 165, 250, 0.25) !important;
+}
+
+[data-theme="dark"] .send-btn:active {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+  box-shadow: 0 2px 6px rgba(96, 165, 250, 0.2) !important;
+}
+
+[data-theme="dark"] .send-btn:disabled {
+  background: #4b5563 !important;
+  color: #9ca3af !important;
+  box-shadow: none !important;
+}
+
+/* 确保所有按钮在暗夜模式下的通用样式 */
+[data-theme="dark"] .el-button {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #e5e7eb !important;
+}
+
+[data-theme="dark"] .el-button--primary {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%) !important;
+  border-color: transparent !important;
+  color: white !important;
+}
+
+[data-theme="dark"] .el-button--primary:hover {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+}
+
+[data-theme="dark"] .el-button:hover {
+  background-color: #4b5563 !important;
+  border-color: #6b7280 !important;
+  color: #f9fafb !important;
+}
+
+[data-theme="dark"] .el-button:disabled {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #9ca3af !important;
+}
+
+/* 转录显示区域黑夜模式 */
+[data-theme="dark"] .transcript-input-display {
+  background-color: #1e3a8a;
+  border-color: #3730a3;
+  color: #e5e7eb;
+}
+
+[data-theme="dark"] .transcript-label {
+  color: #a5b4fc;
+}
+
+[data-theme="dark"] .transcript-icon {
+  color: #60a5fa;
+}
+
+/* 下拉菜单黑夜模式 */
+[data-theme="dark"] .el-dropdown-menu {
+  background-color: #1f2937;
+  border-color: #374151;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .el-dropdown-menu__item {
+  color: #e5e7eb;
+}
+
+[data-theme="dark"] .el-dropdown-menu__item:hover {
+  background-color: #374151;
+  color: #f9fafb;
+}
+
+/* 对话框黑夜模式 */
+[data-theme="dark"] .el-dialog {
+  background-color: #1f2937;
+  color: #e5e7eb;
+}
+
+[data-theme="dark"] .el-dialog__header {
+  border-bottom-color: #374151;
+}
+
+[data-theme="dark"] .el-dialog__title {
+  color: #f9fafb;
+}
+
+[data-theme="dark"] .el-dialog__body {
+  background-color: #1f2937;
+}
+
+[data-theme="dark"] .el-dialog__footer {
+  border-top-color: #374151;
+}
+
+[data-theme="dark"] .el-form-item__label {
+  color: #e5e7eb;
+}
+
+[data-theme="dark"] .el-input__inner {
+  background-color: #374151;
+  border-color: #4b5563;
+  color: #e5e7eb;
+}
+
+/* 代码块黑夜模式优化 */
+[data-theme="dark"] .markdown-content pre {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border-color: #334155;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .markdown-content pre code {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .markdown-content code:not(pre code) {
+  background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
+  color: #fbbf24;
+  border-color: #4b5563;
+}
+
+/* 表格黑夜模式 */
+[data-theme="dark"] .markdown-content table {
+  background: #1f2937;
+  border-color: #374151;
+}
+
+[data-theme="dark"] .markdown-content th {
+  background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
+  color: #f9fafb;
+  border-bottom-color: #4b5563;
+}
+
+[data-theme="dark"] .markdown-content td {
+  border-bottom-color: #374151;
+  color: #e5e7eb;
+}
+
+[data-theme="dark"] .markdown-content tr:nth-child(even) {
+  background-color: #374151;
+}
+
+[data-theme="dark"] .markdown-content tr:hover {
+  background-color: #4b5563;
+}
+
+/* 引用块黑夜模式 */
+[data-theme="dark"] .markdown-content blockquote {
+  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+  border-left-color: #60a5fa;
+  color: #dbeafe;
+  box-shadow: 0 4px 6px -1px rgba(96, 165, 250, 0.1);
+}
+
+/* 链接黑夜模式 */
+[data-theme="dark"] .markdown-content a {
+  color: #60a5fa;
+}
+
+[data-theme="dark"] .markdown-content a:hover {
+  color: #93c5fd;
+}
+
+/* 粗体和斜体黑夜模式 */
+[data-theme="dark"] .markdown-content strong {
+  color: #f9fafb;
+}
+
+[data-theme="dark"] .markdown-content em {
+  color: #e5e7eb;
+}
+
+/* 滚动条黑夜模式 */
+[data-theme="dark"] .session-list::-webkit-scrollbar-track {
+  background-color: #1f2937;
+}
+
+[data-theme="dark"] .session-list::-webkit-scrollbar-thumb {
+  background-color: #4b5563;
+}
+
+[data-theme="dark"] .chat-messages::-webkit-scrollbar-track {
+  background-color: #1f2937;
+}
+
+[data-theme="dark"] .chat-messages::-webkit-scrollbar-thumb {
+  background-color: #4b5563;
+}
+
+/* 确保所有文字内容在黑夜模式下正确显示 */
+[data-theme="dark"] .message-content * {
+  color: inherit !important;
+}
+
+[data-theme="dark"] .user-message .message-content * {
+  color: white !important;
+}
+
+[data-theme="dark"] .ai-message .message-content * {
+  color: #e5e7eb !important;
+}
+
+/* 链接和特殊元素保持可读性 */
+[data-theme="dark"] .user-message .message-content a {
+  color: #93c5fd !important;
+}
+
+[data-theme="dark"] .ai-message .message-content a {
+  color: #60a5fa !important;
+}
+
+[data-theme="dark"] .message-content strong {
+  color: inherit !important;
+}
+
+[data-theme="dark"] .user-message .message-content strong {
+  color: white !important;
+}
+
+[data-theme="dark"] .ai-message .message-content strong {
+  color: #f9fafb !important;
+}
+
+[data-theme="dark"] .message-content em {
+  color: inherit !important;
+}
+
+[data-theme="dark"] .user-message .message-content em {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+[data-theme="dark"] .ai-message .message-content em {
+  color: #e5e7eb !important;
+}
+
+/* ===== 输入框暗夜模式修复（最高优先级） ===== */
+
+/* 覆盖所有可能的输入框样式 - 使用最高优先级 */
+body[data-theme="dark"] .message-input,
+body[data-theme="dark"] .message-input .el-textarea,
+body[data-theme="dark"] .message-input .el-textarea__inner,
+body[data-theme="dark"] .chat-container .message-input,
+body[data-theme="dark"] .chat-container .message-input .el-textarea,
+body[data-theme="dark"] .chat-container .message-input .el-textarea__inner,
+html[data-theme="dark"] .message-input,
+html[data-theme="dark"] .message-input .el-textarea,
+html[data-theme="dark"] .message-input .el-textarea__inner {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #e5e7eb !important;
+  box-shadow: none !important;
+  background-image: none !important;
+}
+
+/* 针对textarea元素的最高优先级样式 */
+body[data-theme="dark"] textarea,
+body[data-theme="dark"] .el-textarea textarea,
+body[data-theme="dark"] .message-input textarea,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] .el-textarea textarea,
+html[data-theme="dark"] .message-input textarea {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #e5e7eb !important;
+  background-image: none !important;
+}
+
+/* Element Plus组件最高优先级覆盖 */
+body[data-theme="dark"] .el-input__inner,
+body[data-theme="dark"] .el-textarea__inner,
+body[data-theme="dark"] .el-input .el-input__inner,
+body[data-theme="dark"] .el-textarea .el-textarea__inner,
+html[data-theme="dark"] .el-input__inner,
+html[data-theme="dark"] .el-textarea__inner,
+html[data-theme="dark"] .el-input .el-input__inner,
+html[data-theme="dark"] .el-textarea .el-textarea__inner {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #e5e7eb !important;
+  box-shadow: none !important;
+  background-image: none !important;
+}
+
+/* 占位符样式修复 */
+body[data-theme="dark"] .message-input::placeholder,
+body[data-theme="dark"] .message-input .el-textarea__inner::placeholder,
+body[data-theme="dark"] .el-textarea__inner::placeholder,
+body[data-theme="dark"] textarea::placeholder,
+html[data-theme="dark"] .message-input::placeholder,
+html[data-theme="dark"] .message-input .el-textarea__inner::placeholder,
+html[data-theme="dark"] .el-textarea__inner::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: #9ca3af !important;
+  opacity: 1 !important;
+}
+
+/* hover和focus状态 */
+body[data-theme="dark"] .message-input .el-textarea__inner:hover,
+body[data-theme="dark"] .el-textarea__inner:hover,
+body[data-theme="dark"] textarea:hover,
+html[data-theme="dark"] .message-input .el-textarea__inner:hover,
+html[data-theme="dark"] .el-textarea__inner:hover,
+html[data-theme="dark"] textarea:hover {
+  border-color: #60a5fa !important;
+}
+
+body[data-theme="dark"] .message-input .el-textarea__inner:focus,
+body[data-theme="dark"] .el-textarea__inner:focus,
+body[data-theme="dark"] textarea:focus,
+html[data-theme="dark"] .message-input .el-textarea__inner:focus,
+html[data-theme="dark"] .el-textarea__inner:focus,
+html[data-theme="dark"] textarea:focus {
+  border-color: #60a5fa !important;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2) !important;
+  outline: none !important;
+}
+
+/* 通用样式覆盖 */
+body[data-theme="dark"] [class*="el-input"],
+body[data-theme="dark"] [class*="el-textarea"],
+body[data-theme="dark"] [class*="message-input"],
+html[data-theme="dark"] [class*="el-input"],
+html[data-theme="dark"] [class*="el-textarea"],
+html[data-theme="dark"] [class*="message-input"] {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #e5e7eb !important;
+}
+
+/* 最终备用方案 - 直接样式注入 */
+[data-theme="dark"] .chat-input .el-textarea .el-textarea__inner {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #e5e7eb !important;
+}
+
+[data-theme="dark"] .input-container .el-textarea .el-textarea__inner {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #e5e7eb !important;
+}
+
+/* ===== 超强优先级暗夜模式输入框修复 ===== */
+
+/* 使用超高优先级选择器覆盖所有可能的Element Plus样式 */
+[data-theme="dark"] .chat-container .chat-input .input-container .el-textarea .el-textarea__inner,
+[data-theme="dark"] .chat-container .input-container .message-input .el-textarea__inner,
+[data-theme="dark"] .chat-input .input-container .message-input .el-textarea__inner,
+[data-theme="dark"] body .chat-container .chat-input .el-textarea .el-textarea__inner,
+[data-theme="dark"] html[data-theme="dark"] .chat-container .chat-input .el-textarea .el-textarea__inner {
+  background-color: #374151 !important;
+  background-image: none !important;
+  border-color: #4b5563 !important;
+  color: #e5e7eb !important;
+  box-shadow: none !important;
+  -webkit-appearance: none !important;
+  outline: none !important;
+}
+
+/* 直接针对textarea元素，使用所有可能的选择器组合 */
+[data-theme="dark"] textarea.el-textarea__inner,
+[data-theme="dark"] .el-textarea textarea,
+[data-theme="dark"] textarea.message-input,
+[data-theme="dark"] body textarea,
+[data-theme="dark"] html textarea {
+  background-color: #374151 !important;
+  background-image: none !important;
+  border-color: #4b5563 !important;
+  color: #e5e7eb !important;
+}
+
+/* 超强优先级 - 使用属性选择器 */
+[data-theme="dark"] textarea[class="el-textarea__inner"],
+[data-theme="dark"] textarea[rows],
+[data-theme="dark"] textarea[resize="none"],
+[data-theme="dark"] input[type="text"],
+[data-theme="dark"] textarea[tabindex] {
+  background-color: #374151 !important;
+  background-image: none !important;
+  border-color: #4b5563 !important;
+  color: #e5e7eb !important;
+}
+
+/* 占位符文字颜色 - 超强优先级 */
+[data-theme="dark"] ::placeholder,
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder,
+[data-theme="dark"] .el-textarea__inner::placeholder,
+[data-theme="dark"] textarea[class="el-textarea__inner"]::placeholder,
+[data-theme="dark"] ::-webkit-input-placeholder,
+[data-theme="dark"] ::-moz-placeholder {
+  color: #9ca3af !important;
+  opacity: 1 !important;
+}
+
+/* 焦点和悬停状态 - 超强优先级 */
+[data-theme="dark"] textarea:focus,
+[data-theme="dark"] textarea:hover,
+[data-theme="dark"] .el-textarea__inner:focus,
+[data-theme="dark"] .el-textarea__inner:hover,
+[data-theme="dark"] textarea[class="el-textarea__inner"]:focus,
+[data-theme="dark"] textarea[class="el-textarea__inner"]:hover {
+  border-color: #60a5fa !important;
+  background-color: #374151 !important;
+  color: #e5e7eb !important;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2) !important;
 }
 </style>

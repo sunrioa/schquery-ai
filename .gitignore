@@ -1,0 +1,73 @@
+# Maven构建目录
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# IDE相关文件
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+*.code-workspace
+
+# Eclipse
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# 系统文件
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# 日志文件
+*.log
+*.log.*
+logs/
+
+# 临时文件
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# 编译文件
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# 属性文件（包含敏感信息）
+application-local.properties
+application-dev.properties
+.env
+.env.local
+.env.*.local
+
+# Node.js相关（如果前端项目）
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+build/
+
+# 缓存
+.cache/
+.parcel-cache/
+
+# 其他工具
+.history/
+replay.html
+sheet/
+.vscode/settings.json

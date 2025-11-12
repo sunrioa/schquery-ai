@@ -27,7 +27,6 @@ spring:
         options:
           model: qwen-plus
 
-
   # 数据库配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver

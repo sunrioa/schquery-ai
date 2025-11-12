@@ -63,3 +63,48 @@ CREATE TABLE `segmentation_words` (
                                       `status` tinyint NOT NULL DEFAULT '1' COMMENT '状态（1-启用，0-禁用）',
                                       PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=48594 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='分词词库';
+
+-- 添加登录信息字段
+ALTER TABLE `user` ADD COLUMN `last_login_ip` VARCHAR(50) NULL COMMENT '最后登录IP地址' AFTER `avatar`;
+ALTER TABLE `user` ADD COLUMN `last_login_time` DATETIME NULL COMMENT '最后登录时间' AFTER `last_login_ip`;
+
+-- 为登录IP字段添加索引，方便查询和统计
+CREATE INDEX `idx_last_login_ip` ON `user`(`last_login_ip`);
+CREATE INDEX `idx_last_login_time` ON `user`(`last_login_time`);
+
+-- ============================================
+-- 用户表地理位置字段
+-- 创建时间: 2025-11-12
+-- 描述: 为user表添加登录地理位置字段
+-- ============================================
+
+ALTER TABLE `user` ADD COLUMN `last_login_country` VARCHAR(50) NULL COMMENT '最后登录国家' AFTER `last_login_time`;
+ALTER TABLE `user` ADD COLUMN `last_login_province` VARCHAR(50) NULL COMMENT '最后登录省份' AFTER `last_login_country`;
+ALTER TABLE `user` ADD COLUMN `last_login_city` VARCHAR(50) NULL COMMENT '最后登录城市' AFTER `last_login_province`;
+
+-- ============================================
+-- 用户登录历史表
+-- 创建时间: 2025-11-12
+-- 描述: 记录用户每次登录的详细信息，用于安全审计和行为分析
+-- ============================================
+
+CREATE TABLE `login_history` (
+                                 `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+                                 `user_id` BIGINT NOT NULL COMMENT '用户ID',
+                                 `user_name` VARCHAR(50) NOT NULL COMMENT '用户名',
+                                 `login_ip` VARCHAR(50) NULL COMMENT '登录IP地址',
+                                 `country` VARCHAR(50) NULL COMMENT '登录国家',
+                                 `province` VARCHAR(50) NULL COMMENT '登录省份',
+                                 `city` VARCHAR(50) NULL COMMENT '登录城市',
+                                 `isp` VARCHAR(100) NULL COMMENT '运营商',
+                                 `login_time` DATETIME NOT NULL COMMENT '登录时间',
+                                 `status` INT NOT NULL DEFAULT 1 COMMENT '登录状态 (1-成功, 0-失败)',
+                                 `fail_reason` VARCHAR(255) NULL COMMENT '失败原因',
+                                 `user_agent` VARCHAR(500) NULL COMMENT '浏览器信息',
+                                 `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                                 PRIMARY KEY (`id`),
+                                 INDEX `idx_user_id` (`user_id`),
+                                 INDEX `idx_login_time` (`login_time`),
+                                 INDEX `idx_login_ip` (`login_ip`),
+                                 INDEX `idx_city` (`city`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户登录历史记录表';

@@ -182,6 +182,12 @@
               </el-tag>
             </template>
           </el-table-column>
+          <el-table-column prop="userAgent" label="登录设备" width="280" align="center">
+            <template #default="{ row }">
+              <span v-if="row.userAgent" class="device-info">{{ getFullDeviceInfo(row.userAgent) }}</span>
+              <span v-else class="no-data">未知</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="failReason" label="失败原因" width="200" align="center">
             <template #default="{ row }">
               <span v-if="row.status === 1" class="no-data">—</span>
@@ -217,6 +223,7 @@ import {
   Location
 } from '@element-plus/icons-vue'
 import { userApi } from '../../api/user'
+import { getFullDeviceInfo } from '../../utils/browserUtils'
 
 const router = useRouter()
 
@@ -543,6 +550,20 @@ onMounted(() => {
 
 .history-tip strong {
   color: #409EFF;
+}
+
+.device-info {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #f0f9ff;
+  border-left: 3px solid #409EFF;
+  color: #333;
+  font-size: 12px;
+  border-radius: 2px;
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 768px) {

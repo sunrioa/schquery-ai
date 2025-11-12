@@ -12,9 +12,12 @@ import cn.ling.domain.vo.DashboardStatsVO;
 import cn.ling.service.UserService;
 import cn.ling.service.ImageStoreService;
 import cn.ling.service.LoginHistoryService;
+import cn.ling.service.OperationLogService;
 import cn.ling.utils.Base64Utils;
+import cn.ling.utils.ContextUtils;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -22,6 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/user")
 @Validated
@@ -35,6 +39,31 @@ public class UserController {
 
     @Resource
     private LoginHistoryService loginHistoryService;
+
+    @Resource
+    private OperationLogService operationLogService;
+
+    /**
+     * 记录操作日志的辅助方法
+     */
+    private void recordOperationLog(HttpServletRequest request, String action, String detail, boolean success) {
+        try {
+            // 从 ContextUtils 获取当前特散的用户名，如果没有则默认为admin
+            String username = "admin";
+            try {
+                String contextUsername = ContextUtils.getUsername();
+                if (contextUsername != null && !contextUsername.isEmpty()) {
+                    username = contextUsername;
+                }
+            } catch (Exception e) {
+                // 日志记录：从 Context 获取用户名失败，使用默认值
+                log.debug("从 ContextUtils 获取用户名失败，使用默认值: {}", e.getMessage());
+            }
+            operationLogService.recordLog(username, action, detail, success ? 1 : 0, request);
+        } catch (Exception e) {
+            log.error("记录操作日志失败", e);
+        }
+    }
 
     //注册
     @PostMapping("/register")
@@ -170,14 +199,44 @@ public class UserController {
 
     // 管理员功能：拉黑用户
     @PostMapping("/admin/blacklistUser")
-    public Result<String> blacklistUser(@RequestParam Long userId) {
-        return userService.blacklistUser(userId);
+    public Result<String> blacklistUser(@RequestParam Long userId, HttpServletRequest request) {
+        try {
+            // 获取用户信息
+            User user = userService.getById(userId);
+            String userName = user != null ? user.getUserName() : "未知用户";
+            
+            Result<String> result = userService.blacklistUser(userId);
+            if (result.getCode() == 200) {
+                recordOperationLog(request, "拉黑用户", "拉黑用户: " + userName + " (ID: " + userId + ")", true);
+            } else {
+                recordOperationLog(request, "拉黑用户", "拉黑用户: " + userName + " (ID: " + userId + ")", false);
+            }
+            return result;
+        } catch (Exception e) {
+            recordOperationLog(request, "拉黑用户", "拉黑用户失败，ID: " + userId + "，原因: " + e.getMessage(), false);
+            throw e;
+        }
     }
 
     // 管理员功能：解除拉黑用户
     @PostMapping("/admin/unblacklistUser")
-    public Result<String> unblacklistUser(@RequestParam Long userId) {
-        return userService.unblacklistUser(userId);
+    public Result<String> unblacklistUser(@RequestParam Long userId, HttpServletRequest request) {
+        try {
+            // 获取用户信息
+            User user = userService.getById(userId);
+            String userName = user != null ? user.getUserName() : "未知用户";
+            
+            Result<String> result = userService.unblacklistUser(userId);
+            if (result.getCode() == 200) {
+                recordOperationLog(request, "解除拉黑", "解除拉黑用户: " + userName + " (ID: " + userId + ")", true);
+            } else {
+                recordOperationLog(request, "解除拉黑", "解除拉黑用户: " + userName + " (ID: " + userId + ")", false);
+            }
+            return result;
+        } catch (Exception e) {
+            recordOperationLog(request, "解除拉黑", "解除拉黑用户失败，ID: " + userId + "，原因: " + e.getMessage(), false);
+            throw e;
+        }
     }
 
 }

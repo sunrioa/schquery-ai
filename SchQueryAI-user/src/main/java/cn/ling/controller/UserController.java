@@ -5,14 +5,21 @@ import cn.ling.domain.pojo.User;
 import cn.ling.domain.pojo.ImageStore;
 import cn.ling.domain.dto.UserDTO;
 import cn.ling.domain.vo.LoginResponse;
+import cn.ling.domain.vo.LoginHistoryVO;
+import cn.ling.domain.vo.UserManagementVO;
+import cn.ling.domain.vo.PageResult;
+import cn.ling.domain.vo.DashboardStatsVO;
 import cn.ling.service.UserService;
 import cn.ling.service.ImageStoreService;
+import cn.ling.service.LoginHistoryService;
 import cn.ling.utils.Base64Utils;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -25,6 +32,9 @@ public class UserController {
 
     @Resource
     private ImageStoreService imageStoreService;
+
+    @Resource
+    private LoginHistoryService loginHistoryService;
 
     //注册
     @PostMapping("/register")
@@ -40,8 +50,8 @@ public class UserController {
 
     //登录
     @PostMapping("/login")
-    public Result<LoginResponse> login(@RequestBody UserDTO userDTO){
-        return userService.login(userDTO);
+    public Result<LoginResponse> login(@RequestBody UserDTO userDTO, HttpServletRequest request){
+        return userService.login(userDTO, request);
     }
 
 
@@ -103,6 +113,12 @@ public class UserController {
         return userService.getUserAvatar();
     }
 
+    // 根据avatarId获取头像
+    @GetMapping("/getAvatarById")
+    public Result<String> getAvatarById(@RequestParam Long avatarId) {
+        return userService.getAvatarById(avatarId);
+    }
+
     // 更新用户头像
     @PostMapping("/updateAvatar")
     public Result<Long> updateAvatar(@RequestParam("avatarFile") MultipartFile avatarFile) {
@@ -119,6 +135,37 @@ public class UserController {
     @PostMapping("/deleteAvatar")
     public Result<String> deleteAvatar() {
         return userService.deleteAvatar();
+    }
+
+    // 获取登录历史
+    @GetMapping("/loginHistory")
+    public Result<List<LoginHistoryVO>> getLoginHistory(
+            @RequestParam(required = false, defaultValue = "1") Integer pageNum,
+            @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
+        return loginHistoryService.getMyLoginHistory(pageNum, pageSize);
+    }
+
+    // 管理员功能：获取所有用户列表
+    @GetMapping("/admin/allUsers")
+    public Result<PageResult<UserManagementVO>> getAllUsers(
+            @RequestParam(required = false, defaultValue = "1") Integer pageNum,
+            @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
+        return userService.getAllUsers(pageNum, pageSize);
+    }
+
+    // 仪表板统计信息
+    @GetMapping("/admin/dashboardStats")
+    public Result<DashboardStatsVO> getDashboardStats() {
+        return userService.getDashboardStats();
+    }
+
+    // 管理员功能：获取指定用户的登录历史
+    @GetMapping("/admin/userLoginHistory")
+    public Result<List<LoginHistoryVO>> getUserLoginHistory(
+            @RequestParam Long userId,
+            @RequestParam(required = false, defaultValue = "1") Integer pageNum,
+            @RequestParam(required = false, defaultValue = "10") Integer pageSize) {
+        return loginHistoryService.getUserLoginHistory(userId, pageNum, pageSize);
     }
 
 }

@@ -194,14 +194,15 @@ import {
   FolderOpened,
   Document
 } from '@element-plus/icons-vue'
+import { userApi } from '../../api/user'
 
 const router = useRouter()
 
 // 响应式数据
-const totalUsers = ref(1248)
-const todayNewUsers = ref(23)
-const activeUsers = ref(456)
-const adminCount = ref(5)
+const totalUsers = ref(0)
+const todayNewUsers = ref(0)
+const activeUsers = ref(0)
+const adminCount = ref(0)
 const totalSensitiveWords = ref(892)
 const todayNewSensitiveWords = ref(12)
 const totalSegmentations = ref(1567)
@@ -252,8 +253,7 @@ const goBack = () => {
 
 // 导航到各个管理页面
 const goToUserManagement = () => {
-  ElMessage.info('用户管理功能开发中...')
-  // TODO: 实现用户管理页面
+  router.push('/admin/user-management')
 }
 
 const goToSensitiveWords = () => {
@@ -313,6 +313,8 @@ const clearCache = async () => {
     await new Promise(resolve => setTimeout(resolve, 1000))
 
     ElMessage.success('系统缓存已清除')
+    // 成功时刷新统计数据
+    loadDashboardStats()
   } catch {
     // 用户取消操作
   }
@@ -323,6 +325,8 @@ const exportData = async () => {
   try {
     ElMessage.info('数据导出功能开发中...')
     // TODO: 实现数据导出功能
+    // 同时刷新统计数据
+    loadDashboardStats()
   } catch (error) {
     console.error('数据导出失败:', error)
     ElMessage.error('数据导出失败')
@@ -334,6 +338,8 @@ const backupData = async () => {
   try {
     ElMessage.info('数据库备份功能开发中...')
     // TODO: 实现数据库备份功能
+    // 同时刷新统计数据
+    loadDashboardStats()
   } catch (error) {
     console.error('数据库备份失败:', error)
     ElMessage.error('数据库备份失败')
@@ -348,8 +354,24 @@ const showSystemLogs = () => {
 
 // 页面加载时获取数据
 onMounted(() => {
+  loadDashboardStats()
   refreshSystemStatus()
 })
+
+// 获取仪表板统计数据
+const loadDashboardStats = async () => {
+  try {
+    const response = await userApi.getDashboardStats()
+    if (response.code === 200) {
+      totalUsers.value = response.data.totalUsers
+      todayNewUsers.value = response.data.todayNewUsers
+      activeUsers.value = response.data.activeUsers
+      adminCount.value = response.data.adminCount
+    }
+  } catch (error) {
+    console.error('获取仪表板统计数据失败:', error)
+  }
+}
 </script>
 
 <style scoped>

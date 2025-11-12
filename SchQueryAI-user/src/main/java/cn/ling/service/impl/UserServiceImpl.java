@@ -3,9 +3,14 @@ package cn.ling.service.impl;
 import cn.ling.Result;
 import cn.ling.domain.dto.UserDTO;
 import cn.ling.domain.pojo.ImageStore;
+import cn.ling.domain.pojo.LoginHistory;
 import cn.ling.domain.vo.LoginResponse;
+import cn.ling.domain.vo.UserManagementVO;
+import cn.ling.domain.vo.PageResult;
+import cn.ling.domain.vo.DashboardStatsVO;
 import cn.ling.service.AIService;
 import cn.ling.service.ImageStoreService;
+import cn.ling.service.LoginHistoryService;
 import cn.ling.utils.*;
 import cn.ling.exception.CustomException;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -13,6 +18,8 @@ import cn.ling.domain.pojo.User;
 import cn.ling.service.UserService;
 import cn.ling.mapper.UserMapper;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -21,8 +28,14 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 
+@Slf4j
 @Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     implements UserService{
@@ -41,6 +54,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
     @Resource
     private AIService aiService;
+
+    @Resource
+    private LoginHistoryService loginHistoryService;
 
     private final static String REGISTER_CODE_KEY = "register_code:";
     private final static String FIND_PASSWORD_CODE_KEY = "find_password_code:";
@@ -174,7 +190,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     }
 
     @Override
-    public Result<LoginResponse> login(UserDTO userDTO) {
+    public Result<LoginResponse> login(UserDTO userDTO, HttpServletRequest request) {
         // 参数校验
         if (userDTO.getUserName() == null || userDTO.getUserName().trim().isEmpty()) {
             throw CustomException.error("用户名不能为空");
@@ -194,6 +210,47 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         if (!BCryptUtils.judge(userDTO.getPassword(), user.getPassWord())) {
             throw CustomException.error("密码错误");
         }
+
+        // 获取客户端IP地址
+        String clientIp = IpUtils.getClientIp(request);
+        
+        // 获取IP地理位置信息
+        IpLocationUtils.LocationInfo locationInfo = IpLocationUtils.getLocation(clientIp);
+        
+        // 检测异地登录
+        boolean isAbnormalLogin = loginHistoryService.detectAbnormalLogin(
+                user.getId(), clientIp, locationInfo.getCity());
+        
+        if (isAbnormalLogin) {
+            log.warn("检测到异地登录 - 用户: {}, IP: {}, 地点: {}", 
+                    user.getUserName(), clientIp, locationInfo.getFullLocation());
+            // 这里可以发送邮件通知用户
+        }
+        
+        // 更新用户登录信息
+        user.setLastLoginIp(clientIp);
+        user.setLastLoginTime(new Date());
+        user.setLastLoginCountry(locationInfo.getCountry());
+        user.setLastLoginProvince(locationInfo.getProvince());
+        user.setLastLoginCity(locationInfo.getCity());
+        updateById(user);
+
+        // 记录登录历史
+        String userAgent = request.getHeader("User-Agent");
+        LoginHistory loginHistory = LoginHistory.builder()
+                .userId(user.getId())
+                .userName(user.getUserName())
+                .loginIp(clientIp)
+                .country(locationInfo.getCountry())
+                .province(locationInfo.getProvince())
+                .city(locationInfo.getCity())
+                .isp(locationInfo.getIsp())
+                .loginTime(new Date())
+                .status(1)
+                .userAgent(userAgent)
+                .createTime(new Date())
+                .build();
+        loginHistoryService.recordLoginHistory(loginHistory);
 
         String token = JwtUtils.generateToken("用户信息", new HashMap<>(){
             {
@@ -568,6 +625,134 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
                 throw e;
             }
             throw CustomException.error("删除头像失败：" + e.getMessage());
+        }
+    }
+
+    @Override
+    public Result<String> getAvatarById(Long avatarId) {
+        try {
+            if (avatarId == null) {
+                return Result.success("");
+            }
+
+            // 获取头像信息
+            ImageStore imageStore = imageStoreService.getById(avatarId);
+            if (imageStore == null) {
+                return Result.success("");
+            }
+
+            return Result.success(imageStore.getImageBase64());
+        } catch (Exception e) {
+            log.error("获取头像失败", e);
+            return Result.success("");
+        }
+    }
+
+    @Override
+    public Result<PageResult<UserManagementVO>> getAllUsers(Integer pageNum, Integer pageSize) {
+        try {
+            // 参数默认值
+            if (pageNum == null || pageNum < 1) {
+                pageNum = 1;
+            }
+            if (pageSize == null || pageSize < 1) {
+                pageSize = 10;
+            }
+
+            // 分页查询所有用户
+            com.baomidou.mybatisplus.extension.plugins.pagination.Page<User> page = 
+                new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(pageNum, pageSize);
+            com.baomidou.mybatisplus.extension.plugins.pagination.Page<User> result = 
+                lambdaQuery().orderByDesc(User::getCreateTime).page(page);
+
+            // 转换为VO
+            List<UserManagementVO> voList = result.getRecords().stream()
+                .map(user -> {
+                    String location = IpLocationUtils.formatLocation(
+                        user.getLastLoginCountry(),
+                        user.getLastLoginProvince(),
+                        user.getLastLoginCity()
+                    );
+
+                    return UserManagementVO.builder()
+                        .id(user.getId())
+                        .userName(user.getUserName())
+                        .email(user.getEmail())
+                        .role(user.getRole())
+                        .avatar(user.getAvatar())
+                        .lastLoginIp(user.getLastLoginIp())
+                        .lastLoginTime(user.getLastLoginTime())
+                        .lastLoginCountry(user.getLastLoginCountry())
+                        .lastLoginProvince(user.getLastLoginProvince())
+                        .lastLoginCity(user.getLastLoginCity())
+                        .lastLoginLocation(location)
+                        .createTime(user.getCreateTime())
+                        .updateTime(user.getUpdateTime())
+                        .status("正常") // 预留字段
+                        .build();
+                })
+                .collect(Collectors.toList());
+
+            // 构建分页结果
+            PageResult<UserManagementVO> pageResult = PageResult.<UserManagementVO>builder()
+                .records(voList)
+                .total(result.getTotal())
+                .pageNum(pageNum)
+                .pageSize(pageSize)
+                .totalPages((int) Math.ceil((double) result.getTotal() / pageSize))
+                .build();
+
+            return Result.success(pageResult, "查询成功");
+        } catch (Exception e) {
+            log.error("获取用户列表失败", e);
+            throw CustomException.error("获取用户列表失败：" + e.getMessage());
+        }
+    }
+
+    @Override
+    public Result<DashboardStatsVO> getDashboardStats() {
+        try {
+            // 统计总用户数
+            long totalUsers = count();
+
+            // 统计今日新增用户数
+            LocalDate today = LocalDate.now();
+            LocalDateTime startOfDay = today.atStartOfDay();
+            LocalDateTime endOfDay = today.plusDays(1).atStartOfDay();
+            
+            Date todayStart = Date.from(startOfDay.atZone(ZoneId.systemDefault()).toInstant());
+            Date todayEnd = Date.from(endOfDay.atZone(ZoneId.systemDefault()).toInstant());
+            
+            long todayNewUsers = lambdaQuery()
+                .between(User::getCreateTime, todayStart, todayEnd)
+                .count();
+
+            // 统计24小时内活跃用户数（最后登录时间在两个小时内）
+            LocalDateTime twentyFourHoursAgo = LocalDateTime.now().minusHours(24);
+            Date cutoffTime = Date.from(twentyFourHoursAgo.atZone(ZoneId.systemDefault()).toInstant());
+            
+            long activeUsers = lambdaQuery()
+                .isNotNull(User::getLastLoginTime)
+                .ge(User::getLastLoginTime, cutoffTime)
+                .count();
+
+            // 统计管理员数
+            long adminCount = lambdaQuery()
+                .eq(User::getRole, "admin")
+                .count();
+
+            // 构建结果
+            DashboardStatsVO stats = DashboardStatsVO.builder()
+                .totalUsers(totalUsers)
+                .todayNewUsers(todayNewUsers)
+                .activeUsers(activeUsers)
+                .adminCount(adminCount)
+                .build();
+
+            return Result.success(stats, "统计成功");
+        } catch (Exception e) {
+            log.error("获取仪表板统计信息失败", e);
+            throw CustomException.error("获取仪表板统计信息失败：" + e.getMessage());
         }
     }
 }

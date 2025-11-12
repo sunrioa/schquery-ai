@@ -47,6 +47,13 @@ export const userApi = {
     return request.get('/user/getAvatar')
   },
 
+  // 根据avatarId获取头像
+  getAvatarById(avatarId) {
+    return request.get('/user/getAvatarById', {
+      params: { avatarId }
+    })
+  },
+
   // 更新用户头像
   updateAvatar(avatarFile) {
     const formData = new FormData()
@@ -81,5 +88,31 @@ export const userApi = {
   // 验证重置密码验证码并重置密码
   resetPassword(data) {
     return request.post('/user/findPassword', data)
+  },
+
+  // 获取登录历史
+  getLoginHistory(pageNum = 1, pageSize = 10) {
+    return request.get('/user/loginHistory', {
+      params: { pageNum, pageSize }
+    })
+  },
+
+  // 管理员功能：获取所有用户列表
+  getAllUsers(pageNum = 1, pageSize = 10) {
+    return request.get('/user/admin/allUsers', {
+      params: { pageNum, pageSize }
+    })
+  },
+
+  // 仪表板统计信息
+  getDashboardStats() {
+    return request.get('/user/admin/dashboardStats')
+  },
+
+  // 管理员功能：获取指定用户的登录历史
+  getUserLoginHistory(userId, pageNum = 1, pageSize = 10) {
+    return request.get('/user/admin/userLoginHistory', {
+      params: { userId, pageNum, pageSize }
+    })
   }
 }

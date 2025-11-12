@@ -10,15 +10,21 @@
             <result property="passWord" column="pass_word" jdbcType="VARCHAR"/>
             <result property="email" column="email" jdbcType="VARCHAR"/>
         <result property="role" column="role" jdbcType="VARCHAR"/>
-
             <result property="createTime" column="create_time" jdbcType="TIMESTAMP"/>
             <result property="updateTime" column="update_time" jdbcType="TIMESTAMP"/>
-
+            <result property="avatar" column="avatar" jdbcType="BIGINT"/>
+            <result property="lastLoginIp" column="last_login_ip" jdbcType="VARCHAR"/>
+            <result property="lastLoginTime" column="last_login_time" jdbcType="TIMESTAMP"/>
+            <result property="lastLoginCountry" column="last_login_country" jdbcType="VARCHAR"/>
+            <result property="lastLoginProvince" column="last_login_province" jdbcType="VARCHAR"/>
+            <result property="lastLoginCity" column="last_login_city" jdbcType="VARCHAR"/>
     </resultMap>
 
     <sql id="Base_Column_List">
         id,user_name,pass_word,
-        email,create_time,update_time
+        email,create_time,update_time,
+        role,avatar,last_login_ip,last_login_time,
+        last_login_country,last_login_province,last_login_city
     </sql>
 
     <!-- 根据用户名查询用户 -->

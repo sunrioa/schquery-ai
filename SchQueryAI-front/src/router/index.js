@@ -10,6 +10,7 @@ import ConversationManagement from '../views/worker/ConversationManagement.vue'
 import SystemManagement from '../views/admin/SystemManagement.vue'
 import SensitiveWordsManagement from '../views/admin/sensitive-words.vue'
 import SegmentationWordsManagement from '../views/admin/segmentation-words.vue'
+import UserManagement from '../views/admin/UserManagement.vue'
 import AdminDashboard from '../views/AdminDashboard.vue'
 import NotFound from '../views/NotFound.vue'
 import { hasAnyRole } from '../utils/auth'
@@ -79,6 +80,12 @@ const routes = [
     path: '/admin/segmentation-words',
     name: 'SegmentationWordsManagement',
     component: SegmentationWordsManagement,
+    meta: { requiresAuth: true, requiresRole: ['admin'] }
+  },
+  {
+    path: '/admin/user-management',
+    name: 'UserManagement',
+    component: UserManagement,
     meta: { requiresAuth: true, requiresRole: ['admin'] }
   },
   {

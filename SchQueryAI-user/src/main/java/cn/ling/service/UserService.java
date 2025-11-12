@@ -4,8 +4,14 @@ import cn.ling.Result;
 import cn.ling.domain.pojo.User;
 import cn.ling.domain.dto.UserDTO;
 import cn.ling.domain.vo.LoginResponse;
+import cn.ling.domain.vo.UserManagementVO;
+import cn.ling.domain.vo.PageResult;
+import cn.ling.domain.vo.DashboardStatsVO;
 import com.baomidou.mybatisplus.extension.service.IService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 /**
 * @author Administrator
@@ -16,7 +22,7 @@ public interface UserService extends IService<User> {
 
     Result<User> register(UserDTO userDTO);
 
-    Result<LoginResponse> login(UserDTO userDTO);
+    Result<LoginResponse> login(UserDTO userDTO, HttpServletRequest request);
 
     Result<String> sendRegisterCode(UserDTO userDTO);
 
@@ -45,4 +51,13 @@ public interface UserService extends IService<User> {
     Result<User> getUserInfo();
 
     Result<String> deleteAvatar();
+
+    // 根据avatarId获取头像
+    Result<String> getAvatarById(Long avatarId);
+
+    // 管理员功能：获取所有用户列表
+    Result<PageResult<UserManagementVO>> getAllUsers(Integer pageNum, Integer pageSize);
+
+    // 仪表板统计信息
+    Result<DashboardStatsVO> getDashboardStats();
 }

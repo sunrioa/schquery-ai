@@ -1,27 +1,24 @@
-package cn.ling.domain.pojo;
+package cn.ling.domain.vo;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.Date;
 
 /**
- * 系统用户表
- * @TableName user
+ * 用户管理VO - 管理员查看用户列表
  */
 @Data
-@AllArgsConstructor
+@Builder
 @NoArgsConstructor
-@TableName(value ="user")
-public class User {
+@AllArgsConstructor
+public class UserManagementVO {
+
     /**
-     * 用户主键ID
+     * 用户ID
      */
-    @TableId(type = IdType.AUTO)
     private Long id;
 
     /**
@@ -30,24 +27,9 @@ public class User {
     private String userName;
 
     /**
-     * 密码（建议加密存储）
-     */
-    private String passWord;
-
-    /**
-     * 电子邮箱
+     * 邮箱
      */
     private String email;
-
-    /**
-     * 创建时间
-     */
-    private Date createTime;
-
-    /**
-     * 更新时间
-     */
-    private Date updateTime;
 
     /**
      * 角色
@@ -55,7 +37,7 @@ public class User {
     private String role;
 
     /**
-     * 头像
+     * 头像ID
      */
     private Long avatar;
 
@@ -84,4 +66,23 @@ public class User {
      */
     private String lastLoginCity;
 
+    /**
+     * 最后登录地点（格式化后）
+     */
+    private String lastLoginLocation;
+
+    /**
+     * 注册时间
+     */
+    private Date createTime;
+
+    /**
+     * 更新时间
+     */
+    private Date updateTime;
+
+    /**
+     * 账号状态（预留字段）
+     */
+    private String status;
 }

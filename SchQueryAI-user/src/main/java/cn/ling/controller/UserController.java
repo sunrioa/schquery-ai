@@ -168,4 +168,16 @@ public class UserController {
         return loginHistoryService.getUserLoginHistory(userId, pageNum, pageSize);
     }
 
+    // 管理员功能：拉黑用户
+    @PostMapping("/admin/blacklistUser")
+    public Result<String> blacklistUser(@RequestParam Long userId) {
+        return userService.blacklistUser(userId);
+    }
+
+    // 管理员功能：解除拉黑用户
+    @PostMapping("/admin/unblacklistUser")
+    public Result<String> unblacklistUser(@RequestParam Long userId) {
+        return userService.unblacklistUser(userId);
+    }
+
 }

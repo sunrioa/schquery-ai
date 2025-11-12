@@ -60,4 +60,10 @@ public interface UserService extends IService<User> {
 
     // 仪表板统计信息
     Result<DashboardStatsVO> getDashboardStats();
+
+    // 管理员功能：拉黑用户（决用户的JWT並且标记用户为弃用）
+    Result<String> blacklistUser(Long userId);
+
+    // 管理员功能：解除拉黑用户（恢复用户的状态）
+    Result<String> unblacklistUser(Long userId);
 }

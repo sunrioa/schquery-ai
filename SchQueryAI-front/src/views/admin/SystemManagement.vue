@@ -195,6 +195,7 @@ import {
   Document
 } from '@element-plus/icons-vue'
 import { userApi } from '../../api/user'
+import request from '../../api/request'
 
 const router = useRouter()
 
@@ -203,10 +204,10 @@ const totalUsers = ref(0)
 const todayNewUsers = ref(0)
 const activeUsers = ref(0)
 const adminCount = ref(0)
-const totalSensitiveWords = ref(892)
-const todayNewSensitiveWords = ref(12)
-const totalSegmentations = ref(1567)
-const todayNewSegmentations = ref(34)
+const totalSensitiveWords = ref(0)
+const todayNewSensitiveWords = ref(0)
+const totalSegmentations = ref(0)
+const todayNewSegmentations = ref(0)
 
 // 系统状态
 const apiStatus = ref({ type: 'success', text: '正常' })
@@ -361,6 +362,7 @@ onMounted(() => {
 // 获取仪表板统计数据
 const loadDashboardStats = async () => {
   try {
+    // ... existing code ...
     const response = await userApi.getDashboardStats()
     if (response.code === 200) {
       totalUsers.value = response.data.totalUsers
@@ -368,8 +370,39 @@ const loadDashboardStats = async () => {
       activeUsers.value = response.data.activeUsers
       adminCount.value = response.data.adminCount
     }
+    
+    // 获取敏感词统计数据
+    await loadSensitiveWordsStats()
+    // 获取分词统计数据
+    await loadSegmentationWordsStats()
   } catch (error) {
     console.error('获取仪表板统计数据失败:', error)
+  }
+}
+
+// 获取敏感词统计数据
+const loadSensitiveWordsStats = async () => {
+  try {
+    const response = await request.get('/admin/UGC/sensitive/stats')
+    if (response.code === 200) {
+      totalSensitiveWords.value = response.data.total || 0
+      todayNewSensitiveWords.value = response.data.todayNew || 0
+    }
+  } catch (error) {
+    console.error('获取敏感词统计数据失败:', error)
+  }
+}
+
+// 获取分词统计数据
+const loadSegmentationWordsStats = async () => {
+  try {
+    const response = await request.get('/admin/UGC/segmentation/stats')
+    if (response.code === 200) {
+      totalSegmentations.value = response.data.total || 0
+      todayNewSegmentations.value = response.data.todayNew || 0
+    }
+  } catch (error) {
+    console.error('获取分词统计数据失败:', error)
   }
 }
 </script>

@@ -83,19 +83,26 @@
         
         <el-table-column prop="status" label="状态" width="100" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.status === '正常' ? 'success' : 'danger'">
-              {{ row.status }}
+            <el-tag :type="row.status === 1 ? 'success' : 'danger'">
+              {{ row.status === 1 ? '正常' : '弃用' }}
             </el-tag>
           </template>
         </el-table-column>
         
-        <el-table-column label="操作" width="200" align="center" fixed="right">
+        <el-table-column label="操作" width="250" align="center" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" size="small" @click="viewLoginHistory(row)">
               登录历史
             </el-button>
             <el-button type="info" size="small" @click="viewUserDetail(row)">
               详情
+            </el-button>
+            <el-button 
+              :type="row.status === 0 ? 'success' : 'danger'" 
+              size="small" 
+              @click="handleToggleBlacklist(row)"
+            >
+              {{ row.status === 0 ? '解除拉黑' : '拉黑' }}
             </el-button>
           </template>
         </el-table-column>
@@ -141,8 +148,8 @@
             <span v-else>未知</span>
           </el-descriptions-item>
           <el-descriptions-item label="账号状态">
-            <el-tag :type="selectedUser.status === '正常' ? 'success' : 'danger'">
-              {{ selectedUser.status }}
+            <el-tag :type="selectedUser.status === 1 ? 'success' : 'danger'">
+              {{ selectedUser.status === 1 ? '正常' : '弃用' }}
             </el-tag>
           </el-descriptions-item>
         </el-descriptions>
@@ -203,7 +210,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ArrowLeft,
   Refresh,
@@ -353,6 +360,56 @@ const handleHistorySizeChange = (size) => {
   loginHistoryPageSize.value = size
   loginHistoryPage.value = 1
   loadLoginHistory()
+}
+
+// 切换用户拉黑状态
+const handleToggleBlacklist = async (row) => {
+  try {
+    let message = ''
+    let action = ''
+    
+    if (row.status === 0) {
+      // 账户当前是弃用，执行解除拉黑
+      message = `是否确定解除拉黑用户 "${row.userName}" ？解除拉黑后该用户可以正常登录`
+      action = 'unblacklist'
+    } else {
+      // 账户当前是正常，执行拉黑
+      message = `是否确定拉黑用户 "${row.userName}" ？拉黑后该用户无法登录`
+      action = 'blacklist'
+    }
+    
+    await ElMessageBox.confirm(
+      message,
+      action === 'blacklist' ? '拉黑用户' : '解除拉黑',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    // 执行响应的操作
+    let response
+    if (action === 'blacklist') {
+      response = await userApi.blacklistUser(row.id)
+    } else {
+      response = await userApi.unblacklistUser(row.id)
+    }
+    
+    if (response.code === 200) {
+      const successMsg = action === 'blacklist' ? `用户 ${row.userName} 已拉黑` : `用户 ${row.userName} 拉黑已解除`
+      ElMessage.success(successMsg)
+      // 刷新用户列表
+      fetchUserList()
+    } else {
+      ElMessage.error(response.msg || (action === 'blacklist' ? '拉黑失败' : '解除拉黑失败'))
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('操作错误:', error)
+      ElMessage.error('操作失败')
+    }
+  }
 }
 
 // 获取头像URL

@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Builder;
 import lombok.Data;
+import java.util.Date;
 
 /**
  * 分词词库实体类
@@ -27,8 +28,18 @@ public class SegmentationWords {
     private String word;
 
     /**
-     * 状态标识
+     * 状态标識
      * 1-启用（该分词词参与分词处理），0-禁用（暂不参与分词处理）
      */
     private Integer status;
+
+    /**
+     * 创建时间
+     */
+    private Date createTime;
+
+    /**
+     * 更新时间
+     */
+    private Date updateTime;
 }

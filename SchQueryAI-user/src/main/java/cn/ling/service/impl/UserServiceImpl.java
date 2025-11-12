@@ -211,6 +211,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             throw CustomException.error("密码错误");
         }
 
+        // 检查用户是否已拉黑（管理员指定帲用户为弃用状态）
+        if (user.getStatus() != null && user.getStatus() == 0) {
+            throw CustomException.error("该账户已拉黑，无法登录");
+        }
+
         // 获取客户端IP地址
         String clientIp = IpUtils.getClientIp(request);
         
@@ -688,7 +693,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
                         .lastLoginLocation(location)
                         .createTime(user.getCreateTime())
                         .updateTime(user.getUpdateTime())
-                        .status("正常") // 预留字段
+                        .status(user.getStatus() != null ? user.getStatus() : 1)
                         .build();
                 })
                 .collect(Collectors.toList());
@@ -753,6 +758,72 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         } catch (Exception e) {
             log.error("获取仪表板统计信息失败", e);
             throw CustomException.error("获取仪表板统计信息失败：" + e.getMessage());
+        }
+    }
+
+    @Override
+    public Result<String> blacklistUser(Long userId) {
+        try {
+            // 查询用户
+            User user = getById(userId);
+            if (user == null) {
+                throw CustomException.error("用户不存在");
+            }
+
+            // 检查用户是否已经有效token（根据最后登录时间）
+            if (user.getLastLoginTime() != null) {
+                // 将用户的不轔加入黑名单（需要垃绎承转最后一次登录时间转换为Unix毫秒条次）
+                String userBlacklistKey = TOKEN_BLACKLIST_KEY + userId;
+                long blacklistedTime = System.currentTimeMillis() / 1000; // 当前时間（秒）
+                long TOKEN_BLACKLIST_TTL = 24 * 60 * 60; // 24小时（与登录JWT过期时间一致）
+                
+                stringRedisTemplate.opsForValue().set(userBlacklistKey, String.valueOf(blacklistedTime), TOKEN_BLACKLIST_TTL, TimeUnit.SECONDS);
+            }
+
+            // 标记用户为弃用（1为正常，0为弃用）
+            user.setStatus(0);
+            user.setUpdateTime(new Date());
+            boolean updated = updateById(user);
+
+            if (updated) {
+                log.info("拉黑用户成功 - 用户ID: {}, 用户名: {}", userId, user.getUserName());
+                return Result.success("用户已拉黑");
+            } else {
+                throw CustomException.error("拉黑用户失败");
+            }
+        } catch (Exception e) {
+            log.error("拉黑用户失败", e);
+            throw CustomException.error("拉黑用户失败：" + e.getMessage());
+        }
+    }
+
+    @Override
+    public Result<String> unblacklistUser(Long userId) {
+        try {
+            // 查询用户
+            User user = getById(userId);
+            if (user == null) {
+                throw CustomException.error("用户不存在");
+            }
+
+            // 删除Redis黑名单中的用户
+            String userBlacklistKey = TOKEN_BLACKLIST_KEY + userId;
+            stringRedisTemplate.delete(userBlacklistKey);
+
+            // 恢复用户为正常状态（1为正常）
+            user.setStatus(1);
+            user.setUpdateTime(new Date());
+            boolean updated = updateById(user);
+
+            if (updated) {
+                log.info("解除拉黑用户成功 - 用户ID: {}, 用户名: {}", userId, user.getUserName());
+                return Result.success("已解除拉黑");
+            } else {
+                throw CustomException.error("解除拉黑失败");
+            }
+        } catch (Exception e) {
+            log.error("解除拉黑失败", e);
+            throw CustomException.error("解除拉黑失败：" + e.getMessage());
         }
     }
 }

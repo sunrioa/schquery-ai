@@ -68,6 +68,13 @@ request.interceptors.response.use(
     } else if (data.code === 200) {
       return data
     } else {
+      // 检查是否是token过期错误
+      if (data.msg && data.msg.includes('TOKEN_EXPIRED')) {
+        localStorage.removeItem('token')
+        ElMessage.error('登录已过期，请重新登录')
+        window.location.href = '/login'
+        return Promise.reject(data)
+      }
       ElMessage.error(data.msg || '请求失败')
       return Promise.reject(data)
     }
@@ -85,6 +92,11 @@ request.interceptors.response.use(
       window.location.href = '/login'
     } else if (error.response && error.response.data) {
       ElMessage.error(error.response.data.msg || '请求失败')
+    } else if (error.msg && error.msg.includes('TOKEN_EXPIRED')) {
+      // 处理从Promise.reject(data)传来的错误
+      localStorage.removeItem('token')
+      ElMessage.error('登录已过期，请重新登录')
+      window.location.href = '/login'
     } else {
       ElMessage.error(error.message || '网络错误')
     }

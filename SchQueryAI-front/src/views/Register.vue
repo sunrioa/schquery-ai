@@ -157,7 +157,7 @@ const validatePass2 = (rule, value, callback) => {
 const registerRules = reactive({
   userName: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 3, max: 20, message: '用户名长度在 3 到 20 个字符', trigger: 'blur' }
+    { min: 6, max: 20, message: '用户名长度在 6 到 20 个字符', trigger: 'blur' }
   ],
   email: [
     { required: true, message: '请输入邮箱', trigger: 'blur' },

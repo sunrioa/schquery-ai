@@ -82,7 +82,7 @@ public class UserManagementVO {
     private Date updateTime;
 
     /**
-     * 账号状态（预留字段）
+     * 账号状态 1-正常 0-弃用
      */
-    private String status;
+    private Integer status;
 }

@@ -28,6 +28,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.Date;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @Slf4j
 @Service
@@ -68,6 +72,8 @@ public class UGCServiceImpl implements UGCService {
                 SensitiveWords sensitiveWords = SensitiveWords.builder()
                         .word(trimmedWord)
                         .status(1)
+                        .createTime(new Date())
+                        .updateTime(new Date())
                         .build();
                 sensitiveWordsList.add(sensitiveWords);
                 wordsToAddToTree.add(trimmedWord);
@@ -176,6 +182,9 @@ public class UGCServiceImpl implements UGCService {
                 if (newStatus != null && (newStatus == 0 || newStatus == 1)) {
                     updateWrapper.set(SensitiveWords::getStatus, newStatus);
                 }
+
+                // 总是更新updateTime字段
+                updateWrapper.set(SensitiveWords::getUpdateTime, new Date());
 
                 if (sensitiveWordsMapper.update(null, updateWrapper) > 0) {
                     updatedCount++;
@@ -292,6 +301,8 @@ public class UGCServiceImpl implements UGCService {
                 SegmentationWords segmentationWords = SegmentationWords.builder()
                         .word(trimmedWord)
                         .status(1)
+                        .createTime(new Date())
+                        .updateTime(new Date())
                         .build();
                 segmentationWordsList.add(segmentationWords);
             }
@@ -367,6 +378,9 @@ public class UGCServiceImpl implements UGCService {
                     updateWrapper.set(SegmentationWords::getStatus, dto.getStatus());
                 }
 
+                // 总是更新updateTime字段
+                updateWrapper.set(SegmentationWords::getUpdateTime, new Date());
+
                 if (segmentationWordsMapper.update(null, updateWrapper) > 0) {
                     updatedCount++;
                 }
@@ -441,6 +455,7 @@ public class UGCServiceImpl implements UGCService {
     @Override
     public Result<Map<String, Object>> getSensitiveWordsStats() {
         try {
+            // ... existing code ...
             // 查询总记录数
             LambdaQueryWrapper<SensitiveWords> queryWrapper = new LambdaQueryWrapper<>();
             Long totalCount = sensitiveWordsMapper.selectCount(queryWrapper);
@@ -455,11 +470,24 @@ public class UGCServiceImpl implements UGCService {
             disabledWrapper.eq(SensitiveWords::getStatus, 0);
             Long disabledCount = sensitiveWordsMapper.selectCount(disabledWrapper);
 
+            // 查询今日新增的记录数
+            LocalDate today = LocalDate.now();
+            LocalDateTime startOfDay = today.atStartOfDay();
+            LocalDateTime endOfDay = today.plusDays(1).atStartOfDay();
+            
+            Date todayStart = Date.from(startOfDay.atZone(ZoneId.systemDefault()).toInstant());
+            Date todayEnd = Date.from(endOfDay.atZone(ZoneId.systemDefault()).toInstant());
+            
+            LambdaQueryWrapper<SensitiveWords> todayWrapper = new LambdaQueryWrapper<>();
+            todayWrapper.between(SensitiveWords::getCreateTime, todayStart, todayEnd);
+            Long todayNewCount = sensitiveWordsMapper.selectCount(todayWrapper);
+
             // 构建统计结果
             Map<String, Object> stats = new HashMap<>();
             stats.put("total", totalCount != null ? totalCount : 0L);
             stats.put("enabled", enabledCount != null ? enabledCount : 0L);
             stats.put("disabled", disabledCount != null ? disabledCount : 0L);
+            stats.put("todayNew", todayNewCount != null ? todayNewCount : 0L);
 
             return Result.success(stats);
         } catch (Exception e) {
@@ -485,11 +513,24 @@ public class UGCServiceImpl implements UGCService {
             disabledWrapper.eq(SegmentationWords::getStatus, 0);
             Long disabledCount = segmentationWordsMapper.selectCount(disabledWrapper);
 
+            // 查询今日新增的记录数
+            LocalDate today = LocalDate.now();
+            LocalDateTime startOfDay = today.atStartOfDay();
+            LocalDateTime endOfDay = today.plusDays(1).atStartOfDay();
+            
+            Date todayStart = Date.from(startOfDay.atZone(ZoneId.systemDefault()).toInstant());
+            Date todayEnd = Date.from(endOfDay.atZone(ZoneId.systemDefault()).toInstant());
+            
+            LambdaQueryWrapper<SegmentationWords> todayWrapper = new LambdaQueryWrapper<>();
+            todayWrapper.between(SegmentationWords::getCreateTime, todayStart, todayEnd);
+            Long todayNewCount = segmentationWordsMapper.selectCount(todayWrapper);
+
             // 构建统计结果
             Map<String, Object> stats = new HashMap<>();
             stats.put("total", totalCount != null ? totalCount : 0L);
             stats.put("enabled", enabledCount != null ? enabledCount : 0L);
             stats.put("disabled", disabledCount != null ? disabledCount : 0L);
+            stats.put("todayNew", todayNewCount != null ? todayNewCount : 0L);
 
             return Result.success(stats);
         } catch (Exception e) {

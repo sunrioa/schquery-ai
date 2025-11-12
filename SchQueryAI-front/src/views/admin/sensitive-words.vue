@@ -140,7 +140,7 @@
         ref="addFormRef"
         label-width="80px"
       >
-        <el-form-item label="敏感词" prop="words">
+        <el-form-item label="敏感词" prop="wordInput">
           <el-input
             v-model="addForm.wordInput"
             type="textarea"
@@ -247,7 +247,7 @@ const editForm = reactive({
 
 // 表单验证规则
 const addRules = {
-  words: [
+  wordInput: [
     { required: true, message: '请输入敏感词', trigger: 'blur' }
   ]
 }
@@ -540,10 +540,13 @@ const handleAdd = async () => {
 
     if (words.length === 0) {
       ElMessage.error('请输入有效的敏感词')
+      submitLoading.value = false
       return
     }
 
+    console.log('准备发送敏感词:', words)
     const response = await http.post('/admin/UGC/sensitive/add', words)
+    console.log('添加敏感词响应:', response)
 
     if (response.code === 200) {
       ElMessage.success(`成功添加 ${words.length} 个敏感词`)
@@ -555,9 +558,9 @@ const handleAdd = async () => {
       ElMessage.error(response.message || '添加敏感词失败')
     }
   } catch (error) {
-    if (error.message !== '表单验证失败') {
-      console.error('添加敏感词失败:', error)
-      ElMessage.error('添加敏感词失败')
+    console.error('添加敏感词异常:', error)
+    if (error && error.message !== '表单验证失败') {
+      ElMessage.error(error.msg || error.message || '添加敏感词失败')
     }
   } finally {
     submitLoading.value = false

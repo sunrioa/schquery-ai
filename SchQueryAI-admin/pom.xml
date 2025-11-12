@@ -30,5 +30,11 @@
             <artifactId>SchQueryAI-domain</artifactId>
             <version>1.0.0</version>
         </dependency>
+
+        <dependency>
+            <groupId>cn.ling</groupId>
+            <artifactId>SchQueryAI-user</artifactId>
+            <version>1.0.0</version>
+        </dependency>
     </dependencies>
 </project>

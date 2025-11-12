@@ -136,6 +136,9 @@
             </template>
 
             <div class="operation-logs">
+              <div v-if="recentLogs.length === 0" class="no-logs">
+                <p>暂无操作日志</p>
+              </div>
               <div v-for="log in recentLogs" :key="log.id" class="log-item">
                 <div class="log-header">
                   <span class="log-operator">{{ log.operator }}</span>
@@ -195,6 +198,8 @@ import {
   Document
 } from '@element-plus/icons-vue'
 import { userApi } from '../../api/user'
+import { operationLogApi } from '../../api/operationLog'
+import request from '../../api/request'
 
 const router = useRouter()
 
@@ -203,10 +208,10 @@ const totalUsers = ref(0)
 const todayNewUsers = ref(0)
 const activeUsers = ref(0)
 const adminCount = ref(0)
-const totalSensitiveWords = ref(892)
-const todayNewSensitiveWords = ref(12)
-const totalSegmentations = ref(1567)
-const todayNewSegmentations = ref(34)
+const totalSensitiveWords = ref(0)
+const todayNewSensitiveWords = ref(0)
+const totalSegmentations = ref(0)
+const todayNewSegmentations = ref(0)
 
 // 系统状态
 const apiStatus = ref({ type: 'success', text: '正常' })
@@ -215,36 +220,7 @@ const redisStatus = ref({ type: 'warning', text: '延迟较高' })
 const systemLoad = ref(45)
 
 // 操作日志
-const recentLogs = ref([
-  {
-    id: 1,
-    operator: '管理员',
-    action: '添加敏感词',
-    detail: '新增敏感词 "测试词汇"',
-    timestamp: new Date(Date.now() - 300000).toISOString()
-  },
-  {
-    id: 2,
-    operator: '系统',
-    action: '用户注册',
-    detail: '新用户 "user123" 完成注册',
-    timestamp: new Date(Date.now() - 600000).toISOString()
-  },
-  {
-    id: 3,
-    operator: '员工',
-    action: '回复对话',
-    detail: '处理用户咨询 #1287',
-    timestamp: new Date(Date.now() - 900000).toISOString()
-  },
-  {
-    id: 4,
-    operator: '管理员',
-    action: '系统备份',
-    detail: '完成数据库自动备份',
-    timestamp: new Date(Date.now() - 1800000).toISOString()
-  }
-])
+const recentLogs = ref([])
 
 // 返回聊天界面
 const goBack = () => {
@@ -313,8 +289,10 @@ const clearCache = async () => {
     await new Promise(resolve => setTimeout(resolve, 1000))
 
     ElMessage.success('系统缓存已清除')
-    // 成功时刷新统计数据
+    // 成功时记录操作日志并刷新统计数据
+    console.log('[操作日志] 管理员清除系统缓存')
     loadDashboardStats()
+    loadRecentLogs()
   } catch {
     // 用户取消操作
   }
@@ -325,8 +303,10 @@ const exportData = async () => {
   try {
     ElMessage.info('数据导出功能开发中...')
     // TODO: 实现数据导出功能
+    console.log('[操作日志] 管理员导出系统数据')
     // 同时刷新统计数据
     loadDashboardStats()
+    loadRecentLogs()
   } catch (error) {
     console.error('数据导出失败:', error)
     ElMessage.error('数据导出失败')
@@ -338,8 +318,10 @@ const backupData = async () => {
   try {
     ElMessage.info('数据库备份功能开发中...')
     // TODO: 实现数据库备份功能
+    console.log('[操作日志] 管理员执行数据库备份')
     // 同时刷新统计数据
     loadDashboardStats()
+    loadRecentLogs()
   } catch (error) {
     console.error('数据库备份失败:', error)
     ElMessage.error('数据库备份失败')
@@ -352,15 +334,33 @@ const showSystemLogs = () => {
   // TODO: 实现系统日志页面
 }
 
+// 获取最近操作日志
+const loadRecentLogs = async () => {
+  try {
+    const response = await operationLogApi.getRecentLogs(20)
+    console.log('操作日志响应:', response)
+    if (response.code === 200) {
+      recentLogs.value = response.data || []
+      console.log('操作日志数据:', recentLogs.value)
+    } else {
+      console.warn('获取操作日志失败', response.message)
+    }
+  } catch (error) {
+    console.error('获取操作日志失败:', error)
+  }
+}
+
 // 页面加载时获取数据
 onMounted(() => {
   loadDashboardStats()
+  loadRecentLogs()
   refreshSystemStatus()
 })
 
 // 获取仪表板统计数据
 const loadDashboardStats = async () => {
   try {
+    // ... existing code ...
     const response = await userApi.getDashboardStats()
     if (response.code === 200) {
       totalUsers.value = response.data.totalUsers
@@ -368,8 +368,39 @@ const loadDashboardStats = async () => {
       activeUsers.value = response.data.activeUsers
       adminCount.value = response.data.adminCount
     }
+    
+    // 获取敏感词统计数据
+    await loadSensitiveWordsStats()
+    // 获取分词统计数据
+    await loadSegmentationWordsStats()
   } catch (error) {
     console.error('获取仪表板统计数据失败:', error)
+  }
+}
+
+// 获取敏感词统计数据
+const loadSensitiveWordsStats = async () => {
+  try {
+    const response = await request.get('/admin/UGC/sensitive/stats')
+    if (response.code === 200) {
+      totalSensitiveWords.value = response.data.total || 0
+      todayNewSensitiveWords.value = response.data.todayNew || 0
+    }
+  } catch (error) {
+    console.error('获取敏感词统计数据失败:', error)
+  }
+}
+
+// 获取分词统计数据
+const loadSegmentationWordsStats = async () => {
+  try {
+    const response = await request.get('/admin/UGC/segmentation/stats')
+    if (response.code === 200) {
+      totalSegmentations.value = response.data.total || 0
+      todayNewSegmentations.value = response.data.todayNew || 0
+    }
+  } catch (error) {
+    console.error('获取分词统计数据失败:', error)
   }
 }
 </script>
@@ -557,6 +588,84 @@ const loadDashboardStats = async () => {
   display: flex;
   gap: 15px;
   flex-wrap: wrap;
+}
+
+.monitoring-card {
+  height: auto;
+  max-height: 320px;
+}
+
+.system-status {
+  min-height: 240px;
+  space-y: 15px;
+}
+
+.operation-logs {
+  max-height: 240px;
+  min-height: 150px;
+  overflow-y: auto;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.no-logs {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px 20px;
+  color: #999;
+  font-size: 14px;
+}
+
+.log-item {
+  padding: 12px;
+  margin-bottom: 8px;
+  background-color: #f9f9f9;
+  border-left: 3px solid #409EFF;
+  border-radius: 2px;
+  box-sizing: border-box;
+}
+
+.log-item:last-child {
+  margin-bottom: 5px;
+}
+
+.log-header {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.log-operator {
+  padding: 2px 6px;
+  background-color: #e6f7ff;
+  border-radius: 2px;
+  color: #0050b3;
+  font-weight: 500;
+}
+
+.log-action {
+  padding: 2px 6px;
+  background-color: #f6ffed;
+  border-radius: 2px;
+  color: #274e20;
+  font-weight: 500;
+}
+
+.log-time {
+  color: #999;
+  margin-left: auto;
+}
+
+.log-detail {
+  font-size: 12px;
+  color: #666;
+  padding-left: 5px;
+  line-height: 1.4;
+  word-wrap: break-word;
+  word-break: break-word;
+  white-space: normal;
 }
 
 @media (max-width: 768px) {

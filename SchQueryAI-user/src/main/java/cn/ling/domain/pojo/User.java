@@ -84,4 +84,9 @@ public class User {
      */
     private String lastLoginCity;
 
+    /**
+     * 用户状态 1-正常 0-弃用
+     */
+    private Integer status = 1;
+
 }

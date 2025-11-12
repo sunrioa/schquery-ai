@@ -114,5 +114,19 @@ export const userApi = {
     return request.get('/user/admin/userLoginHistory', {
       params: { userId, pageNum, pageSize }
     })
+  },
+
+  // 管理员功能：拉黑用户
+  blacklistUser(userId) {
+    return request.post('/user/admin/blacklistUser', {}, {
+      params: { userId }
+    })
+  },
+
+  // 管理员功能：解除拉黑用户
+  unblacklistUser(userId) {
+    return request.post('/user/admin/unblacklistUser', {}, {
+      params: { userId }
+    })
   }
 }

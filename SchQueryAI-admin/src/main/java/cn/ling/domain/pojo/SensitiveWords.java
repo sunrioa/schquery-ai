@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Builder;
 import lombok.Data;
+import java.util.Date;
 
 /**
  * 敏感词实体类
@@ -27,8 +28,18 @@ public class SensitiveWords {
     private String word;
 
     /**
-     * 状态标识
+     * 状态标識
      * 1-启用（该敏感词参与过滤检测），0-禁用（暂不参与过滤检测）
      */
     private Integer status;
+
+    /**
+     * 创建时间
+     */
+    private Date createTime;
+
+    /**
+     * 更新时间
+     */
+    private Date updateTime;
 }

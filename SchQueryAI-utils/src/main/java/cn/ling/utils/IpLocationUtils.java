@@ -2,16 +2,15 @@ package cn.ling.utils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.StringUtils;
-
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * IP地理位置工具类
@@ -26,58 +25,16 @@ public class IpLocationUtils {
     /**
      * IP地理位置信息
      */
+    @Getter
+    @Setter
     public static class LocationInfo {
         private String country = "未知";
         private String province = "未知";
         private String city = "未知";
         private String isp = "未知";
 
-        public String getCountry() {
-            return country;
-        }
-
-        public void setCountry(String country) {
-            this.country = country;
-        }
-
-        public String getProvince() {
-            return province;
-        }
-
-        public void setProvince(String province) {
-            this.province = province;
-        }
-
-        public String getCity() {
-            return city;
-        }
-
-        public void setCity(String city) {
-            this.city = city;
-        }
-
-        public String getIsp() {
-            return isp;
-        }
-
-        public void setIsp(String isp) {
-            this.isp = isp;
-        }
-
         public String getFullLocation() {
-            StringBuilder sb = new StringBuilder();
-            if (StringUtils.hasText(country) && !"未知".equals(country)) {
-                sb.append(country);
-            }
-            if (StringUtils.hasText(province) && !"未知".equals(province)) {
-                if (sb.length() > 0) sb.append(" ");
-                sb.append(province);
-            }
-            if (StringUtils.hasText(city) && !"未知".equals(city)) {
-                if (sb.length() > 0) sb.append(" ");
-                sb.append(city);
-            }
-            return sb.length() > 0 ? sb.toString() : "未知";
+            return formatLocation(country, province, city);
         }
     }
 
@@ -233,13 +190,13 @@ public class IpLocationUtils {
             sb.append(country);
         }
         if (StringUtils.hasText(province) && !"未知".equals(province)) {
-            if (sb.length() > 0) sb.append(" ");
+            if (!sb.isEmpty()) sb.append(" ");
             sb.append(province);
         }
         if (StringUtils.hasText(city) && !"未知".equals(city)) {
-            if (sb.length() > 0) sb.append(" ");
+            if (!sb.isEmpty()) sb.append(" ");
             sb.append(city);
         }
-        return sb.length() > 0 ? sb.toString() : "未知";
+        return !sb.isEmpty() ? sb.toString() : "未知";
     }
 }

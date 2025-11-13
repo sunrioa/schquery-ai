@@ -1,8 +1,7 @@
 package cn.ling.utils;
 
 import com.alibaba.fastjson2.JSONObject;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -11,11 +10,11 @@ import org.springframework.web.socket.TextMessage;
 /**
  * JSON消息构建工具类
  * 负责创建与音频处理相关的配置消息和结束消息
+ * 使用FastJSON构建WebSocket通信所需的JSON格式消息，支持语音识别服务的配置和控制
  */
+@Slf4j
 @Component
 public class JsonUtils {
-    // 日志记录器
-    private static final Logger logger = LoggerFactory.getLogger(JsonUtils.class);
 
     /**
      * 模型模式（从配置文件读取，默认值为"offline"）
@@ -45,28 +44,28 @@ public class JsonUtils {
      * @return 构建好的配置消息TextMessage对象
      */
     public TextMessage buildConfigMessage(String wavName) {
-        logger.info("开始构建配置消息，音频文件名: {}", wavName);
+        log.info("开始构建配置消息，音频文件名: {}", wavName);
 
         // 使用FastJSON的JSONObject创建配置消息
         JSONObject config = new JSONObject();
 
         // 设置处理模式（在线/离线）
         config.put("mode", model);
-        logger.debug("配置消息添加模式: {}", model);
+        log.debug("配置消息添加模式: {}", model);
 
         // 设置音频文件名
         config.put("wav_name", wavName);
 
         // 设置音频格式为PCM
         config.put("wav_format", "pcm");
-        logger.debug("配置消息音频格式: pcm");
+        log.debug("配置消息音频格式: pcm");
 
         // 标记为正在说话状态
         config.put("is_speaking", true);
 
         // 设置音频采样率
         config.put("audio_fs", AUDIO_SAMPLE_RATE);
-        logger.debug("配置消息采样率: {}", AUDIO_SAMPLE_RATE);
+        log.debug("配置消息采样率: {}", AUDIO_SAMPLE_RATE);
 
         // 启用数字转换（将语音中的数字转换为阿拉伯数字）
         config.put("itn", true);
@@ -74,17 +73,17 @@ public class JsonUtils {
         // 设置分片大小参数
         int[] chunkSizes = new int[]{5, 10, 5};
         config.put("chunk_size", chunkSizes);
-        logger.debug("配置消息分片大小: {}", chunkSizes);
+        log.debug("配置消息分片大小: {}", chunkSizes);
 
         // 当热词不为空时添加热词配置
         if (StringUtils.hasText(hotWords)) {
             config.put("hotwords", hotWords);
-            logger.debug("配置消息添加热词: {}", hotWords);
+            log.debug("配置消息添加热词: {}", hotWords);
         } else {
-            logger.debug("未配置热词，不添加hotwords字段");
+            log.debug("未配置热词，不添加hotwords字段");
         }
 
-        logger.info("配置消息构建完成，内容: {}", config);
+        log.info("配置消息构建完成，内容: {}", config);
         return new TextMessage(config.toString());
     }
 
@@ -96,7 +95,7 @@ public class JsonUtils {
      * @return 构建好的结束消息TextMessage对象
      */
     public TextMessage buildEndMessage(String wavName) {
-        logger.info("开始构建结束消息，音频文件名: {}", wavName);
+        log.info("开始构建结束消息，音频文件名: {}", wavName);
 
         // 使用FastJSON的JSONObject创建结束消息
         JSONObject endMsg = new JSONObject();
@@ -112,9 +111,9 @@ public class JsonUtils {
 
         // 设置处理模式（与配置消息保持一致）
         endMsg.put("mode", model);
-        logger.debug("结束消息模式: {}", model);
+        log.debug("结束消息模式: {}", model);
 
-        logger.info("结束消息构建完成，内容: {}", endMsg);
+        log.info("结束消息构建完成，内容: {}", endMsg);
         return new TextMessage(endMsg.toString());
     }
 }

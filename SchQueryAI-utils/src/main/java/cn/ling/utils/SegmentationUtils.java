@@ -38,7 +38,7 @@ public class SegmentationUtils {
         } catch (IOException e) {
             throw new RuntimeException("分词处理失败", e);
         }
-//        log.info("分词结果为:{}", words);
+        log.info("分词结果为:{}", words);
         return words;
     }
 

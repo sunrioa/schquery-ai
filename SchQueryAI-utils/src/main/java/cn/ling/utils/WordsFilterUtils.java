@@ -5,7 +5,6 @@ import lombok.Data;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import java.util.*;
@@ -18,9 +17,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @Component
 public class WordsFilterUtils {
-
-    @Autowired
-    private SegmentationUtils segmentationUtils;
 
     /**
      * 执行敏感词过滤（单线程版）
@@ -38,7 +34,7 @@ public class WordsFilterUtils {
         }
 
         // 1. 分词处理并计时
-        List<String> segmentationWords = segmentationUtils.doSegmentationWords(comment);
+        List<String> segmentationWords = SegmentationUtils.doSegmentationWords(comment);
 
         // 2. 检测敏感词
         Set<String> sensitiveWords = new HashSet<>();

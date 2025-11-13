@@ -1,8 +1,6 @@
 package cn.ling.utils;
 
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.*;
@@ -13,11 +11,11 @@ import java.util.concurrent.TimeUnit;
 /**
  * FFmpeg音频转换工具类
  * 负责将上传的音频文件转换为指定格式的PCM音频数据
+ * 使用FFmpeg工具进行音频格式转换，支持多种音频格式输入
  */
+@Slf4j // 启用SLF4J日志功能
 @Component
 public class FFmpegUtils {
-    // 日志记录器
-    private static final Logger logger = LoggerFactory.getLogger(FFmpegUtils.class);
 
     // 目标PCM音频的采样率：16000Hz
     private static final int AUDIO_SAMPLE_RATE = 16000;
@@ -31,8 +29,8 @@ public class FFmpegUtils {
      * @throws Exception 转换过程中发生的异常
      */
     public byte[] convertAudioToPcm(MultipartFile file) throws Exception {
-        logger.info("开始音频转换为PCM格式，原始文件名: {}", file.getOriginalFilename());
-        logger.debug("原始文件大小: {} bytes, 内容类型: {}", file.getSize(), file.getContentType());
+        log.info("开始音频转换为PCM格式，原始文件名: {}", file.getOriginalFilename());
+        log.debug("原始文件大小: {} bytes, 内容类型: {}", file.getSize(), file.getContentType());
 
         // 创建临时文件（避免内存溢出，JVM退出后自动删除）
         // 输入临时文件：保存上传的原始音频
@@ -42,11 +40,11 @@ public class FFmpegUtils {
         tempInput.deleteOnExit();
         tempOutput.deleteOnExit();
 
-        logger.debug("创建临时输入文件: {}, 临时输出文件: {}", tempInput.getAbsolutePath(), tempOutput.getAbsolutePath());
+        log.debug("创建临时输入文件: {}, 临时输出文件: {}", tempInput.getAbsolutePath(), tempOutput.getAbsolutePath());
 
         try {
             // 写入上传文件到临时输入文件
-            logger.debug("开始将上传文件内容写入临时文件");
+            log.debug("开始将上传文件内容写入临时文件");
             try (InputStream in = file.getInputStream();
                  OutputStream out = new FileOutputStream(tempInput)) {
                 byte[] buffer = new byte[8192];
@@ -55,7 +53,7 @@ public class FFmpegUtils {
                     out.write(buffer, 0, len);
                 }
             }
-            logger.debug("上传文件内容写入临时文件完成");
+            log.debug("上传文件内容写入临时文件完成");
 
             // 构建FFmpeg转换命令
             // 参数说明：
@@ -70,7 +68,7 @@ public class FFmpegUtils {
                     "ffmpeg -y -i %s -ar %d -ac 1 -acodec pcm_s16le -f s16le %s -loglevel warning",
                     tempInput.getAbsolutePath(), AUDIO_SAMPLE_RATE, tempOutput.getAbsolutePath()
             );
-            logger.info("执行FFmpeg转换命令: {}", ffmpegCmd);
+            log.info("执行FFmpeg转换命令: {}", ffmpegCmd);
 
             // 执行FFmpeg命令
             Process process = Runtime.getRuntime().exec(ffmpegCmd);
@@ -80,44 +78,44 @@ public class FFmpegUtils {
             readProcessOutput(process.getErrorStream(), "FFmpeg错误");
 
             // 等待转换完成（超时30秒）
-            logger.debug("等待FFmpeg转换完成，超时时间30秒");
+            log.debug("等待FFmpeg转换完成，超时时间30秒");
             boolean isCompleted = process.waitFor(30, TimeUnit.SECONDS);
             if (!isCompleted) {
                 process.destroyForcibly();
-                logger.error("FFmpeg转换超时（30秒）");
+                log.error("FFmpeg转换超时（30秒）");
                 throw new Exception("FFmpeg转换超时（30秒）");
             }
 
             // 检查转换结果
             int exitValue = process.exitValue();
             if (exitValue != 0) {
-                logger.error("FFmpeg转换失败，退出码: {}", exitValue);
+                log.error("FFmpeg转换失败，退出码: {}", exitValue);
                 throw new Exception("FFmpeg转换失败（退出码：" + exitValue + "）");
             }
 
             // 验证输出文件是否存在且不为空
             if (!tempOutput.exists() || tempOutput.length() == 0) {
-                logger.error("FFmpeg转换成功但未生成有效输出文件");
+                log.error("FFmpeg转换成功但未生成有效输出文件");
                 throw new Exception("FFmpeg转换成功但未生成有效输出文件");
             }
 
             // 读取PCM数据
-            logger.debug("开始读取转换后的PCM文件，文件大小: {} bytes", tempOutput.length());
+            log.debug("开始读取转换后的PCM文件，文件大小: {} bytes", tempOutput.length());
             byte[] pcmData = Files.readAllBytes(tempOutput.toPath());
-            logger.info("PCM转换完成，转换后数据大小: {} bytes", pcmData.length);
+            log.info("PCM转换完成，转换后数据大小: {} bytes", pcmData.length);
 
             return pcmData;
         } finally {
             // 清理临时文件
             if (tempInput.delete()) {
-                logger.debug("临时输入文件已删除: {}", tempInput.getAbsolutePath());
+                log.debug("临时输入文件已删除: {}", tempInput.getAbsolutePath());
             } else {
-                logger.warn("无法删除临时输入文件: {}", tempInput.getAbsolutePath());
+                log.warn("无法删除临时输入文件: {}", tempInput.getAbsolutePath());
             }
             if (tempOutput.delete()) {
-                logger.debug("临时输出文件已删除: {}", tempOutput.getAbsolutePath());
+                log.debug("临时输出文件已删除: {}", tempOutput.getAbsolutePath());
             } else {
-                logger.warn("无法删除临时输出文件: {}", tempOutput.getAbsolutePath());
+                log.warn("无法删除临时输出文件: {}", tempOutput.getAbsolutePath());
             }
         }
     }
@@ -130,11 +128,11 @@ public class FFmpegUtils {
      */
     private String getFileExtension(String filename) {
         if (filename == null || !filename.contains(".")) {
-            logger.debug("文件名不存在或没有扩展名，使用默认扩展名.wav");
+            log.debug("文件名不存在或没有扩展名，使用默认扩展名.wav");
             return ".wav";
         }
         String extension = filename.substring(filename.lastIndexOf("."));
-        logger.debug("获取到文件扩展名: {}", extension);
+        log.debug("获取到文件扩展名: {}", extension);
         return extension;
     }
 
@@ -151,10 +149,10 @@ public class FFmpegUtils {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     // 记录FFmpeg输出的详细信息到调试日志
-                    logger.debug("{}: {}", streamName, line);
+                    log.debug("{}: {}", streamName, line);
                 }
             } catch (Exception e) {
-                logger.warn("读取{}时发生错误", streamName, e);
+                log.warn("读取{}时发生错误", streamName, e);
             }
         }, "FFmpeg-" + streamName + "-Reader").start();
     }

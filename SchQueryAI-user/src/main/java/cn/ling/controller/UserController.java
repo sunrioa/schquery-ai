@@ -2,7 +2,6 @@ package cn.ling.controller;
 
 import cn.ling.Result;
 import cn.ling.domain.pojo.User;
-import cn.ling.domain.pojo.ImageStore;
 import cn.ling.domain.dto.UserDTO;
 import cn.ling.domain.vo.LoginResponse;
 import cn.ling.domain.vo.LoginHistoryVO;
@@ -10,10 +9,8 @@ import cn.ling.domain.vo.UserManagementVO;
 import cn.ling.domain.vo.PageResult;
 import cn.ling.domain.vo.DashboardStatsVO;
 import cn.ling.service.UserService;
-import cn.ling.service.ImageStoreService;
 import cn.ling.service.LoginHistoryService;
 import cn.ling.service.OperationLogService;
-import cn.ling.utils.Base64Utils;
 import cn.ling.utils.ContextUtils;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,7 +18,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-
 import java.util.List;
 import java.util.Map;
 
@@ -45,7 +41,7 @@ public class UserController {
      */
     private void recordOperationLog(HttpServletRequest request, String action, String detail, boolean success) {
         try {
-            // 从 ContextUtils 获取当前特散的用户名，如果没有则默认为admin
+            // 从 ContextUtils 获取当前登录的用户名，如果没有则默认为admin
             String username = "admin";
             try {
                 String contextUsername = ContextUtils.getUsername();
@@ -102,8 +98,7 @@ public class UserController {
     // 流式语音识别 - 开始会话
     @PostMapping("/streaming/start")
     public Result<String> startStreamingRecognition(@RequestBody Map<String, String> request) {
-        String sessionId = request.get("sessionId");
-        return userService.startStreamingRecognition(sessionId);
+        return userService.startStreamingRecognition(request.get("sessionId"));
     }
 
     // 流式语音识别 - 发送音频
@@ -203,11 +198,7 @@ public class UserController {
             String userName = user != null ? user.getUserName() : "未知用户";
             
             Result<String> result = userService.blacklistUser(userId);
-            if (result.getCode() == 200) {
-                recordOperationLog(request, "拉黑用户", "拉黑用户: " + userName + " (ID: " + userId + ")", true);
-            } else {
-                recordOperationLog(request, "拉黑用户", "拉黑用户: " + userName + " (ID: " + userId + ")", false);
-            }
+            recordOperationLog(request, "拉黑用户", "拉黑用户: " + userName + " (ID: " + userId + ")", result.getCode() == 200);
             return result;
         } catch (Exception e) {
             recordOperationLog(request, "拉黑用户", "拉黑用户失败，ID: " + userId + "，原因: " + e.getMessage(), false);

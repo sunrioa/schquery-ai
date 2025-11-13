@@ -35,9 +35,6 @@ public class UserController {
     private UserService userService;
 
     @Resource
-    private ImageStoreService imageStoreService;
-
-    @Resource
     private LoginHistoryService loginHistoryService;
 
     @Resource
@@ -227,11 +224,7 @@ public class UserController {
             String userName = user != null ? user.getUserName() : "未知用户";
             
             Result<String> result = userService.unblacklistUser(userId);
-            if (result.getCode() == 200) {
-                recordOperationLog(request, "解除拉黑", "解除拉黑用户: " + userName + " (ID: " + userId + ")", true);
-            } else {
-                recordOperationLog(request, "解除拉黑", "解除拉黑用户: " + userName + " (ID: " + userId + ")", false);
-            }
+            recordOperationLog(request, "解除拉黑", "解除拉黑用户: " + userName + " (ID: " + userId + ")", result.getCode() == 200);
             return result;
         } catch (Exception e) {
             recordOperationLog(request, "解除拉黑", "解除拉黑用户失败，ID: " + userId + "，原因: " + e.getMessage(), false);

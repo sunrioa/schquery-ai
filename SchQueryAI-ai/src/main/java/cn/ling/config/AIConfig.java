@@ -1,5 +1,7 @@
 package cn.ling.config;
 
+import cn.ling.advisor.SensitiveFilterAdvisor;
+import jakarta.annotation.Resource;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
@@ -36,6 +38,8 @@ public class AIConfig {
                 .build();
     }
 
+    @Resource
+    SensitiveFilterAdvisor sensitiveFilterAdvisor;
 
     @Bean
     public ChatClient openAiChatClient(OpenAiChatModel openAiChatModel) {
@@ -52,6 +56,7 @@ public class AIConfig {
 
         return ChatClient.builder(openAiChatModel)
                 .defaultSystem(systemPrompt)
+                .defaultAdvisors(sensitiveFilterAdvisor)
                 .build();
     }
 

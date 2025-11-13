@@ -31,10 +31,10 @@ public class WordsFilterUtils {
      * @param comment 待过滤的评论文本
      * @return 过滤结果，包含敏感词信息、处理耗时等指标
      */
-    public String doFilter(String comment) {
+    public List<String> doFilter(String comment) {
         // 边界处理：空文本或无敏感词库时直接返回成功
         if (comment == null || comment.isEmpty()) {
-            return "";
+            return List.of();
         }
 
         // 1. 分词处理并计时
@@ -52,7 +52,7 @@ public class WordsFilterUtils {
             sensitiveWords.addAll(foundWords);
         }
 
-        return sensitiveWords.toString();
+        return sensitiveWords.stream().toList();
     }
 
 

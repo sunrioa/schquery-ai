@@ -1,68 +1,78 @@
+# Spring Boot应用配置文件
 spring:
   data:
     redis:
-      database: 0
-      host: localhost  # Your Redis server IP/domain
-      port: 6379       # Default Redis port
-      timeout: 2000ms  # Connection timeout
-      lettuce: # Lettuce is the default client; configure pool if needed
+      # Redis数据库配置 - 用于缓存和会话存储
+      database: 0        # Redis数据库索引（0-15）
+      host: localhost  # Redis服务器IP地址
+      port: 6379         # Redis服务器端口
+      timeout: 2000ms    # 连接超时时间（毫秒）
+      lettuce:           # Lettuce连接池配置（Lettuce是默认的Redis客户端）
         pool:
-          max-active: 8  # Max connections
-          max-idle: 8    # Max idle connections
-          min-idle: 2    # Min idle connections
+          max-active: 8  # 连接池最大连接数
+          max-idle: 8    # 连接池最大空闲连接数
+          min-idle: 2    # 连接池最小空闲连接数
 
+  # Servlet配置
   servlet:
     multipart:
-      enabled: true  # 开启文件上传（默认true）
-      max-file-size: 100MB  # 单文件最大大小
-      max-request-size: 200MB  # 单次请求总大小
-      file-size-threshold: 10MB  # 阈值：超过则写入磁盘
-      location: /data/tmp/upload  # 临时文件目录
+      # 文件上传配置
+      enabled: true             # 开启文件上传功能（默认为true）
+      max-file-size: 100MB      # 单个文件最大上传大小
+      max-request-size: 200MB   # 单次请求最大上传大小（所有文件总和）
+      file-size-threshold: 10MB # 文件大小阈值：超过此大小将写入磁盘
+      location: /data/tmp/upload # 临时文件存储目录
 
+  # AI功能配置
   ai:
     openai:
-      base-url: https://dashscope.aliyuncs.com/compatible-mode
-      api-key: ${DASHSCOPE_API_KEY}
+      # OpenAI兼容接口配置（使用阿里云通义千问）
+      base-url: https://dashscope.aliyuncs.com/compatible-mode  # API基础地址
+      api-key: ${DASHSCOPE_API_KEY}              # API访问密钥
 
       chat:
         options:
-          model: qwen-plus
+          model: qwen-plus  # 对话模型：通义千问-plus版本
 
       embedding:
         options:
-          model: text-embedding-v1
-          dimensions: 1024
+          model: text-embedding-v1  # 文本嵌入模型
+          dimensions: 1024          # 嵌入向量维度
 
     vectorstore:
       qdrant:
-        host: localhost
-        port: 6334
-        api-key: xxxx
-        collection-name: gzhhxy
-        use-tls: false
-        initialize-schema: true
+        # Qdrant向量数据库配置 - 用于存储和检索文档向量
+        host: localhost        # Qdrant服务器地址
+        port: 6334                  # Qdrant服务器端口
+        api-key: ${SECRET_VALUE}             # Qdrant访问密钥
+        collection-name: gzhhxy     # 向量集合名称
+        use-tls: false              # 是否启用TLS加密
+        initialize-schema: true     # 是否自动初始化数据库模式
 
 
-  # 数据库配置
+  # MySQL数据库配置
   datasource:
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/schqueryai?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: root
-    password: ${PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver  # MySQL JDBC驱动类名
+    url: jdbc:mysql://localhost:3306/schqueryai?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true  # 数据库连接URL
+    username: root                                 # 数据库用户名
+    password: ${PASSWORD}                              # 数据库密码
 
+# 邮件服务配置
 email:
-  host: smtp.qq.com
-  port: 465
-  username: user@example.com
-  password: ${EMAIL_PASSWORD}
-  from: user@example.com
+  host: smtp.qq.com                    # SMTP服务器地址（QQ邮箱）
+  port: 465                            # SMTP服务器端口（SSL加密）
+  username: user@example.com          # 邮箱用户名
+  password: ${EMAIL_PASSWORD}           # 邮箱授权码（非邮箱密码）
+  from: user@example.com              # 发件人邮箱地址
 
+# 服务器配置
 server:
-  port: 8080
+  port: 8080                           # 应用服务端口号
 
+# 语音识别（FunASR）配置
 parameters:
-  model: "offline"  # 必须为"offline"，FunASR离线模式强制要求
-  hotWords: "{\"自定义\":20,\"热词\":20,\"设置\":30}"  # 正确：JSON格式需转义双引号（YAML中双引号内的"需用\"转义）
-  serverIpPort: "ws://127.0.0.1:10095"  # 本地FunASR服务器地址（127.0.0.1=本地，10095=端口）
-  funasr:  # 二级节点，对应代码中@Value读取的层级
-    subprotocol: "funasr-ws"  # 子协议（1.0+版本用funasr-ws，旧版本需改为"funasr"）
+  model: "offline"                     # 识别模式：必须为"offline"（离线模式）
+  hotWords: "{\"自定义\":20,\"热词\":20,\"设置\":30}"  # 自定义热词及权重（JSON格式）
+  serverIpPort: "ws://127.0.0.1:10095"  # FunASR服务器WebSocket地址
+  funasr:                              # FunASR详细配置节点
+    subprotocol: "funasr-ws"           # WebSocket子协议名称（1.0+版本使用）

@@ -2,7 +2,6 @@ package cn.ling.exception;
 
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * 自定义业务异常类
@@ -11,7 +10,6 @@ import lombok.extern.slf4j.Slf4j;
  * 与GlobalExceptionHandler配合使用，实现异常的统一处理和日志记录
  */
 @EqualsAndHashCode(callSuper = true)
-@Slf4j
 @Data
 public class CustomException extends RuntimeException {
 

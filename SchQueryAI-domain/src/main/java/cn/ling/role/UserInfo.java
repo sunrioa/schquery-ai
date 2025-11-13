@@ -3,7 +3,6 @@ package cn.ling.role;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * 用户信息封装类
@@ -11,7 +10,6 @@ import lombok.extern.slf4j.Slf4j;
  * 通常与ThreadLocal配合使用，在请求处理过程中保存用户上下文
  * 支持用户认证、权限控制和业务操作中的身份识别
  */
-@Slf4j
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

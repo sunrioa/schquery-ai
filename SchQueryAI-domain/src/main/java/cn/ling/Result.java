@@ -3,7 +3,6 @@ package cn.ling;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * 通用API响应结果封装类
@@ -13,7 +12,6 @@ import lombok.extern.slf4j.Slf4j;
  *
  * @param <T> 响应数据类型，支持泛型以适应不同业务场景
  */
-@Slf4j
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

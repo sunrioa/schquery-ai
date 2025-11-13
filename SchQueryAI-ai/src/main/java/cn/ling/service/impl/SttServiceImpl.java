@@ -4,8 +4,9 @@ import cn.ling.exception.CustomException;
 import cn.ling.handler.SttWebSocketHandler;
 import cn.ling.service.SttService;
 import cn.ling.utils.JsonUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.*;
@@ -23,10 +24,9 @@ import java.util.UUID;
  * 流式语音识别服务实现
  * 支持长连接模式，管理多个并发的识别会话
  */
+@Slf4j // 启用SLF4J日志功能
 @Service
 public class SttServiceImpl implements SttService {
-
-    private static final Logger log = LoggerFactory.getLogger(SttService.class);
 
     /**
      * 模型服务地址
@@ -61,12 +61,15 @@ public class SttServiceImpl implements SttService {
     /**
      * 识别会话数据结构
      */
+    @Getter
     private static class RecognitionSession {
+        // Getters
         private final String sessionToken;
         private final String recognitionId;
         private final WebSocketSession webSocketSession;
         private final SttWebSocketHandler handler;
         private final long createTime;
+        @Setter
         private volatile boolean isSending = false; // 发送状态锁
         private final Object sendLock = new Object(); // 同步锁
 
@@ -79,15 +82,6 @@ public class SttServiceImpl implements SttService {
             this.createTime = System.currentTimeMillis();
         }
 
-        // Getters
-        public String getSessionToken() { return sessionToken; }
-        public String getRecognitionId() { return recognitionId; }
-        public WebSocketSession getWebSocketSession() { return webSocketSession; }
-        public SttWebSocketHandler getHandler() { return handler; }
-        public long getCreateTime() { return createTime; }
-        public boolean isSending() { return isSending; }
-        public void setSending(boolean sending) { isSending = sending; }
-        public Object getSendLock() { return sendLock; }
     }
 
     @Override

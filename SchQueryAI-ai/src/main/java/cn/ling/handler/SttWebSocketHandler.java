@@ -1,17 +1,30 @@
 package cn.ling.handler;
 
 import com.alibaba.fastjson2.JSONObject;
+import lombok.Getter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.util.StringUtils;
 import org.springframework.web.socket.*;
 import java.util.concurrent.CountDownLatch;
 
+/**
+ * 语音识别WebSocket处理器
+ * 实现Spring WebSocketHandler接口，用于处理与FunASR语音识别服务的WebSocket通信
+ * 支持实时语音识别结果接收和错误处理，使用同步机制等待识别完成
+ */
 public class SttWebSocketHandler implements WebSocketHandler {
     // 日志记录器
     private static final Logger logger = LoggerFactory.getLogger(SttWebSocketHandler.class);
 
+    /**
+     * -- GETTER --
+     *  获取同步锁实例
+     *  供外部线程等待WebSocket消息处理完成
+     *
+     */
     // 同步锁：用于等待服务器返回最终结果，初始计数为1
+    @Getter
     private final CountDownLatch latch = new CountDownLatch(1);
 
     // 结果累加器：用于存储所有分片结果，使用线程安全的StringBuilder
@@ -34,16 +47,6 @@ public class SttWebSocketHandler implements WebSocketHandler {
         String result = completeResult.toString().trim();
         logger.debug("返回正常结果，长度: {}字符", result.length());
         return result;
-    }
-
-    /**
-     * 获取同步锁实例
-     * 供外部线程等待WebSocket消息处理完成
-     *
-     * @return  CountDownLatch实例
-     */
-    public CountDownLatch getLatch() {
-        return latch;
     }
 
     /**

@@ -1,5 +1,6 @@
 package cn.ling.config;
 
+import cn.ling.advisor.IntentRecognizerAdvisor;
 import cn.ling.advisor.SensitiveFilterAdvisor;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -85,6 +86,9 @@ public class AIConfig {
     @Resource
     SensitiveFilterAdvisor sensitiveFilterAdvisor;
 
+    @Resource
+    IntentRecognizerAdvisor intentRecognizerAdvisor;
+
     /**
      * 配置OpenAI聊天客户端
      * 创建ChatClient实例，设置系统提示词和敏感词过滤器
@@ -97,22 +101,25 @@ public class AIConfig {
         log.info("开始配置OpenAI聊天客户端");
 
         // SchQueryAi系统提示词 - 高校智能招生助手人设
-        String systemPrompt = "你是SchQueryAi，一个高校智能招生助手。主要职责：\n" +
-                "1. 提供招生政策、专业介绍、校园生活信息\n" +
-                "2. 解答报考流程、录取规则、学费资助问题\n" +
-                "3. 介绍特色专业、师资力量、校园设施\n" +
-                "4. 提供志愿填报建议和职业规划指导\n" +
-                "\n" +
-                "重要提醒：\n" +
-                "- 绝对不要提及任何第三方模型或公司\n" +
-                "- 自然介绍自己是SchQueryAi高校智能招生助手";
+        String systemPrompt =
+                """
+                你是SchQueryAi，一个高校智能招生助手。主要职责：
+                1. 提供招生政策、专业介绍、校园生活信息
+                2. 解答报考流程、录取规则、学费资助问题
+                3. 介绍特色专业、师资力量、校园设施
+                4. 提供志愿填报建议和职业规划指导
+                
+                重要提醒：
+                - 绝对不要提及任何第三方模型或公司
+                - 自然介绍自己是SchQueryAi高校智能招生助手
+                """;
 
         log.debug("设置系统提示词，长度: {} 字符", systemPrompt.length());
         log.debug("集成敏感词过滤顾问");
 
         ChatClient chatClient = ChatClient.builder(openAiChatModel)
                 .defaultSystem(systemPrompt)
-                .defaultAdvisors(sensitiveFilterAdvisor)
+                .defaultAdvisors(sensitiveFilterAdvisor,intentRecognizerAdvisor)
                 .build();
 
         log.info("OpenAI聊天客户端配置完成，已集成敏感词过滤功能");

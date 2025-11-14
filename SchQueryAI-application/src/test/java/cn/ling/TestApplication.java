@@ -6,20 +6,39 @@ import cn.ling.service.SensitiveWordsService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.List;
+import java.util.*;
 
 @Slf4j
 @SpringBootTest
 class TestApplication {
 
+    // 自定义意图映射（与业务相关的意图）
+    private static final Map<String, String> BUSINESS_INTENT_MAP = new HashMap<>();
+    static {
+        BUSINESS_INTENT_MAP.put("Q", "专业信息");
+        BUSINESS_INTENT_MAP.put("R", "招生计划");
+        BUSINESS_INTENT_MAP.put("S", "历年分数线");
+        BUSINESS_INTENT_MAP.put("T", "招生政策");
+        BUSINESS_INTENT_MAP.put("U", "报考指南");
+        BUSINESS_INTENT_MAP.put("V", "校园信息");
+        BUSINESS_INTENT_MAP.put("W", "UNKNOWN");
+    }
+
+    @Resource
+    private ChatClient chatClient;
+
+    @Test
+    public void intent() {
+        String userInput = "学校里面有多少个宿舍楼？环境怎么样";
+        System.out.println(chatClient.prompt(userInput).call().chatClientResponse());
+    }
+
     @Resource
     RerankRpc rpc;
-
 
     @Test
     public void testRpc(){

@@ -872,6 +872,10 @@ onMounted(() => {
 .menu-item .el-icon {
   margin-right: 8px;
   font-size: 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* 空状态样式 */
@@ -883,6 +887,7 @@ onMounted(() => {
   min-height: 400px;
   color: #909399;
   text-align: center;
+  width: 100%;
 }
 
 /* 分页样式 */

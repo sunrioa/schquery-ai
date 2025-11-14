@@ -24,14 +24,15 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
 
 @Slf4j
 @Service
@@ -129,8 +130,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             newUser.setUserName(userDTO.getUserName());
             newUser.setPassWord(BCryptUtils.encode(userDTO.getPassword()));
             newUser.setEmail(userDTO.getEmail());
-            newUser.setCreateTime(new Date());
-            newUser.setUpdateTime(new Date());
+            newUser.setCreateTime(LocalDateTime.now(ZoneId.systemDefault()));
+            newUser.setUpdateTime(LocalDateTime.now(ZoneId.systemDefault()));
             newUser.setRole("user");
 
             boolean save = save(newUser);
@@ -216,7 +217,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
         // 获取客户端IP地址
         String clientIp = IpUtils.getClientIp(request);
-        
+        // 添加详细日志用于诊断IP获取问题
+        log.info("用户 {} 登录 - 获取到的客户端IP: {}, RemoteAddr: {}, X-Forwarded-For: {}, X-Real-IP: {}",
+                userDTO.getUserName(), clientIp, request.getRemoteAddr(),
+                request.getHeader("X-Forwarded-For"), request.getHeader("X-Real-IP"));
+
         // 获取IP地理位置信息
         IpLocationUtils.LocationInfo locationInfo = IpLocationUtils.getLocation(clientIp);
         
@@ -232,7 +237,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         
         // 更新用户登录信息
         user.setLastLoginIp(clientIp);
-        user.setLastLoginTime(new Date());
+        // 使用服务器时区时间而不是UTC时间
+        LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
+        user.setLastLoginTime(now);
         user.setLastLoginCountry(locationInfo.getCountry());
         user.setLastLoginProvince(locationInfo.getProvince());
         user.setLastLoginCity(locationInfo.getCity());
@@ -240,6 +247,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
         // 记录登录历史
         String userAgent = request.getHeader("User-Agent");
+        // 使用服务器时区时间
+        LocalDateTime loginTime = LocalDateTime.now(ZoneId.systemDefault());
         LoginHistory loginHistory = LoginHistory.builder()
                 .userId(user.getId())
                 .userName(user.getUserName())
@@ -248,10 +257,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
                 .province(locationInfo.getProvince())
                 .city(locationInfo.getCity())
                 .isp(locationInfo.getIsp())
-                .loginTime(new Date())
+                .loginTime(loginTime)
                 .status(1)
                 .userAgent(userAgent)
-                .createTime(new Date())
+                .createTime(loginTime)
                 .build();
         loginHistoryService.recordLoginHistory(loginHistory);
 
@@ -300,7 +309,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
         // 更新密码
         user.setPassWord(BCryptUtils.encode(userDTO.getRePassword()));
-        user.setUpdateTime(new Date());
+        user.setUpdateTime(LocalDateTime.now(ZoneId.systemDefault()));
         boolean update = updateById(user);
 
         if (update) {
@@ -343,7 +352,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
             // 更新密码
             user.setPassWord(BCryptUtils.encode(userDTO.getPassword()));
-            user.setUpdateTime(new Date());
+            user.setUpdateTime(LocalDateTime.now(ZoneId.systemDefault()));
             boolean update = updateById(user);
 
             if (update) {
@@ -780,7 +789,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
             // 标记用户为弃用（1为正常，0为弃用）
             user.setStatus(0);
-            user.setUpdateTime(new Date());
+            user.setUpdateTime(LocalDateTime.now(ZoneId.systemDefault()));
             boolean updated = updateById(user);
 
             if (updated) {
@@ -810,7 +819,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
             // 恢复用户为正常状态（1为正常）
             user.setStatus(1);
-            user.setUpdateTime(new Date());
+            user.setUpdateTime(LocalDateTime.now(ZoneId.systemDefault()));
             boolean updated = updateById(user);
 
             if (updated) {

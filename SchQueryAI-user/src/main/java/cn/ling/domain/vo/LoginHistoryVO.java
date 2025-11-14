@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
 import java.util.Date;
 
 /**
@@ -43,7 +44,7 @@ public class LoginHistoryVO {
     /**
      * 登录时间
      */
-    private Date loginTime;
+    private LocalDateTime loginTime;
 
     /**
      * 登录状态

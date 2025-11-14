@@ -136,6 +136,10 @@
                     <el-icon><Lock /></el-icon>
                     修改密码
                   </el-dropdown-item>
+                  <el-dropdown-item v-if="userStore.userInfo.role !== 'admin'" command="contact-service" divided>
+                    <el-icon><ChatDotRound /></el-icon>
+                    联系客服
+                  </el-dropdown-item>
                   <el-dropdown-item divided command="logout">
                     <el-icon><SwitchButton /></el-icon>
                     退出登录
@@ -266,6 +270,69 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- 客服对话框 -->
+    <el-dialog
+        v-model="showCustomerServiceDialog"
+        title="联系客服"
+        width="600px"
+        @close="customerServiceMessage = ''"
+    >
+      <div class="customer-service-container">
+        <!-- 消息历史 -->
+        <div class="customer-service-messages" ref="customerServiceMessagesContainer">
+          <div v-if="customerServiceHistory.length === 0" class="empty-message">
+            <el-empty description="暂无消息" />
+          </div>
+          <div v-else>
+            <div
+                v-for="msg in customerServiceHistory"
+                :key="msg.id"
+                class="message-bubble"
+                :class="{ 'user-msg': msg.senderType === 1, 'admin-msg': msg.senderType === 2 }"
+            >
+              <div class="message-content">{{ msg.messageContent }}</div>
+              <div class="message-time">{{ formatTime(msg.createTime) }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 主题选择 -->
+        <div class="topic-selector">
+          <el-select v-model="customerServiceTopic" placeholder="请选择咨询主题">
+            <el-option label="一般问题" value="general" />
+            <el-option label="账户问题" value="account" />
+            <el-option label="功能问题" value="feature" />
+            <el-option label="其他问题" value="other" />
+          </el-select>
+        </div>
+
+        <!-- 消息输入框 -->
+        <div class="message-input-container">
+          <el-input
+              v-model="customerServiceMessage"
+              type="textarea"
+              :rows="3"
+              placeholder="请输入您的问题或反馈..."
+              resize="none"
+          />
+        </div>
+      </div>
+
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="showCustomerServiceDialog = false">关闭</el-button>
+          <el-button
+              type="primary"
+              @click="sendCustomerServiceMessage"
+              :loading="customerServiceLoading"
+              :disabled="!customerServiceMessage.trim()"
+          >
+            发送
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -304,6 +371,14 @@ const sessionsLoading = ref(false)
 const showRenameDialog = ref(false)
 const renameSessionName = ref('')
 const messagesContainer = ref(null)
+
+// 客服对话框相关状态
+const showCustomerServiceDialog = ref(false)
+const customerServiceMessage = ref('')
+const customerServiceTopic = ref('general')
+const customerServiceHistory = ref([])
+const customerServiceLoading = ref(false)
+const customerServiceMessagesContainer = ref(null)
 
 // 录音相关状态
 const isRecording = ref(false)
@@ -1264,6 +1339,10 @@ const handleUserCommand = async (command) => {
     case 'password':
       router.push('/password')
       break
+    case 'contact-service':
+      // 联系客服 - 打开新的聊天窗口
+      router.push('/chat-window')
+      break
     case 'logout':
       try {
         await ElMessageBox.confirm(
@@ -1283,6 +1362,71 @@ const handleUserCommand = async (command) => {
         // 用户取消操作
       }
       break
+  }
+}
+
+// 加载客服消息历史
+const loadCustomerServiceHistory = async () => {
+  try {
+    // 调用后端 API 获取此用户的客服消息历史
+    // 暂时正也没有实瞳的 API，所以这里一个空数组
+    customerServiceHistory.value = []
+  } catch (error) {
+    console.error('加载消息历史失败:', error)
+  }
+}
+
+// 发送客服消息
+const sendCustomerServiceMessage = async () => {
+  if (!customerServiceMessage.value.trim()) return
+
+  if (!checkToken()) return
+
+  try {
+    customerServiceLoading.value = true
+
+    // 调用后端 API 发送客服消息
+    const response = await fetch('http://localhost:8080/customer-service/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messageContent: customerServiceMessage.value,
+        topic: customerServiceTopic.value,
+        senderType: 1  // 1-用户，2-管理员
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error('发送消息失败')
+    }
+
+    const result = await response.json()
+    if (result.code !== 200) {
+      throw new Error(result.msg || '发送消息失败')
+    }
+
+    // 消息发送成功，清空输入框并添加到历史
+    const messageData = result.data
+    if (messageData) {
+      customerServiceHistory.value.push(messageData)
+      customerServiceMessage.value = ''
+      ElMessage.success('消息已发送')
+
+      // 滿果済滥，会话自动滥动到最下
+      nextTick(() => {
+        if (customerServiceMessagesContainer.value) {
+          customerServiceMessagesContainer.value.scrollTop = customerServiceMessagesContainer.value.scrollHeight
+        }
+      })
+    }
+  } catch (error) {
+    console.error('发送消息失败:', error)
+    ElMessage.error(error.message || '发送消息失败')
+  } finally {
+    customerServiceLoading.value = false
   }
 }
 
@@ -4395,5 +4539,127 @@ html[data-theme="dark"] [class*="message-input"] {
   background-color: #374151 !important;
   color: #e5e7eb !important;
   box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2) !important;
+}
+
+/* ===== 客服对话框样式 ===== */
+
+.customer-service-container {
+  display: flex;
+  flex-direction: column;
+  height: 400px;
+  gap: 12px;
+}
+
+.customer-service-messages {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 12px;
+  background-color: #f9fafb;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.empty-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.message-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  max-width: 80%;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+.message-bubble.user-msg {
+  align-self: flex-end;
+  background-color: #3b82f6;
+  color: white;
+}
+
+.message-bubble.admin-msg {
+  align-self: flex-start;
+  background-color: #e5e7eb;
+  color: #374151;
+}
+
+.message-content {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.message-time {
+  font-size: 12px;
+  opacity: 0.7;
+  text-align: right;
+}
+
+.message-bubble.user-msg .message-time {
+  text-align: right;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.message-bubble.admin-msg .message-time {
+  text-align: left;
+  color: #6b7280;
+}
+
+.topic-selector {
+  display: flex;
+  gap: 8px;
+}
+
+.topic-selector .el-select {
+  flex: 1;
+}
+
+.message-input-container {
+  display: flex;
+  gap: 8px;
+}
+
+.message-input-container .el-input {
+  flex: 1;
+}
+
+/* 客服对话框黑夜模式 */
+[data-theme="dark"] .customer-service-messages {
+  border-color: #4b5563;
+  background-color: #1f2937;
+}
+
+[data-theme="dark"] .message-bubble.admin-msg {
+  background-color: #4b5563;
+  color: #e5e7eb;
+}
+
+[data-theme="dark"] .message-bubble.admin-msg .message-time {
+  color: #9ca3af;
+}
+
+[data-theme="dark"] .el-select {
+  color: #e5e7eb;
+}
+
+[data-theme="dark"] .el-input__inner,
+[data-theme="dark"] .customer-service-container .el-input__inner {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #e5e7eb !important;
+}
+
+[data-theme="dark"] .customer-service-container .el-textarea__inner {
+  background-color: #374151 !important;
+  border-color: #4b5563 !important;
+  color: #e5e7eb !important;
 }
 </style>

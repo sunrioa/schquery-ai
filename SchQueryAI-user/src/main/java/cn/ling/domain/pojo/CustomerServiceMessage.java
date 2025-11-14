@@ -11,15 +11,15 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * 用户登录历史记录表
- * @TableName login_history
+ * 客服消息表
+ * @TableName customer_service_message
  */
 @Data
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@TableName(value = "login_history")
-public class LoginHistory {
+@TableName(value = "customer_service_message")
+public class CustomerServiceMessage {
     /**
      * 主键ID
      */
@@ -37,52 +37,42 @@ public class LoginHistory {
     private String userName;
 
     /**
-     * 登录IP地址
+     * 消息内容
      */
-    private String loginIp;
+    private String messageContent;
 
     /**
-     * 登录国家
+     * 发送者类型 (1-用户, 2-管理员)
      */
-    private String country;
+    private Integer senderType;
 
     /**
-     * 登录省份/州
+     * 发送者ID (用户ID或管理员ID)
      */
-    private String province;
+    private Long senderId;
 
     /**
-     * 登录城市
+     * 发送者名称
      */
-    private String city;
+    private String senderName;
 
     /**
-     * 运营商
+     * 消息状态 (1-已读, 0-未读)
      */
-    private String isp;
+    private Integer readStatus;
 
     /**
-     * 登录时间
+     * 回话话题/类别
      */
-    private LocalDateTime loginTime;
-
-    /**
-     * 登录状态 (1-成功, 0-失败)
-     */
-    private Integer status;
-
-    /**
-     * 失败原因
-     */
-    private String failReason;
-
-    /**
-     * 浏览器信息
-     */
-    private String userAgent;
+    private String topic;
 
     /**
      * 创建时间
      */
     private LocalDateTime createTime;
+
+    /**
+     * 更新时间
+     */
+    private LocalDateTime updateTime;
 }

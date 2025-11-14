@@ -94,6 +94,85 @@
         </el-col>
       </el-row>
 
+      <!-- 客服消息卡片 -->
+      <el-row :gutter="20" class="customer-service-row">
+        <el-col :span="24">
+          <el-card class="customer-service-card">
+            <template #header>
+              <div class="card-header">
+                <el-icon class="header-icon"><ChatDotRound /></el-icon>
+                <span>客服消息</span>
+                <el-badge :value="unreadMessageCount" :max="99" class="badge-item" />
+              </div>
+            </template>
+
+            <div class="customer-service-content">
+              <!-- 统计信息 -->
+              <div class="service-stats">
+                <div class="stat-box">
+                  <div class="stat-number">{{ pendingSessionCount }}</div>
+                  <div class="stat-name">待处理</div>
+                </div>
+                <div class="stat-box">
+                  <div class="stat-number">{{ unreadMessageCount }}</div>
+                  <div class="stat-name">未读消息</div>
+                </div>
+              </div>
+
+              <!-- 最近会话 -->
+              <div class="recent-sessions">
+                <div v-if="customerServiceSessions.length === 0" class="empty-sessions">
+                  <p>暂无客服消息</p>
+                </div>
+                <div v-else class="sessions-list">
+                  <div v-for="session in customerServiceSessions.slice(0, 3)" :key="session.id" class="session-item" @click="openSession(session)">
+                    <div class="session-header">
+                      <span class="user-name">{{ session.userName }}</span>
+                      <span class="session-time">{{ formatTime(session.lastMessageTime) }}</span>
+                    </div>
+                    <div class="session-preview">{{ session.lastMessage }}</div>
+                    <el-tag v-if="session.unreadCount > 0" type="danger" size="small" class="unread-tag">
+                      {{ session.unreadCount }}条未读
+                    </el-tag>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 快捷按马 -->
+              <div class="service-actions">
+                <el-button type="primary" size="small" @click="loadCustomerServiceData">刷新</el-button>
+                <el-button type="default" size="small" @click="goToCustomerServiceManagement">查看全部</el-button>
+                <el-button type="warning" size="small" @click="testAPI">测试API</el-button>
+              </div>
+            </div>
+          </el-card>
+        </el-col>
+      </el-row>
+
+      <!-- 客服回复模态框 -->
+      <el-dialog
+          v-model="showCustomerServiceModal"
+          title="处理客服消息"
+          width="600px"
+          v-if="selectedSession"
+      >
+        <div class="modal-content">
+          <div class="session-header">
+            <span>用户: {{ selectedSession.userName }}</span>
+            <span>主题: {{ selectedSession.topic }}</span>
+          </div>
+          <div class="session-messages">
+            <div v-for="msg in selectedSession.messages" :key="msg.id" class="message" :class="{ 'user-message': msg.senderType === 1, 'admin-message': msg.senderType === 2 }">
+              <span class="message-content">{{ msg.messageContent }}</span>
+              <span class="message-time">{{ formatTime(msg.createTime) }}</span>
+            </div>
+          </div>
+        </div>
+        <template #footer>
+          <el-button @click="showCustomerServiceModal = false">关闭</el-button>
+        </template>
+      </el-dialog>
+
       <!-- 系统监控面板 -->
       <el-row :gutter="20" class="monitoring-row">
         <el-col :span="12">
@@ -195,7 +274,9 @@ import {
   Delete,
   Download,
   FolderOpened,
-  Document
+  Document,
+  ChatDotRound,
+  Bell
 } from '@element-plus/icons-vue'
 import { userApi } from '../../api/user'
 import { operationLogApi } from '../../api/operationLog'
@@ -221,6 +302,14 @@ const systemLoad = ref(45)
 
 // 操作日志
 const recentLogs = ref([])
+
+// 客服消息
+const customerServiceSessions = ref([])
+const pendingSessionCount = ref(0)
+const unreadMessageCount = ref(0)
+const showCustomerServiceModal = ref(false)
+const selectedSession = ref(null)
+const customerServiceLoading = ref(false)
 
 // 返回聊天界面
 const goBack = () => {
@@ -352,9 +441,25 @@ const loadRecentLogs = async () => {
 
 // 页面加载时获取数据
 onMounted(() => {
+  console.log('[SystemManagement] 页面已加载，开始初始化...')
+  
+  // 检查登录状态
+  const token = localStorage.getItem('token')
+  if (!token) {
+    console.error('[SystemManagement] 未找到token，请先登录')
+    ElMessage.warning('请先登录')
+    router.push('/login')
+    return
+  }
+  
+  console.log('[SystemManagement] Token存在，开始加载数据')
+  
   loadDashboardStats()
   loadRecentLogs()
+  loadCustomerServiceData()
   refreshSystemStatus()
+  
+  console.log('[SystemManagement] 所有加载函数已调用')
 })
 
 // 获取仪表板统计数据
@@ -401,6 +506,126 @@ const loadSegmentationWordsStats = async () => {
     }
   } catch (error) {
     console.error('获取分词统计数据失败:', error)
+  }
+}
+
+// 加载客服消息数据
+const loadCustomerServiceData = async () => {
+  try {
+    customerServiceLoading.value = true
+    const token = localStorage.getItem('token')
+    
+    console.log('[SystemManagement] 开始加载客服消息数据...')
+    
+    // 调用后端 API 获取客服统计信息
+    const response = await fetch('http://localhost:8080/customer-service/stats', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+
+    console.log('[SystemManagement] stats API 响应状态:', response.status)
+    
+    if (response.ok) {
+      const result = await response.json()
+      console.log('[SystemManagement] stats API 返回数据:', result)
+      
+      if (result.code === 200 && result.data) {
+        // 使用返回的数据
+        pendingSessionCount.value = result.data.pendingCount || 0
+        unreadMessageCount.value = result.data.unreadCount || 0
+        
+        console.log('[SystemManagement] 待处理:', pendingSessionCount.value, '未读:', unreadMessageCount.value)
+        
+        // 获取会话列表（使用userSessions字段）
+        if (result.data.userSessions && result.data.userSessions.length > 0) {
+          customerServiceSessions.value = result.data.userSessions
+          console.log('[SystemManagement] 会话数量:', customerServiceSessions.value.length)
+        } else {
+          // 如果stats接口没有返回userSessions，再调用pending-sessions接口
+          console.log('[SystemManagement] userSessions为空，调用pending-sessions接口...')
+          const sessionsResponse = await fetch('http://localhost:8080/customer-service/pending-sessions', {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          })
+
+          console.log('[SystemManagement] pending-sessions API 响应状态:', sessionsResponse.status)
+          
+          if (sessionsResponse.ok) {
+            const sessionsResult = await sessionsResponse.json()
+            console.log('[SystemManagement] pending-sessions API 返回数据:', sessionsResult)
+            
+            if (sessionsResult.code === 200) {
+              customerServiceSessions.value = sessionsResult.data || []
+              console.log('[SystemManagement] 会话数量:', customerServiceSessions.value.length)
+            } else {
+              console.warn('[SystemManagement] pending-sessions API 返回错误:', sessionsResult.msg)
+            }
+          } else {
+            console.error('[SystemManagement] pending-sessions API 请求失败:', sessionsResponse.statusText)
+          }
+        }
+      } else {
+        console.warn('[SystemManagement] stats API 返回错误:', result.msg)
+      }
+    } else {
+      console.error('[SystemManagement] stats API 请求失败:', response.statusText)
+    }
+  } catch (error) {
+    console.error('[SystemManagement] 加载客服消息数据失败:', error)
+    ElMessage.error('加载客服数据失败，请检查后端服务')
+  } finally {
+    customerServiceLoading.value = false
+  }
+}
+
+// 打开客服消息会话
+const openSession = (session) => {
+  // 跳转到客服管理页面并携带会话信息
+  router.push('/admin/customer-service').then(() => {
+    // 延迟触发，确保页面已加载
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('select-customer-session', {
+        detail: { sessionId: session.id, userId: session.userId }
+      }))
+    }, 200)
+  })
+}
+
+// 导航到客服消息管理页面
+const goToCustomerServiceManagement = () => {
+  router.push('/admin/customer-service')
+}
+
+// 测试API调用
+const testAPI = async () => {
+  console.log('[TEST] 开始测试API调用...')
+  const token = localStorage.getItem('token')
+  console.log('[TEST] Token:', token ? '存在' : '不存在')
+  
+  try {
+    console.log('[TEST] 发送请求到: http://localhost:8080/customer-service/stats')
+    const response = await fetch('http://localhost:8080/customer-service/stats', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    console.log('[TEST] 响应状态:', response.status)
+    const data = await response.json()
+    console.log('[TEST] 响应数据:', data)
+    
+    ElMessage.success('请查看控制台输出')
+  } catch (error) {
+    console.error('[TEST] 请求失败:', error)
+    ElMessage.error('请求失败: ' + error.message)
   }
 }
 </script>
@@ -695,5 +920,197 @@ const loadSegmentationWordsStats = async () => {
     height: auto;
     min-height: 200px;
   }
+}
+
+/* 客服消息卡片样式 */
+.customer-service-row {
+  margin-bottom: 20px;
+}
+
+.customer-service-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.customer-service-card :deep(.el-card__header) {
+  border-bottom-color: #ebeef5;
+  padding: 15px 20px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+
+.header-icon {
+  color: #409EFF;
+  font-size: 20px;
+}
+
+.badge-item {
+  margin-left: auto;
+}
+
+.customer-service-content {
+  padding: 20px 0;
+}
+
+.service-stats {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+  padding: 0 20px;
+}
+
+.stat-box {
+  flex: 1;
+  padding: 15px;
+  background-color: #f5f7fa;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.stat-number {
+  font-size: 28px;
+  font-weight: bold;
+  color: #409EFF;
+  margin-bottom: 5px;
+}
+
+.stat-name {
+  font-size: 12px;
+  color: #909399;
+}
+
+.recent-sessions {
+  margin-bottom: 20px;
+  padding: 0 20px;
+}
+
+.empty-sessions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100px;
+  color: #909399;
+  font-size: 14px;
+}
+
+.sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.session-item {
+  padding: 12px;
+  background-color: #f9f9f9;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.session-item:hover {
+  background-color: #f0f5ff;
+  border-color: #409EFF;
+}
+
+.session-item .session-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.user-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 14px;
+}
+
+.session-time {
+  color: #999;
+  font-size: 12px;
+}
+
+.session-preview {
+  color: #666;
+  font-size: 12px;
+  margin-bottom: 8px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.unread-tag {
+  align-self: flex-start;
+}
+
+.service-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 0 20px;
+  border-top: 1px solid #ebeef5;
+  padding-top: 15px;
+}
+
+.modal-content {
+  padding: 20px 0;
+}
+
+.modal-content .session-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.session-messages {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.message {
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.message.user-message {
+  background-color: #e6f7ff;
+  color: #0050b3;
+  align-self: flex-end;
+  max-width: 80%;
+}
+
+.message.admin-message {
+  background-color: #f6ffed;
+  color: #274e20;
+  align-self: flex-start;
+  max-width: 80%;
+}
+
+.message-content {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.message-time {
+  font-size: 12px;
+  opacity: 0.7;
 }
 </style>

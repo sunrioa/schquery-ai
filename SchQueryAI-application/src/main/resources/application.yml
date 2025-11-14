@@ -26,10 +26,8 @@ spring:
   # AI功能配置
   ai:
     openai:
-      # OpenAI兼容接口配置（使用阿里云通义千问）
-      base-url: https://dashscope.aliyuncs.com/compatible-mode  # API基础地址
-      api-key: ${DASHSCOPE_API_KEY}              # API访问密钥
-
+      base-url: https://dashscope.aliyuncs.com/compatible-mode
+      api-key: ${DASHSCOPE_API_KEY}
       chat:
         options:
           model: qwen-plus  # 对话模型：通义千问-plus版本
@@ -51,11 +49,11 @@ spring:
 
 
   # MySQL数据库配置
-  datasource:
-    driver-class-name: com.mysql.cj.jdbc.Driver  # MySQL JDBC驱动类名
-    url: jdbc:mysql://localhost:3306/schqueryai?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true  # 数据库连接URL
-    username: root                                 # 数据库用户名
-    password: ${PASSWORD}                              # 数据库密码
+  datasource:                          # 数据库密码
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/schqueryai?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: ${PASSWORD}
 
 # 邮件服务配置
 email:

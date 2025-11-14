@@ -6,6 +6,9 @@ import Password from '../views/Password.vue'
 import ForgotPassword from '../views/ForgotPassword.vue'
 import Profile from '../views/Profile.vue'
 import Chat from '../views/Chat.vue'
+import CustomerService from '../views/CustomerService.vue'
+import ChatWindow from '../views/ChatWindow.vue'
+import AdminCustomerService from '../views/admin/AdminCustomerService.vue'
 import ConversationManagement from '../views/worker/ConversationManagement.vue'
 import SystemManagement from '../views/admin/SystemManagement.vue'
 import SensitiveWordsManagement from '../views/admin/sensitive-words.vue'
@@ -59,6 +62,18 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/customer-service',
+    name: 'CustomerService',
+    component: CustomerService,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/chat-window',
+    name: 'ChatWindow',
+    component: ChatWindow,
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/worker/conversation-management',
     name: 'ConversationManagement',
     component: ConversationManagement,
@@ -92,6 +107,12 @@ const routes = [
     path: '/admin/system-management',
     name: 'SystemManagement',
     component: SystemManagement,
+    meta: { requiresAuth: true, requiresRole: ['admin'] }
+  },
+  {
+    path: '/admin/customer-service',
+    name: 'AdminCustomerService',
+    component: AdminCustomerService,
     meta: { requiresAuth: true, requiresRole: ['admin'] }
   },
   {

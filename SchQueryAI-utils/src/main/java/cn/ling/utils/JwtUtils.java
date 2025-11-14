@@ -2,6 +2,9 @@ package cn.ling.utils;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.stereotype.Component;
+
 import lombok.extern.slf4j.Slf4j;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
@@ -15,6 +18,7 @@ import java.util.Map;
  * 支持HMAC-SHA256签名算法，设置合理的过期时间，确保令牌安全性
  */
 @Slf4j
+@Component
 public class JwtUtils {
 
     // 密钥（实际项目中建议从配置文件读取，长度至少32位）

@@ -2,12 +2,23 @@ package cn.ling.config;
 
 import cn.ling.advisor.IntentRecognizerAdvisor;
 import cn.ling.advisor.SensitiveFilterAdvisor;
+import io.qdrant.client.QdrantClient;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
+import org.springframework.ai.document.MetadataMode;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.embedding.TokenCountBatchingStrategy;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.OpenAiEmbeddingModel;
+import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.qdrant.QdrantVectorStore;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -97,7 +108,7 @@ public class AIConfig {
      * @return 配置好的ChatClient聊天客户端
      */
     @Bean
-    public ChatClient openAiChatClient(OpenAiChatModel openAiChatModel) {
+    public ChatClient openAiChatClient(OpenAiChatModel openAiChatModel,@Qualifier("qdrantVectorStore") VectorStore qdrantVectorStore) {
         log.info("开始配置OpenAI聊天客户端");
 
         // SchQueryAi系统提示词 - 高校智能招生助手人设
@@ -108,7 +119,7 @@ public class AIConfig {
                 2. 解答报考流程、录取规则、学费资助问题
                 3. 介绍特色专业、师资力量、校园设施
                 4. 提供志愿填报建议和职业规划指导
-                
+
                 重要提醒：
                 - 绝对不要提及任何第三方模型或公司
                 - 自然介绍自己是SchQueryAi高校智能招生助手
@@ -117,13 +128,49 @@ public class AIConfig {
         log.debug("设置系统提示词，长度: {} 字符", systemPrompt.length());
         log.debug("集成敏感词过滤顾问");
 
+        QuestionAnswerAdvisor questionAnswerAdvisor = QuestionAnswerAdvisor.builder(qdrantVectorStore)
+                .searchRequest(
+                        SearchRequest.builder()
+                                .similarityThreshold(0.5d)
+                                .topK(6)
+                                .build()
+                )
+                .build();
+
         ChatClient chatClient = ChatClient.builder(openAiChatModel)
                 .defaultSystem(systemPrompt)
-                .defaultAdvisors(sensitiveFilterAdvisor,intentRecognizerAdvisor)
+                .defaultAdvisors(
+                        sensitiveFilterAdvisor,
+                        intentRecognizerAdvisor,
+                        questionAnswerAdvisor
+                )
                 .build();
 
         log.info("OpenAI聊天客户端配置完成，已集成敏感词过滤功能");
         return chatClient;
+    }
+
+    @Bean
+    public VectorStore qdrantVectorStore(QdrantClient qdrantClient, EmbeddingModel embeddingModel
+    ) {
+        return QdrantVectorStore.builder(qdrantClient, embeddingModel)
+                .batchingStrategy(new TokenCountBatchingStrategy())
+                .collectionName("gzhhxy")
+                .initializeSchema(true)
+                .build();
+    }
+
+    @Bean
+    public EmbeddingModel embeddingModel(
+            OpenAiApi openAiApi,
+            @Value("${spring.ai.openai.embedding.options.model}") String model,
+            @Value("${spring.ai.openai.embedding.options.dimensions}") Integer dimensions
+    ) {
+        OpenAiEmbeddingOptions openAiEmbeddingOptions = OpenAiEmbeddingOptions.builder()
+                .model(model)
+                .dimensions(dimensions)
+                .build();
+        return new OpenAiEmbeddingModel(openAiApi, MetadataMode.ALL,openAiEmbeddingOptions);
     }
 
 }

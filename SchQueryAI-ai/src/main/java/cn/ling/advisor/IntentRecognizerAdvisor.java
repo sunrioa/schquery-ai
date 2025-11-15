@@ -55,7 +55,6 @@ public class IntentRecognizerAdvisor implements BaseAdvisor {
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest chatClientRequest, CallAdvisorChain callAdvisorChain) {
         ChatClientRequest processedRequest = before(chatClientRequest, callAdvisorChain);
-        System.out.println("用户意图为："+chatClientRequest.context().get("INTENT"));
         return callAdvisorChain.nextCall(processedRequest);
     }
 

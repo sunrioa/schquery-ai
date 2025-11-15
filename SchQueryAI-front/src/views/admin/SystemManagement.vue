@@ -2,10 +2,15 @@
   <div class="system-management">
     <div class="management-header">
       <h1>系统管理</h1>
-      <el-button @click="goBack" type="default">
-        <el-icon><ArrowLeft /></el-icon>
-        返回聊天
-      </el-button>
+      <div class="header-actions">
+        <el-button @click="toggleDarkMode" type="default" :icon="isDarkMode ? 'sunny' : 'moon'">
+          {{ isDarkMode ? '浅色' : '暗夜' }}
+        </el-button>
+        <el-button @click="goBack" type="default">
+          <el-icon><ArrowLeft /></el-icon>
+          返回聊天
+        </el-button>
+      </div>
     </div>
 
     <div class="management-content">
@@ -102,7 +107,7 @@
               <div class="card-header">
                 <el-icon class="header-icon"><ChatDotRound /></el-icon>
                 <span>客服消息</span>
-                <el-badge :value="unreadMessageCount" :max="99" class="badge-item" />
+                <el-badge v-if="unreadMessageCount > 0" :value="unreadMessageCount" :max="99" class="badge-item" />
               </div>
             </template>
 
@@ -130,7 +135,7 @@
                       <span class="user-name">{{ session.userName }}</span>
                       <span class="session-time">{{ formatTime(session.lastMessageTime) }}</span>
                     </div>
-                    <div class="session-preview">{{ session.lastMessage }}</div>
+                    <div v-if="session.unreadCount > 0" class="session-preview">{{ session.lastMessage }}</div>
                     <el-tag v-if="session.unreadCount > 0" type="danger" size="small" class="unread-tag">
                       {{ session.unreadCount }}条未读
                     </el-tag>
@@ -138,11 +143,10 @@
                 </div>
               </div>
 
-              <!-- 快捷按马 -->
+              <!-- 快捷按钮 -->
               <div class="service-actions">
                 <el-button type="primary" size="small" @click="loadCustomerServiceData">刷新</el-button>
                 <el-button type="default" size="small" @click="goToCustomerServiceManagement">查看全部</el-button>
-                <el-button type="warning" size="small" @click="testAPI">测试API</el-button>
               </div>
             </div>
           </el-card>
@@ -294,6 +298,9 @@ const todayNewSensitiveWords = ref(0)
 const totalSegmentations = ref(0)
 const todayNewSegmentations = ref(0)
 
+// 暗夜模式
+const isDarkMode = ref(false)
+
 // 系统状态
 const apiStatus = ref({ type: 'success', text: '正常' })
 const dbStatus = ref({ type: 'success', text: '正常' })
@@ -314,6 +321,21 @@ const customerServiceLoading = ref(false)
 // 返回聊天界面
 const goBack = () => {
   router.push('/chat')
+}
+
+// 切换暗夜模式
+const toggleDarkMode = () => {
+  isDarkMode.value = !isDarkMode.value
+  const html = document.documentElement
+  if (isDarkMode.value) {
+    html.setAttribute('data-theme', 'dark')
+    localStorage.setItem('theme', 'dark')
+  } else {
+    html.removeAttribute('data-theme')
+    localStorage.setItem('theme', 'light')
+  }
+  // 发布全局事件，让其他页面也能冬撕
+  window.dispatchEvent(new CustomEvent('theme-change', { detail: { isDark: isDarkMode.value } }))
 }
 
 // 导航到各个管理页面
@@ -443,6 +465,13 @@ const loadRecentLogs = async () => {
 onMounted(() => {
   console.log('[SystemManagement] 页面已加载，开始初始化...')
   
+  // 初始化主题
+const savedTheme = localStorage.getItem('theme')
+  if (savedTheme === 'dark') {
+    isDarkMode.value = true
+    document.documentElement.setAttribute('data-theme', 'dark')
+  }
+  
   // 检查登录状态
   const token = localStorage.getItem('token')
   if (!token) {
@@ -465,7 +494,6 @@ onMounted(() => {
 // 获取仪表板统计数据
 const loadDashboardStats = async () => {
   try {
-    // ... existing code ...
     const response = await userApi.getDashboardStats()
     if (response.code === 200) {
       totalUsers.value = response.data.totalUsers
@@ -535,14 +563,19 @@ const loadCustomerServiceData = async () => {
       if (result.code === 200 && result.data) {
         // 使用返回的数据
         pendingSessionCount.value = result.data.pendingCount || 0
-        unreadMessageCount.value = result.data.unreadCount || 0
+        // 不直接使用后端的unreadCount，等获取会话列表后再计算
         
-        console.log('[SystemManagement] 待处理:', pendingSessionCount.value, '未读:', unreadMessageCount.value)
+        console.log('[SystemManagement] 待处理:', pendingSessionCount.value)
         
         // 获取会话列表（使用userSessions字段）
         if (result.data.userSessions && result.data.userSessions.length > 0) {
           customerServiceSessions.value = result.data.userSessions
           console.log('[SystemManagement] 会话数量:', customerServiceSessions.value.length)
+          // 从会话列表计算总未读数
+          unreadMessageCount.value = customerServiceSessions.value.reduce((total, session) => {
+            return total + (session.unreadCount || 0)
+          }, 0)
+          console.log('[SystemManagement] 计算未读数:', unreadMessageCount.value)
         } else {
           // 如果stats接口没有返回userSessions，再调用pending-sessions接口
           console.log('[SystemManagement] userSessions为空，调用pending-sessions接口...')
@@ -563,11 +596,18 @@ const loadCustomerServiceData = async () => {
             if (sessionsResult.code === 200) {
               customerServiceSessions.value = sessionsResult.data || []
               console.log('[SystemManagement] 会话数量:', customerServiceSessions.value.length)
+              // 从会话列表计算总未读数
+              unreadMessageCount.value = customerServiceSessions.value.reduce((total, session) => {
+                return total + (session.unreadCount || 0)
+              }, 0)
+              console.log('[SystemManagement] 计算未读数:', unreadMessageCount.value)
             } else {
               console.warn('[SystemManagement] pending-sessions API 返回错误:', sessionsResult.msg)
+              unreadMessageCount.value = 0
             }
           } else {
             console.error('[SystemManagement] pending-sessions API 请求失败:', sessionsResponse.statusText)
+            unreadMessageCount.value = 0
           }
         }
       } else {
@@ -584,17 +624,40 @@ const loadCustomerServiceData = async () => {
   }
 }
 
-// 打开客服消息会话
-const openSession = (session) => {
-  // 跳转到客服管理页面并携带会话信息
-  router.push('/admin/customer-service').then(() => {
-    // 延迟触发，确保页面已加载
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('select-customer-session', {
-        detail: { sessionId: session.id, userId: session.userId }
-      }))
-    }, 200)
-  })
+const openSession = async (session) => {
+  try {
+    // 先标记为已读
+    const token = localStorage.getItem('token')
+    if (session.unreadCount > 0) {
+      const response = await fetch(`http://localhost:8080/customer-service/mark-read-by-user?userId=${session.userId}&senderType=1`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (response.ok) {
+        // 本地更新会话未读数
+        const unreadDelta = session.unreadCount
+        session.unreadCount = 0
+        unreadMessageCount.value = Math.max(0, unreadMessageCount.value - unreadDelta)
+        console.log('[SystemManagement] 已标记为已读, 未读数:', unreadMessageCount.value)
+      }
+    }
+    
+    // 跳转到客服管理页面
+    router.push('/admin/customer-service').then(() => {
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('select-customer-session', {
+          detail: { sessionId: session.id, userId: session.userId }
+        }))
+      }, 200)
+    })
+  } catch (error) {
+    console.error('[SystemManagement] 打开会话失败:', error)
+    ElMessage.error('打开会话失败')
+  }
 }
 
 // 导航到客服消息管理页面
@@ -602,32 +665,6 @@ const goToCustomerServiceManagement = () => {
   router.push('/admin/customer-service')
 }
 
-// 测试API调用
-const testAPI = async () => {
-  console.log('[TEST] 开始测试API调用...')
-  const token = localStorage.getItem('token')
-  console.log('[TEST] Token:', token ? '存在' : '不存在')
-  
-  try {
-    console.log('[TEST] 发送请求到: http://localhost:8080/customer-service/stats')
-    const response = await fetch('http://localhost:8080/customer-service/stats', {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    })
-    
-    console.log('[TEST] 响应状态:', response.status)
-    const data = await response.json()
-    console.log('[TEST] 响应数据:', data)
-    
-    ElMessage.success('请查看控制台输出')
-  } catch (error) {
-    console.error('[TEST] 请求失败:', error)
-    ElMessage.error('请求失败: ' + error.message)
-  }
-}
 </script>
 
 <style scoped>
@@ -635,6 +672,11 @@ const testAPI = async () => {
   padding: 20px;
   max-width: 1400px;
   margin: 0 auto;
+  background-color: white;
+}
+
+[data-theme="dark"] .system-management {
+  background-color: #1a1a1a;
 }
 
 .management-header {
@@ -644,9 +686,23 @@ const testAPI = async () => {
   margin-bottom: 20px;
 }
 
+[data-theme="dark"] .management-header {
+  justify-content: space-between;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
 .management-header h1 {
   margin: 0;
   color: #333;
+}
+
+[data-theme="dark"] .management-header h1 {
+  color: #e0e0e0;
 }
 
 .stats-row {
@@ -657,6 +713,15 @@ const testAPI = async () => {
   position: relative;
   overflow: hidden;
   cursor: default;
+}
+
+[data-theme="dark"] .stat-card {
+  background-color: #2a2a2a !important;
+  border-color: #444 !important;
+}
+
+[data-theme="dark"] .stat-card :deep(.el-card__body) {
+  background-color: #2a2a2a !important;
 }
 
 .stat-card :deep(.el-card__body) {
@@ -681,6 +746,10 @@ const testAPI = async () => {
   color: #666;
 }
 
+[data-theme="dark"] .stat-label {
+  color: #999;
+}
+
 .stat-icon {
   font-size: 48px;
   color: rgba(64, 158, 255, 0.2);
@@ -700,9 +769,22 @@ const testAPI = async () => {
   height: 200px;
 }
 
+[data-theme="dark"] .module-card {
+  background-color: #2a2a2a !important;
+  border-color: #444 !important;
+}
+
+[data-theme="dark"] .module-card :deep(.el-card__body) {
+  background-color: #2a2a2a !important;
+}
+
 .module-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .module-card:hover {
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
 }
 
 .module-content {
@@ -724,12 +806,20 @@ const testAPI = async () => {
   font-size: 18px;
 }
 
+[data-theme="dark"] .module-content h3 {
+  color: #e0e0e0;
+}
+
 .module-content p {
   margin: 0 0 15px 0;
   color: #666;
   font-size: 14px;
   line-height: 1.5;
   flex-grow: 1;
+}
+
+[data-theme="dark"] .module-content p {
+  color: #999;
 }
 
 .module-stats {
@@ -763,6 +853,10 @@ const testAPI = async () => {
 .status-label {
   color: #333;
   font-weight: 500;
+}
+
+[data-theme="dark"] .status-label {
+  color: #e0e0e0;
 }
 
 .operation-logs {
@@ -809,6 +903,19 @@ const testAPI = async () => {
   margin-bottom: 20px;
 }
 
+[data-theme="dark"] .quick-actions-card {
+  background-color: #2a2a2a !important;
+  border-color: #444 !important;
+}
+
+[data-theme="dark"] .quick-actions-card :deep(.el-card__body) {
+  background-color: #2a2a2a !important;
+}
+
+[data-theme="dark"] .quick-actions-card :deep(.el-card__header) {
+  background-color: #2a2a2a !important;
+}
+
 .quick-actions {
   display: flex;
   gap: 15px;
@@ -818,6 +925,19 @@ const testAPI = async () => {
 .monitoring-card {
   height: auto;
   max-height: 320px;
+}
+
+[data-theme="dark"] .monitoring-card {
+  background-color: #2a2a2a !important;
+  border-color: #444 !important;
+}
+
+[data-theme="dark"] .monitoring-card :deep(.el-card__body) {
+  background-color: #2a2a2a !important;
+}
+
+[data-theme="dark"] .monitoring-card :deep(.el-card__header) {
+  background-color: #2a2a2a !important;
 }
 
 .system-status {
@@ -842,6 +962,10 @@ const testAPI = async () => {
   font-size: 14px;
 }
 
+[data-theme="dark"] .no-logs {
+  color: #666;
+}
+
 .log-item {
   padding: 12px;
   margin-bottom: 8px;
@@ -849,6 +973,11 @@ const testAPI = async () => {
   border-left: 3px solid #409EFF;
   border-radius: 2px;
   box-sizing: border-box;
+}
+
+[data-theme="dark"] .log-item {
+  background-color: #333;
+  border-left-color: #409EFF;
 }
 
 .log-item:last-child {
@@ -870,6 +999,12 @@ const testAPI = async () => {
   font-weight: 500;
 }
 
+[data-theme="dark"] .log-operator {
+  background-color: rgba(0, 80, 179, 0.2);
+  color: #65b1ff;
+  font-weight: 500;
+}
+
 .log-action {
   padding: 2px 6px;
   background-color: #f6ffed;
@@ -878,7 +1013,18 @@ const testAPI = async () => {
   font-weight: 500;
 }
 
+[data-theme="dark"] .log-action {
+  background-color: rgba(82, 196, 26, 0.2);
+  color: #85ce61;
+  font-weight: 500;
+}
+
 .log-time {
+  color: #999;
+  margin-left: auto;
+}
+
+[data-theme="dark"] .log-time {
   color: #999;
   margin-left: auto;
 }
@@ -891,6 +1037,10 @@ const testAPI = async () => {
   word-wrap: break-word;
   word-break: break-word;
   white-space: normal;
+}
+
+[data-theme="dark"] .log-detail {
+  color: #ccc;
 }
 
 @media (max-width: 768px) {
@@ -932,9 +1082,26 @@ const testAPI = async () => {
   overflow: hidden;
 }
 
+[data-theme="dark"] .customer-service-card {
+  background-color: #2a2a2a !important;
+  border-color: #444 !important;
+}
+
+[data-theme="dark"] .customer-service-card :deep(.el-card__body) {
+  background-color: #2a2a2a !important;
+}
+
+[data-theme="dark"] .customer-service-card :deep(.el-card__header) {
+  background-color: #2a2a2a !important;
+}
+
 .customer-service-card :deep(.el-card__header) {
   border-bottom-color: #ebeef5;
   padding: 15px 20px;
+}
+
+[data-theme="dark"] .customer-service-card :deep(.el-card__header) {
+  border-bottom-color: #444;
 }
 
 .card-header {
@@ -942,6 +1109,11 @@ const testAPI = async () => {
   align-items: center;
   gap: 10px;
   font-weight: 600;
+  color: #333;
+}
+
+[data-theme="dark"] .card-header {
+  color: #e0e0e0;
 }
 
 .header-icon {
@@ -972,6 +1144,10 @@ const testAPI = async () => {
   text-align: center;
 }
 
+[data-theme="dark"] .stat-box {
+  background-color: #333;
+}
+
 .stat-number {
   font-size: 28px;
   font-weight: bold;
@@ -982,6 +1158,10 @@ const testAPI = async () => {
 .stat-name {
   font-size: 12px;
   color: #909399;
+}
+
+[data-theme="dark"] .stat-name {
+  color: #999;
 }
 
 .recent-sessions {
@@ -998,6 +1178,10 @@ const testAPI = async () => {
   font-size: 14px;
 }
 
+[data-theme="dark"] .empty-sessions {
+  color: #666;
+}
+
 .sessions-list {
   display: flex;
   flex-direction: column;
@@ -1011,10 +1195,22 @@ const testAPI = async () => {
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.3s;
+  color: #333;
+}
+
+[data-theme="dark"] .session-item {
+  background-color: #333;
+  border-color: #444;
+  color: #e0e0e0;
 }
 
 .session-item:hover {
   background-color: #f0f5ff;
+  border-color: #409EFF;
+}
+
+[data-theme="dark"] .session-item:hover {
+  background-color: #3a4a5a;
   border-color: #409EFF;
 }
 
@@ -1031,9 +1227,17 @@ const testAPI = async () => {
   font-size: 14px;
 }
 
+[data-theme="dark"] .user-name {
+  color: #e0e0e0;
+}
+
 .session-time {
   color: #999;
   font-size: 12px;
+}
+
+[data-theme="dark"] .session-time {
+  color: #777;
 }
 
 .session-preview {
@@ -1046,6 +1250,10 @@ const testAPI = async () => {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+[data-theme="dark"] .session-preview {
+  color: #999;
 }
 
 .unread-tag {
@@ -1061,6 +1269,10 @@ const testAPI = async () => {
   padding-top: 15px;
 }
 
+[data-theme="dark"] .service-actions {
+  border-top-color: #444;
+}
+
 .modal-content {
   padding: 20px 0;
 }
@@ -1072,6 +1284,12 @@ const testAPI = async () => {
   margin-bottom: 20px;
   padding-bottom: 10px;
   border-bottom: 1px solid #ebeef5;
+  color: #333;
+}
+
+[data-theme="dark"] .modal-content .session-header {
+  border-bottom-color: #444;
+  color: #e0e0e0;
 }
 
 .session-messages {
@@ -1097,11 +1315,84 @@ const testAPI = async () => {
   max-width: 80%;
 }
 
+[data-theme="dark"] .message.user-message {
+  background-color: rgba(0, 80, 179, 0.2);
+  color: #65b1ff;
+}
+
 .message.admin-message {
   background-color: #f6ffed;
   color: #274e20;
   align-self: flex-start;
   max-width: 80%;
+}
+
+[data-theme="dark"] .message.admin-message {
+  background-color: rgba(82, 196, 26, 0.2);
+  color: #85ce61;
+}
+
+/* el-card暗夜模式适配 */
+:deep(.el-card) {
+  --el-card-bg-color: white;
+  --el-card-border-color: #ebeef5;
+  --el-card-text-color: #333;
+}
+
+[data-theme="dark"] :deep(.el-card) {
+  --el-card-bg-color: #2a2a2a !important;
+  --el-card-border-color: #444 !important;
+  --el-card-text-color: #e0e0e0 !important;
+  background-color: #2a2a2a !important;
+  border-color: #444 !important;
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] :deep(.el-card__header) {
+  border-bottom-color: #444 !important;
+  background-color: #2a2a2a !important;
+}
+
+[data-theme="dark"] :deep(.el-card__body) {
+  color: #e0e0e0 !important;
+  background-color: #2a2a2a !important;
+}
+
+[data-theme="dark"] :deep(.el-card__title) {
+  color: #e0e0e0 !important;
+}
+
+/* el-dialog暗夜模式适配 */
+:deep(.el-dialog) {
+  --el-dialog-bg-color: white;
+}
+
+[data-theme="dark"] :deep(.el-dialog) {
+  --el-dialog-bg-color: #2a2a2a;
+}
+
+[data-theme="dark"] :deep(.el-dialog__header) {
+  border-bottom-color: #444;
+}
+
+[data-theme="dark"] :deep(.el-dialog__title) {
+  color: #e0e0e0;
+}
+
+[data-theme="dark"] :deep(.el-dialog__close) {
+  color: #999;
+}
+
+[data-theme="dark"] :deep(.el-dialog__close:hover) {
+  color: #e0e0e0;
+}
+
+[data-theme="dark"] :deep(.el-dialog__body) {
+  color: #e0e0e0;
+}
+
+[data-theme="dark"] :deep(.el-dialog__footer) {
+  border-top-color: #444;
 }
 
 .message-content {

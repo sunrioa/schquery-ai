@@ -44,20 +44,27 @@
               class="message-group"
               :class="msg.senderType === 1 ? 'user-group' : 'admin-group'"
           >
-            <!-- 管理员消息 -->
+            <!-- 管理员消恫 -->
             <div v-if="msg.senderType === 2" class="message-wrapper">
               <div class="message-bubble admin-bubble">
                 <div class="bubble-content">{{ msg.messageContent }}</div>
               </div>
-              <div class="message-time">{{ formatTime(msg.createTime) }}</div>
+              <div class="message-meta">
+                <span class="message-time">{{ formatTime(msg.createTime) }}</span>
+              </div>
             </div>
 
-            <!-- 用户消息 -->
+            <!-- 用户消恫 -->
             <div v-else class="message-wrapper">
               <div class="message-bubble user-bubble">
                 <div class="bubble-content">{{ msg.messageContent }}</div>
               </div>
-              <div class="message-time">{{ formatTime(msg.createTime) }}</div>
+              <div class="message-meta">
+                <span class="message-time">{{ formatTime(msg.createTime) }}</span>
+                <span class="read-status" :class="msg.readStatus === 1 ? 'read' : 'unread'">
+                  {{ msg.readStatus === 1 ? '✓已读' : '未读' }}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -165,15 +172,60 @@ onMounted(async () => {
   // 加载消息历史
   await loadMessageHistory()
 
+  // 调用API标记管理员消恫为已读（发送者类型=2）
+  try {
+    const token = localStorage.getItem('token')
+    await fetch('http://localhost:8080/customer-service/mark-read-by-user?userId=' + userId.value + '&senderType=2', {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    console.log('[ChatWindow] 已标记管理员消恫为已读')
+    
+    // 需要重新加载一次消恫，以获取最新的readStatus状态
+    await loadMessageHistory()
+    
+    // 触发事件，告诉AdminCustomerService消恫已读，更新红点
+    window.dispatchEvent(new CustomEvent('user-marked-admin-read', {
+      detail: { userId: userId.value }
+    }))
+  } catch (error) {
+    console.error('[ChatWindow] 标记已读失败:', error)
+  }
+
   // 连接WebSocket
   connectWebSocket()
+  
+  // 监听管理员已标记消息事件
+  window.addEventListener('admin-marked-read', handleAdminMarkedRead)
+  console.log('[ChatWindow] 已添加 admin-marked-read 监听器')
 })
 
 // 清理
+const handleAdminMarkedRead = async (event) => {
+  console.log('[ChatWindow] 接收到管理员已标记消息事件', event?.detail)
+  const { userId } = event?.detail || {}
+  
+  // 只有当事件中的userId与当前用户ID匹配时，才更新消息状态
+  if (userId && userId == userId.value) {
+    // 立即更新本地消息列表，将用户消息标记为已读
+    messages.value.forEach(msg => {
+      if (msg.senderType === 1) { // 用户消息
+        msg.readStatus = 1 // 标记为已读
+      }
+    })
+    console.log('[ChatWindow] 已更新本地用户消息为已读')
+  }
+}
+
 onUnmounted(() => {
   if (webSocket.value) {
     webSocket.value.close()
   }
+  // 移除事件监听器
+  window.removeEventListener('admin-marked-read', handleAdminMarkedRead)
 })
 
 // 格式化时间
@@ -257,10 +309,11 @@ const connectWebSocket = () => {
           const newMsg = {
             id: Date.now(),
             messageContent: data.content,
-            senderType: 2,  // 管理员消息
+            senderType: 2,  // 管理员消恫
             senderId: data.fromUserId,
             senderName: '客服',
-            createTime: new Date().toISOString()
+            createTime: new Date().toISOString(),
+            readStatus: 1 // 管理员消恫，用户立即查看为已读
           }
           messages.value.push(newMsg)
           console.log('[ChatWindow] 消息已添加到列表，当前消息数:', messages.value.length)
@@ -272,8 +325,18 @@ const connectWebSocket = () => {
           isTyping.value = true
         } else if (data.type === 'typing_end') {
           isTyping.value = false
+        } else if (data.type === 'admin_viewing') {
+          // 管理员正在查看你的消恫
+          console.log('[ChatWindow] 管理员正在查看你的消恫')
+          // 立即标记所有用户消恫为已读
+          messages.value.forEach(msg => {
+            if (msg.senderType === 1) {
+              msg.readStatus = 1
+            }
+          })
+          ElMessage.success('管理员正在查看你的消恫')
         } else {
-          console.warn('[ChatWindow] 未知消息类型:', data.type)
+          console.warn('[ChatWindow] 未知消恫类型:', data.type)
         }
       } catch (error) {
         console.error('[ChatWindow] 处理WebSocket消息错误:', error)
@@ -312,14 +375,15 @@ const sendMessage = async () => {
     sending.value = true
     const token = localStorage.getItem('token')
 
-    // 添加本地消息
+    // 添加本地消恫
     const userMsg = {
       id: Date.now(),
       messageContent: messageInput.value,
-      senderType: 1, // 用户消息
+      senderType: 1, // 用户消恫
       senderId: userId.value,
       senderName: userStore.userInfo.userName,
-      createTime: new Date().toISOString()
+      createTime: new Date().toISOString(),
+      readStatus: 0 // 用户发送，管理员尚未查看
     }
     messages.value.push(userMsg)
 
@@ -639,7 +703,7 @@ const goBack = () => {
   white-space: pre-wrap;
 }
 
-/* 消息时间 */
+/* 消恫时间 */
 .message-time {
   font-size: 12px;
   color: #999;
@@ -652,6 +716,45 @@ const goBack = () => {
 
 [data-theme="dark"] .message-time {
   color: #777;
+}
+
+/* 消恫元信息容器 */
+.message-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.message-group.user-group .message-meta {
+  justify-content: flex-end;
+}
+
+/* 已读/未读状态 */
+.read-status {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+
+.read-status.read {
+  color: #52c41a;
+  background-color: #f6ffed;
+}
+
+.read-status.unread {
+  color: #ff4d4f;
+  background-color: #fff1f0;
+}
+
+[data-theme="dark"] .read-status.read {
+  background-color: rgba(82, 196, 26, 0.1);
+}
+
+[data-theme="dark"] .read-status.unread {
+  background-color: rgba(255, 77, 79, 0.1);
 }
 
 /* 输入指示器 */
@@ -782,5 +885,68 @@ const goBack = () => {
 .message-list-leave-to {
   opacity: 0;
   transform: translateY(-10px);
+}
+
+/* el-card暗夜模式适配 */
+:deep(.el-card) {
+  --el-card-bg-color: white;
+  --el-card-border-color: #ebeef5;
+  --el-card-text-color: #333;
+}
+
+[data-theme="dark"] :deep(.el-card) {
+  --el-card-bg-color: #2a2a2a !important;
+  --el-card-border-color: #444 !important;
+  --el-card-text-color: #e0e0e0 !important;
+  background-color: #2a2a2a !important;
+  border-color: #444 !important;
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] :deep(.el-card__header) {
+  border-bottom-color: #444 !important;
+  background-color: #2a2a2a !important;
+}
+
+[data-theme="dark"] :deep(.el-card__body) {
+  color: #e0e0e0 !important;
+  background-color: #2a2a2a !important;
+}
+
+[data-theme="dark"] :deep(.el-card__title) {
+  color: #e0e0e0 !important;
+}
+
+/* el-dialog暗夜模式适配 */
+:deep(.el-dialog) {
+  --el-dialog-bg-color: white;
+}
+
+[data-theme="dark"] :deep(.el-dialog) {
+  --el-dialog-bg-color: #2a2a2a;
+}
+
+[data-theme="dark"] :deep(.el-dialog__header) {
+  border-bottom-color: #444;
+}
+
+[data-theme="dark"] :deep(.el-dialog__title) {
+  color: #e0e0e0;
+}
+
+[data-theme="dark"] :deep(.el-dialog__close) {
+  color: #999;
+}
+
+[data-theme="dark"] :deep(.el-dialog__close:hover) {
+  color: #e0e0e0;
+}
+
+[data-theme="dark"] :deep(.el-dialog__body) {
+  color: #e0e0e0;
+}
+
+[data-theme="dark"] :deep(.el-dialog__footer) {
+  border-top-color: #444;
 }
 </style>

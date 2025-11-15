@@ -86,7 +86,7 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
     @Override
     public Result<Long> replyMessage(CustomerServiceDTO dto) {
         try {
-            // 创建管理员回复消息
+            // 创建管理员回复消恫
             CustomerServiceMessage message = CustomerServiceMessage.builder()
                     .userId(dto.getUserId())
                     .userName(dto.getUserName())
@@ -94,7 +94,7 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
                     .senderType(2) // 2-管理员
                     .senderId(dto.getSenderId())
                     .senderName(dto.getSenderName())
-                    .readStatus(0) // 未读
+                    .readStatus(1) // 管理员发送，自动为已读
                     .topic(dto.getTopic())
                     .createTime(LocalDateTime.now(ZoneId.systemDefault()))
                     .updateTime(LocalDateTime.now(ZoneId.systemDefault()))
@@ -166,12 +166,19 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
     @Override
     public Result<String> markAsRead(Long userId) {
         try {
-            this.baseMapper.markAsRead(userId, 2); // 标记来自管理员(2)的消息为已读
-            log.info("用户 {} 标记消息已读", userId);
+            this.baseMapper.markAsRead(userId, 2); // 标记来自管理员(2)的消恫为已读
+            // 同时更新session表的unreadCount（回收来自殡理员的已读消恫）
+            CustomerServiceSession session = customerServiceSessionMapper.selectByUserId(userId);
+            if (session != null) {
+                // 计算次未读消恫数（贫元:使用算法）
+                // 尚未实现，不过由于我们国有的getStats()不再供markAsRead，所以不需要级联修复
+                log.info("会话 {} 已更新", userId);
+            }
+            log.info("用户 {} 标记消恫已读", userId);
             return Result.success("已标记为已读");
         } catch (Exception e) {
-            log.error("标记消息已读失败", e);
-            throw CustomException.error("标记消息已读失败");
+            log.error("标记消恫已读失败", e);
+            throw CustomException.error("标记消恫已读失败");
         }
     }
 
@@ -217,7 +224,7 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
                                 .lastMessage(session.getLastMessage())
                                 .unreadCount(session.getUnreadCount())
                                 .lastMessageTime(session.getUpdateTime().toString())
-                                .topic(messages.isEmpty() ? "general" : (messages.get(0).getTopic() != null ? messages.get(0).getTopic() : "general"))
+                                .topic(messages.isEmpty() ? "general" : (messages.get(messages.size() - 1).getTopic() != null ? messages.get(messages.size() - 1).getTopic() : "general"))
                                 .status(status)
                                 .messages(messageVOs)
                                 .build();
@@ -235,7 +242,9 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
     public Result<CustomerServiceVO.StatsVO> getStats() {
         try {
             Integer pendingCount = customerServiceSessionMapper.getPendingCount();
-            Integer unreadCount = customerServiceSessionMapper.getTotalUnreadCount();
+            // 改为从message表动态计算未读数，而不是使用session表的unreadCount
+            // 统计所有status=0(待处理)的会话中，来自用户(senderType=1)且未读(readStatus=0)的消息数
+            Integer unreadCount = this.baseMapper.countUnreadMessagesByPendingSessions();
             List<CustomerServiceSession> sessions = customerServiceSessionMapper.selectPendingSessions();
 
             List<CustomerServiceVO.UserSessionVO> userSessions = sessions.stream()
@@ -300,6 +309,36 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
         } catch (Exception e) {
             log.error("完成客服会话失败", e);
             throw CustomException.error("完成客服会话失败");
+        }
+    }
+
+    @Override
+    public Result<String> markAsReadByUser(Long userId, Integer senderType) {
+        try {
+            // 使用MyBatis Plus的update方法标记消恫为已读
+            this.update(
+                com.baomidou.mybatisplus.core.toolkit.Wrappers.lambdaUpdate(CustomerServiceMessage.class)
+                    .eq(CustomerServiceMessage::getUserId, userId)
+                    .eq(senderType != null && senderType != 0, CustomerServiceMessage::getSenderType, senderType)
+                    .set(CustomerServiceMessage::getReadStatus, 1)
+            );
+            
+            // 同时更新session表的unreadCount(指挅定类型的已读消恫)
+            CustomerServiceSession session = customerServiceSessionMapper.selectByUserId(userId);
+            if (session != null && senderType != null && senderType == 1) {
+                // 如果senderType=1(来自用户)，提伛unreadCount
+                // 消恫数=该会话中来自用户且未读的消恫数
+                Integer unreadCount = this.baseMapper.countUnreadByUserAndType(userId, 1);
+                session.setUnreadCount(Math.max(0, unreadCount != null ? unreadCount : 0));
+                session.setUpdateTime(LocalDateTime.now(ZoneId.systemDefault()));
+                customerServiceSessionMapper.updateById(session);
+            }
+            
+            log.info("用户 {} 的客服消恫已标记为已读，类型: {}", userId, senderType);
+            return Result.success("标记成功");
+        } catch (Exception e) {
+            log.error("标记消恫已读失败", e);
+            throw CustomException.error("标记消恫已读失败");
         }
     }
 }

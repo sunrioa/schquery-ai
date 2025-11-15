@@ -4227,6 +4227,27 @@ onUnmounted(() => {
   border-top-color: #374151;
 }
 
+/* el-card黑夜模式 */
+[data-theme="dark"] :deep(.el-card) {
+  background-color: #1f2937 !important;
+  border-color: #374151 !important;
+  color: #e5e7eb !important;
+}
+
+[data-theme="dark"] :deep(.el-card__header) {
+  border-bottom-color: #374151 !important;
+  background-color: #111827 !important;
+}
+
+[data-theme="dark"] :deep(.el-card__body) {
+  background-color: #1f2937 !important;
+  color: #e5e7eb !important;
+}
+
+[data-theme="dark"] :deep(.el-card__title) {
+  color: #e5e7eb !important;
+}
+
 [data-theme="dark"] .el-form-item__label {
   color: #e5e7eb;
 }

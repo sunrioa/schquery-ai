@@ -76,18 +76,22 @@ public class CustomerServiceWebSocketHandler extends TextWebSocketHandler {
             String toUserId = convertToString(msgData.get("toUserId"));
             String content = convertToString(msgData.get("content"));
             String userName = convertToString(msgData.get("userName")); // 用户名
+            String topic = convertToString(msgData.get("topic")); // 咨询主题
 
-            log.info("收到消息 - 类型: {}, 来自: {} ({}), 用户名: {}, 内容: {}", messageType, fromUserId, fromType, userName, content);
+            log.info("收到消息 - 类型: {}, 来自: {} ({}), 用户名: {}, 主题: {}, 内容: {}", messageType, fromUserId, fromType, userName, topic, content);
 
             if ("user_message".equals(messageType)) {
                 // 用户发送消息给管理员
-                handleUserMessage(fromUserId, userName, toUserId, content);
+                handleUserMessage(fromUserId, userName, toUserId, content, topic);
             } else if ("admin_message".equals(messageType)) {
                 // 管理员回复用户
                 handleAdminMessage(fromUserId, toUserId, content);
             } else if ("admin_notification".equals(messageType)) {
-                // 通知所有管理员有新消息
+                // 通知所有管理员有新消恫
                 broadcastToAdmins(buildMessage("new_user_message", fromUserId, content));
+            } else if ("admin_viewing".equals(messageType)) {
+                // 管理员正在查看某个用户的消恫
+                handleAdminViewing(fromUserId, toUserId);
             } else {
                 log.warn("未知的消息类型: {}", messageType);
             }
@@ -110,7 +114,7 @@ public class CustomerServiceWebSocketHandler extends TextWebSocketHandler {
     /**
      * 处理用户消息
      */
-    private void handleUserMessage(String userId, String userName, String toUserId, String content) {
+    private void handleUserMessage(String userId, String userName, String toUserId, String content, String topic) {
         try {
             // 1. 保存消息到数据库
             if (customerServiceBridge != null) {
@@ -119,11 +123,11 @@ public class CustomerServiceWebSocketHandler extends TextWebSocketHandler {
                         .userName(userName != null ? userName : "用户" + userId)
                         .messageContent(content)
                         .senderType(1) // 1-用户
-                        .topic("general")
+                        .topic(topic != null ? topic : "general")
                         .build();
                 
                 customerServiceBridge.sendMessage(dto);
-                log.info("用户消息已保存到数据库: 用户ID={}, 用户名={}", userId, userName);
+                log.info("用户消息已保存到数据库: 用户ID={}, 用户名={}, 主题={}", userId, userName, topic);
             } else {
                 log.warn("客服服务未注入，消息仅转发不保存");
             }
@@ -137,6 +141,7 @@ public class CustomerServiceWebSocketHandler extends TextWebSocketHandler {
         notifyMsg.put("fromUserId", userId);
         notifyMsg.put("userName", userName != null ? userName : userId);
         notifyMsg.put("content", content);
+        notifyMsg.put("topic", topic != null ? topic : "general");
         notifyMsg.put("timestamp", System.currentTimeMillis());
         
         // 3. 将消息发送给所有在线的管理员
@@ -308,7 +313,7 @@ public class CustomerServiceWebSocketHandler extends TextWebSocketHandler {
     }
 
     /**
-     * 发送消息给指定的用户
+     * 发送消恫给指定的用户
      */
     public static void sendMessageToUser(String userId, Map<String, Object> message) {
         WebSocketSession userSession = userSessions.get(userId);
@@ -317,9 +322,32 @@ public class CustomerServiceWebSocketHandler extends TextWebSocketHandler {
                 synchronized (userSession) {
                     userSession.sendMessage(new TextMessage(JSON.toJSONString(message)));
                 }
-                log.info("消息已发送给用户 {}", userId);
+                log.info("消恫已发送给用户 {}", userId);
             } catch (IOException e) {
-                log.error("发送消息给用户 {} 失败", userId, e);
+                log.error("发送消恫给用户 {} 失败", userId, e);
+            }
+        } else {
+            log.warn("用户 {} 不在线", userId);
+        }
+    }
+
+    /**
+     * 处理管理员查看用户消恫
+     */
+    private void handleAdminViewing(String adminId, String userId) {
+        WebSocketSession userSession = userSessions.get(userId);
+        if (userSession != null && userSession.isOpen()) {
+            try {
+                Map<String, Object> viewingMsg = new HashMap<>();
+                viewingMsg.put("type", "admin_viewing");
+                viewingMsg.put("adminId", adminId);
+                viewingMsg.put("timestamp", System.currentTimeMillis());
+                synchronized (userSession) {
+                    userSession.sendMessage(new TextMessage(JSON.toJSONString(viewingMsg)));
+                }
+                log.info("已告诉用户 {} 管理员 {} 正在查看", userId, adminId);
+            } catch (IOException e) {
+                log.error("发送查看事件失败", e);
             }
         } else {
             log.warn("用户 {} 不在线", userId);

@@ -49,6 +49,13 @@ public interface CustomerServiceService extends IService<CustomerServiceMessage>
     Result<String> assignSession(Long userId, Long adminId);
 
     /**
+     * 标记特定用户的消恫为已读
+     * @param userId 用户ID
+     * @param senderType 发送者类型（0-所有, 1-用户, 2-管理员）
+     */
+    Result<String> markAsReadByUser(Long userId, Integer senderType);
+
+    /**
      * 完成客服会话
      */
     Result<String> completeSession(Long userId);

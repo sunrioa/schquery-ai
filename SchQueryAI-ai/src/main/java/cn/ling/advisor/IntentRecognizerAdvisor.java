@@ -71,6 +71,6 @@ public class IntentRecognizerAdvisor implements BaseAdvisor {
 
     @Override
     public int getOrder() {
-        return 0; // 优先执行
+        return 1;
     }
 }

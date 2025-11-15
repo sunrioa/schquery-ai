@@ -108,3 +108,33 @@ CREATE TABLE `login_history` (
                                  INDEX `idx_login_ip` (`login_ip`),
                                  INDEX `idx_city` (`city`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户登录历史记录表';
+
+-- 文档主表：存储完整文档的基本信息和状态
+CREATE TABLE documents (
+                           id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '文档唯一标识ID',
+                           title VARCHAR(500) COMMENT '文档标题，默认为文件名',
+                           content TEXT COMMENT '文档完整内容（小文件直接存储文本，大文件建议仅存关键摘要）',
+                           file_path VARCHAR(500) COMMENT '文件存储路径（可选，如本地路径或云存储URL）',
+                           file_type VARCHAR(50) COMMENT '文件类型（可选，如pdf、docx、txt等）',
+                           upload_time DATETIME COMMENT '文档上传时间',
+                           update_time DATETIME COMMENT '文档最后修改时间（内容或属性变更时更新）',
+                           status TINYINT DEFAULT 1 COMMENT '文档状态：1-有效，0-删除（逻辑删除，避免物理删除数据）',
+                           process_status TINYINT DEFAULT 0 COMMENT '处理状态：0-未处理，1-处理中，2-处理完成，3-处理失败（用于跟踪文档拆分、向量化流程）',
+                           metadata JSON COMMENT '文档级扩展元数据（如作者、来源、权限标签等，按需动态存储）',
+                           INDEX idx_upload_time (upload_time) COMMENT '按上传时间查询的索引，加速时间范围筛选',
+                           INDEX idx_status_process (status, process_status) COMMENT '按状态和处理状态联合查询的索引，优化筛选效率'
+);
+
+-- 文档片段表：存储文档拆分后的子片段，与向量数据库关联
+CREATE TABLE document_chunks (
+                                 id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '片段唯一标识ID',
+                                 document_id BIGINT COMMENT '关联的文档ID，对应documents表的id',
+                                 chunk_index INT COMMENT '片段在文档中的顺序编号（从0开始），用于重组完整文档',
+                                 chunk_content TEXT COMMENT '片段具体内容（生成向量的原始文本）',
+                                 token_count INT COMMENT '片段的token数量（控制embedding模型输入长度，避免超限）',
+                                 created_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '片段创建时间（拆分完成时自动记录）',
+                                 qdrant_point_id VARCHAR(64) COMMENT '关联Qdrant向量数据库中该片段的point ID，用于向量检索后溯源',
+                                 metadata JSON COMMENT '片段级扩展元数据（如页码、段落位置、关键词等）',
+                                 INDEX idx_document_id (document_id) COMMENT '按文档ID查询其所有片段的索引，加速批量操作',
+                                 UNIQUE KEY uk_qdrant_point_id (qdrant_point_id) COMMENT '确保Qdrant的point ID唯一，避免向量与片段多对一关联'
+);

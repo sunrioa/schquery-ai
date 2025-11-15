@@ -28,26 +28,18 @@ class TestApplication {
     @Resource
     OpenAiChatModel openAiChatModel;
 
+    @Resource
+    EmbeddingModel embeddingModel;
+
+    @Resource
+    private ChatClient chatClient;
+
     @Test
     public void test() {
-        QuestionAnswerAdvisor questionAnswerAdvisor = QuestionAnswerAdvisor.builder(vectorStore)
-                .searchRequest(
-                        SearchRequest.builder()
-                                .similarityThreshold(0.8d)
-                                .topK(6)
-                                .build()
-                )
-                .build();
-
-        ChatClient chatClient = ChatClient.builder(openAiChatModel)
-                .defaultAdvisors(questionAnswerAdvisor)
-                .build();
-
         ChatClient.CallResponseSpec call = chatClient.prompt()
                 .user("Funasr和PP-StructureV3你知道吗？")
                 .advisors(a -> a.param(QuestionAnswerAdvisor.FILTER_EXPRESSION, "jianli == 'zzl'"))
                 .call();
-
         System.out.println("模型回答：" + call.chatResponse().getResult().getOutput().getText());
     }
 
@@ -91,9 +83,6 @@ class TestApplication {
         BUSINESS_INTENT_MAP.put("V", "校园信息");
         BUSINESS_INTENT_MAP.put("W", "UNKNOWN");
     }
-
-    @Resource
-    private ChatClient chatClient;
 
     @Test
     public void intent() {

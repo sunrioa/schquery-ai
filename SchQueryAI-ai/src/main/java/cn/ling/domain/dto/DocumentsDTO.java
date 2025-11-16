@@ -3,15 +3,12 @@ package cn.ling.domain.dto;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.web.multipart.MultipartFile;
 import java.util.Map;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class DocumentsDTO {
-    private MultipartFile file;
-
     /**
      * 文档唯一标识ID
      */

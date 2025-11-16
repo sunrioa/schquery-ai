@@ -2,6 +2,7 @@ package cn.ling.config;
 
 import cn.ling.advisor.IntentRecognizerAdvisor;
 import cn.ling.advisor.SensitiveFilterAdvisor;
+import cn.ling.vector.CustomQdrantVectorStore;
 import io.qdrant.client.QdrantClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -193,6 +194,14 @@ public class AIConfig {
     @Bean
     public TokenTextSplitter tokenTextSplitter(){
         return new TokenTextSplitter();
+    }
+
+    @Bean
+    public CustomQdrantVectorStore customQdrantVectorStore(
+            QdrantClient qdrantClient,
+            EmbeddingModel embeddingModel
+    ){
+        return new CustomQdrantVectorStore.Builder(qdrantClient, embeddingModel).build();
     }
 
 }

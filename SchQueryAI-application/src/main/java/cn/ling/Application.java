@@ -3,12 +3,14 @@ package cn.ling;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableAsync;
 
 /**
  * SchQueryAI 应用程序主入口类
  * 这是整个Spring Boot应用程序的启动点，负责初始化和启动应用上下文
  */
 @Slf4j // 启用SLF4J日志功能
+@EnableAsync
 @SpringBootApplication
 public class Application {
 

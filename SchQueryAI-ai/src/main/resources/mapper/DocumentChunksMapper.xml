@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.ling.mapper.DocumentChunksMapper">
+
+    <resultMap id="BaseResultMap" type="cn.ling.domain.pojo.DocumentChunks">
+            <id property="id" column="id" jdbcType="BIGINT"/>
+            <result property="documentId" column="document_id" jdbcType="BIGINT"/>
+            <result property="chunkIndex" column="chunk_index" jdbcType="INTEGER"/>
+            <result property="chunkContent" column="chunk_content" jdbcType="VARCHAR"/>
+            <result property="chunkLength" column="chunk_length" jdbcType="INTEGER"/>
+            <result property="createdTime" column="created_time" jdbcType="TIMESTAMP"/>
+            <result property="qdrantPointId" column="qdrant_point_id" jdbcType="VARCHAR"/>
+        <result
+                property="metadata"
+                column="metadata"
+                typeHandler="com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler"
+        />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,document_id,chunk_index,
+        chunk_content,chunk_length,created_time,
+        qdrant_point_id,metadata
+    </sql>
+</mapper>

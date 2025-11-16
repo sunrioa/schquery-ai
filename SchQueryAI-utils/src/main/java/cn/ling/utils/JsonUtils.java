@@ -7,6 +7,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.socket.TextMessage;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * JSON消息构建工具类
  * 负责创建与音频处理相关的配置消息和结束消息
@@ -115,6 +118,20 @@ public class JsonUtils {
 
         log.info("结束消息构建完成，内容: {}", endMsg);
         return new TextMessage(endMsg.toString());
+    }
+
+    public static Map<String,Object> strToMap(String str){
+        HashMap<String, Object> map = new HashMap<>();
+        try {
+            // 使用 FastJSON2 解析 JSON 字符串
+            JSONObject jsonObject = JSONObject.parseObject(str);
+            // 将 JSONObject 转换为 Map
+            map = new HashMap<>(jsonObject);
+        } catch (Exception e) {
+            // 异常处理：可以根据需要记录日志或抛出运行时异常
+            throw new RuntimeException("JSON 解析失败: " + e.getMessage());
+        }
+        return map;
     }
 }
 

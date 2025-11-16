@@ -1,8 +1,6 @@
-package cn.ling.sync;
+package cn.ling.service;
 
 import cn.ling.domain.dto.DocumentsDTO;
-import cn.ling.service.DocumentChunksService;
-import cn.ling.service.DocumentsService;
 import org.springframework.web.multipart.MultipartFile;
 
 public interface SyncService {

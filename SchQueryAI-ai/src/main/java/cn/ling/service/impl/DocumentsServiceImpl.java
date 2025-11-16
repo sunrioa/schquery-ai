@@ -2,26 +2,25 @@ package cn.ling.service.impl;
 
 import cn.ling.Result;
 import cn.ling.domain.dto.DocumentsDTO;
-import cn.ling.domain.ocr.OcrResp;
-import cn.ling.rpc.OcrRpc;
 import cn.ling.service.DocumentChunksService;
-import cn.ling.sync.SyncService;
+import cn.ling.service.SyncService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import cn.ling.domain.pojo.Documents;
 import cn.ling.service.DocumentsService;
 import cn.ling.mapper.DocumentsMapper;
 import jakarta.annotation.Resource;
-import org.springframework.scheduling.annotation.Async;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 
 /**
-* @author Administrator
-* @description 针对表【documents】的数据库操作Service实现
-* @createDate 2025-11-16 00:26:43
-*/
+ * 文档服务实现类
+ * 负责文档的上传、存储和异步处理
+ */
+@Slf4j
 @Service
 public class DocumentsServiceImpl extends ServiceImpl<DocumentsMapper, Documents>
     implements DocumentsService{
@@ -32,19 +31,74 @@ public class DocumentsServiceImpl extends ServiceImpl<DocumentsMapper, Documents
     @Resource
     SyncService syncService;
 
+    /**
+     * 处理文档上传
+     * 1. 保存文档基本信息到数据库
+     * 2. 异步处理文档内容（OCR、分块、向量化）
+     *
+     * @param documentsDTO 文档数据传输对象
+     * @param file 上传的文件
+     * @return 上传结果
+     */
     @Override
-    public Result<String> upload(DocumentsDTO documentsDTO,MultipartFile file) {
-        Documents documents = Documents.builder()
-                .fileType(file.getContentType())
-                .title(!documentsDTO.getTitle().isEmpty()?documentsDTO.getTitle():file.getOriginalFilename())
-                .uploadTime(LocalDateTime.now())
-                .updateTime(LocalDateTime.now())
-                .status(1)
-                .processStatus(0)
-                .metadata(documentsDTO.getMetadata())
-                .build();
-        save(documents);
-        syncService.doKnowledgeUpload(documents.getId(),documentsDTO,file,this,documentChunksService);
-        return Result.success("上传成功");
+    public Result<String> upload(DocumentsDTO documentsDTO, MultipartFile file) {
+        log.info("开始处理文档上传 - 文件名: {}, 文件类型: {}, 文件大小: {} bytes",
+                file.getOriginalFilename(), file.getContentType(), file.getSize());
+
+        try {
+            // 1. 参数校验
+            if (file.isEmpty()) {
+                log.error("文档上传失败：文件为空");
+                return Result.error("文件不能为空");
+            }
+
+            if (!StringUtils.hasText(file.getOriginalFilename())) {
+                log.error("文档上传失败：文件名为空");
+                return Result.error("文件名不能为空");
+            }
+
+            // 2. 构建文档实体
+            String title = StringUtils.hasText(documentsDTO.getTitle())
+                    ? documentsDTO.getTitle()
+                    : file.getOriginalFilename();
+
+            Documents documents = Documents.builder()
+                    .fileType(file.getContentType())
+                    .title(title)
+                    .uploadTime(LocalDateTime.now())
+                    .updateTime(LocalDateTime.now())
+                    .status(1) // 正常状态
+                    .processStatus(0) // 待处理状态
+                    .metadata(documentsDTO.getMetadata())
+                    .build();
+
+            // 3. 保存文档基本信息
+            boolean saved = save(documents);
+            if (!saved) {
+                log.error("文档基本信息保存失败 - 文件名: {}", file.getOriginalFilename());
+                return Result.error("文档保存失败");
+            }
+
+            log.info("文档基本信息保存成功 - 文档ID: {}, 标题: {}", documents.getId(), documents.getTitle());
+
+            // 4. 异步处理文档内容（OCR、分块、向量化）
+            try {
+                syncService.doKnowledgeUpload(documents.getId(), documentsDTO, file, this, documentChunksService);
+                log.info("已启动异步文档处理任务 - 文档ID: {}", documents.getId());
+            } catch (Exception e) {
+                log.error("启动异步文档处理任务失败 - 文档ID: {}, 错误信息: {}", documents.getId(), e.getMessage(), e);
+                // 更新文档状态为处理失败
+                documents.setProcessStatus(-1); // 处理失败状态
+                updateById(documents);
+                return Result.error("文档处理启动失败：" + e.getMessage());
+            }
+
+            log.info("文档上传成功 - 文档ID: {}, 文件名: {}", documents.getId(), file.getOriginalFilename());
+            return Result.success("上传成功");
+
+        } catch (Exception e) {
+            log.error("文档上传过程中发生异常 - 文件名: {}, 错误信息: {}", file.getOriginalFilename(), e.getMessage(), e);
+            return Result.error("文档上传失败：" + e.getMessage());
+        }
     }
 }

@@ -4,8 +4,9 @@ import cn.ling.Result;
 import cn.ling.service.AIService;
 import cn.ling.service.SttService;
 import cn.ling.utils.FFmpegUtils;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -17,11 +18,19 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class AIserviceImpl implements AIService {
 
-    @Autowired
+    @Resource
     private SttService sttService;
 
-    @Autowired
+    @Resource
     private FFmpegUtils fFmpegUtils;
+
+    @Resource(name = "ocrCorrectChatClient")
+    private ChatClient ocrCorrectChatClient;
+
+    @Override
+    public String ocrCorrect(String text) {
+        return ocrCorrectChatClient.prompt(text).call().content();
+    }
 
     /**
      * 开始流式语音识别会话

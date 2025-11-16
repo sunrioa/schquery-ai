@@ -10,6 +10,9 @@ import org.springframework.web.multipart.MultipartFile;
  */
 public interface AIService {
 
+    String ocrCorrect(String text);
+
+
     /**
      * 开始流式语音识别会话
      * 初始化语音识别连接，准备接收音频数据进行实时识别

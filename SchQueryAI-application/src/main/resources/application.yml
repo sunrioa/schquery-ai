@@ -42,7 +42,7 @@ spring:
       embedding:
         options:
           model: text-embedding-v1  # 文本嵌入模型
-          dimensions: 1024          # 嵌入向量维度
+          dimensions: 1536          # 嵌入向量维度
           topK: 6
           similarityThreshold: 0.1
 

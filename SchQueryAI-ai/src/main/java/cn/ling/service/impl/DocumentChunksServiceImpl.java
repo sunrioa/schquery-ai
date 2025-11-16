@@ -1,5 +1,6 @@
 package cn.ling.service.impl;
 
+import cn.ling.utils.TextSplitterUtils;
 import cn.ling.vector.CustomQdrantVectorStore;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import cn.ling.domain.pojo.DocumentChunks;
@@ -31,6 +32,9 @@ public class DocumentChunksServiceImpl extends ServiceImpl<DocumentChunksMapper,
     @Resource
     CustomQdrantVectorStore customQdrantVectorStore;
 
+    @Resource
+    TextSplitterUtils textSplitterUtils;
+
     /**
      * 保存文档分块
      * 1. 使用TokenTextSplitter将文档内容分割成多个片段
@@ -58,8 +62,11 @@ public class DocumentChunksServiceImpl extends ServiceImpl<DocumentChunksMapper,
             }
 
             // 2. 文档分块处理
-            Document document = new Document(content, metadata);
-            List<Document> documentList = tokenTextSplitter.split(document);
+//            Document document = new Document(content, metadata);
+//            List<Document> documentList = tokenTextSplitter.split(document);
+
+            List<Document> documentList = textSplitterUtils.splitText(content).stream().map(text -> new Document(text, metadata)).toList();
+
             log.info("文档分块完成 - 文档ID: {}, 总分块数: {}", id, documentList.size());
 
             if (documentList.isEmpty()) {

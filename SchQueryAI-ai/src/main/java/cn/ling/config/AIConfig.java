@@ -1,5 +1,6 @@
 package cn.ling.config;
 
+import cn.ling.utils.TextSplitterUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
@@ -10,6 +11,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import java.util.Arrays;
 
 /**
  * AI功能配置类
@@ -42,8 +44,23 @@ public class AIConfig {
     }
 
     @Bean
-    public TokenTextSplitter tokenTextSplitter(){
-        return new TokenTextSplitter();
+    public TokenTextSplitter tokenTextSplitter() {
+        return TokenTextSplitter.builder()
+                .withChunkSize(300)  // 缩小单段最大Token数，强制分割长文本
+                .withMinChunkSizeChars(100)  // 最小字符数，避免过短片段
+                .withMinChunkLengthToEmbed(10)
+                .withKeepSeparator(true)
+                .build();
+    }
+
+    @Bean
+    public TextSplitterUtils textSplitterUtils(){
+        return new TextSplitterUtils.Builder()
+                .separators(Arrays.asList("\n\n", "第.*章", "第.*条", "一、", "二、", "三、", "四、", "五、", "六、", "七、", "八、", "九、", "十、", "（一）", "（二）", "（三）", "（四）", "（五）", "（六）", "（七）", "（八）", "（九）", "（十）", "1. ", "2. ", "3. ", "4. ", "5. ", "6. ", "7. ", "8. ", "9. ", "10. ", "。", "；", "！", "？"))
+                .chunkSize(600)
+                .chunkOverlap(100)
+                .lengthFunction(TextSplitterUtils.defaultLengthFunction())
+                .build();
     }
 
 }

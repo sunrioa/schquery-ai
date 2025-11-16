@@ -4,8 +4,15 @@ spring:
     redis:
       # Redis数据库配置 - 用于缓存和会话存储
       database: 0        # Redis数据库索引（0-15）
-      host: localhost  # Redis服务器IP地址
-      port: 6379         # Redis服务器端口
+
+      host: localhost  # 百度云Redis服务器IP地址
+      port: 5580         # 腾讯云Redis服务器端口
+      password: ${PASSWORD} # 腾讯云Redis服务器密码
+
+#      host: localhost  # 腾讯云Redis服务器IP地址
+#      port: 6379         # 百度云Redis服务器端口
+#      password:          # 百度云Redis服务器密码
+
       timeout: 2000ms    # 连接超时时间（毫秒）
       lettuce:           # Lettuce连接池配置（Lettuce是默认的Redis客户端）
         pool:
@@ -42,9 +49,17 @@ spring:
     vectorstore:
       qdrant:
         # Qdrant向量数据库配置 - 用于存储和检索文档向量
-        host: localhost        # Qdrant服务器地址
-        port: 6334                  # Qdrant服务器端口
-        api-key: ${SECRET_VALUE}             # Qdrant访问密钥
+
+#        host: localhost        # 百度云Qdrant服务器地址
+#        port: 6334                  # 百度云Qdrant服务器端口
+#        api-key: ${SECRET_VALUE}             # 百度云Qdrant访问密钥
+
+        host: localhost        # 腾讯云Qdrant服务器地址
+        port: 6005                  # 腾讯云Qdrant服务器端口
+
+
+        api-key: ${API_KEY}             # 腾讯云Qdrant访问密钥
+
         collection-name: gzhhxy     # 向量集合名称
         use-tls: false              # 是否启用TLS加密
         initialize-schema: true     # 是否自动初始化数据库模式
@@ -53,6 +68,11 @@ spring:
   # MySQL数据库配置
   datasource:                          # 数据库密码
     driver-class-name: com.mysql.cj.jdbc.Driver
+
+#    url: jdbc:mysql://localhost:3306/schqueryai?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+#    username: root
+#    password: ${SECRET_VALUE}
+
     url: jdbc:mysql://localhost:3306/schqueryai?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
     password: ${PASSWORD}

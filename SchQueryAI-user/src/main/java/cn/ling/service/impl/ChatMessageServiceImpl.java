@@ -9,9 +9,9 @@ import cn.ling.mapper.ChatMessageMapper;
 import cn.ling.service.ChatMessageService;
 import cn.ling.service.ChatSessionService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import java.util.Date;
@@ -32,14 +32,14 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
      * AI聊天客户端
      * 用于生成AI回复
      */
-    @Autowired
-    private ChatClient chatClient;
+    @Resource(name="openAiChatClient")
+    private ChatClient openAiChatClient;
 
     /**
      * 聊天会话服务
      * 用于更新会话的最后消息时间
      */
-    @Autowired
+    @Resource
     private ChatSessionService chatSessionService;
 
     /**
@@ -124,7 +124,7 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
 
             // 使用流式生成AI回复
             log.info("开始生成AI回复");
-            Flux<String> aiResponseStream = chatClient.prompt()
+            Flux<String> aiResponseStream = openAiChatClient.prompt()
                     .user(chatMessageDTO.getContent())
                     .stream()
                     .content();

@@ -22,7 +22,7 @@ public class ChatClientConfig {
      * @param openAiChatModel OpenAI聊天模型实例
      * @return 配置好的ChatClient聊天客户端
      */
-    @Bean
+    @Bean("openAiChatClient")
     public ChatClient openAiChatClient(
             OpenAiChatModel openAiChatModel,
             @Qualifier("questionAnswerAdvisor") Advisor questionAnswerAdvisor,
@@ -40,7 +40,7 @@ public class ChatClientConfig {
                 .build();
     }
 
-    @Bean
+    @Bean("ocrCorrectChatClient")
     public ChatClient ocrCorrectChatClient(OpenAiChatModel openAiChatModel){
         log.info("开始配置OpenAI-OCR结果纠正客户端");
         return ChatClient.builder(openAiChatModel)

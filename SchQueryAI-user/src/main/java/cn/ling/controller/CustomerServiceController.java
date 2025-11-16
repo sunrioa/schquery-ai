@@ -183,4 +183,25 @@ public class CustomerServiceController {
             return Response.error("完成会话失败：" + e.getMessage());
         }
     }
+
+    /**
+     * 标记特定用户的消息为已读
+     */
+    @PutMapping("/mark-read-by-user")
+    public Response<?> markAsReadByUser(
+            @RequestParam Long userId,
+            @RequestParam(required = false, defaultValue = "0") Integer senderType,
+            @RequestHeader("Authorization") String token
+    ) {
+        try {
+            Result<String> result = customerServiceService.markAsReadByUser(userId, senderType);
+            if (result.getCode() == 200) {
+                return Response.success(result.getData());
+            } else {
+                return Response.error(result.getCode(), result.getMsg());
+            }
+        } catch (Exception e) {
+            return Response.error("标记失败：" + e.getMessage());
+        }
+    }
 }

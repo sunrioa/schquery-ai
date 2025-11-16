@@ -32,10 +32,12 @@ export const useUserStore = defineStore('user', () => {
     const userName = data.userName || data.fromUserId || '未知用户'
     const messageContent = data.content || ''
     const userId = data.fromUserId
+    const topic = data.topic || 'general'
     
     console.log('[userStore] 提取的用户名:', userName)
     console.log('[userStore] 消息内容:', messageContent)
     console.log('[userStore] 用户ID:', userId)
+    console.log('[userStore] 咨询主题:', topic)
     
     // 触发新消息事件，让AdminCustomerService实时更新
     console.log('[userStore] 触发 new-customer-message 事件')
@@ -48,6 +50,7 @@ export const useUserStore = defineStore('user', () => {
           userName: userName,
           messageContent: messageContent,
           senderType: 1, // 1-用户
+          topic: topic,
           createTime: new Date().toISOString()
         }
       }

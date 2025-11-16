@@ -20,6 +20,9 @@
             <el-icon><Search /></el-icon>
           </template>
         </el-input>
+        <el-button @click="toggleDarkMode" type="default" :icon="isDarkMode ? 'sunny' : 'moon'">
+          {{ isDarkMode ? '浅色' : '暗夜' }}
+        </el-button>
         <el-button type="primary" @click="showAddDialog = true">
           <el-icon><Plus /></el-icon>
           添加敏感词
@@ -213,6 +216,7 @@ const showAddDialog = ref(false)
 const showEditDialog = ref(false)
 const searchKeyword = ref('')
 const selectedWords = ref(new Set())
+const isDarkMode = ref(false)
 
 // 分页数据
 const currentPage = ref(1)
@@ -644,8 +648,34 @@ const formatDate = (date) => {
   return new Date(date).toLocaleString('zh-CN')
 }
 
+// 切换暗夜模式
+const toggleDarkMode = () => {
+  isDarkMode.value = !isDarkMode.value
+  const html = document.documentElement
+  if (isDarkMode.value) {
+    html.setAttribute('data-theme', 'dark')
+    localStorage.setItem('theme', 'dark')
+  } else {
+    html.removeAttribute('data-theme')
+    localStorage.setItem('theme', 'light')
+  }
+  window.dispatchEvent(new CustomEvent('theme-change', { detail: { isDark: isDarkMode.value } }))
+}
+
 // 页面加载
 onMounted(() => {
+  // 初始化主题
+  const savedTheme = localStorage.getItem('theme')
+  if (savedTheme === 'dark') {
+    isDarkMode.value = true
+    document.documentElement.setAttribute('data-theme', 'dark')
+  }
+
+  // 监听全局主题改变事件
+  window.addEventListener('theme-change', (e) => {
+    isDarkMode.value = e.detail?.isDark ?? false
+  })
+
   getSensitiveWordsList()
   // 添加全局点击事件监听器
   document.addEventListener('click', handleGlobalClick)
@@ -662,6 +692,10 @@ onUnmounted(() => {
 <style scoped>
 .sensitive-words-management {
   padding: 20px;
+}
+
+[data-theme="dark"] .sensitive-words-management {
+  background-color: #1a1a1a;
 }
 
 .page-header {
@@ -690,9 +724,14 @@ onUnmounted(() => {
   text-align: center;
 }
 
+[data-theme="dark"] .page-header h1 {
+  color: #e0e0e0;
+}
+
 .header-actions {
   display: flex;
   align-items: center;
+  gap: 10px;
 }
 
 /* 统计卡片样式 */
@@ -757,15 +796,42 @@ onUnmounted(() => {
   margin-bottom: 5px;
 }
 
+[data-theme="dark"] .stat-number {
+  color: #e0e0e0;
+}
+
 .stat-label {
   font-size: 14px;
   color: #666;
   font-weight: 500;
 }
 
+[data-theme="dark"] .stat-label {
+  color: #999;
+}
+
+[data-theme="dark"] .stat-card {
+  background-color: #2a2a2a !important;
+  border-color: #444 !important;
+}
+
+[data-theme="dark"] .stat-card:hover {
+  background-color: #333 !important;
+}
+
+[data-theme="dark"] .stat-card.active {
+  background-color: rgba(33, 150, 243, 0.2) !important;
+  border-color: #2196F3 !important;
+}
+
 /* 敏感词列表样式 */
 .words-list-card {
   min-height: 500px;
+}
+
+[data-theme="dark"] .words-list-card {
+  background-color: #2a2a2a !important;
+  border-color: #444 !important;
 }
 
 .words-container {
@@ -800,6 +866,11 @@ onUnmounted(() => {
 .word-item:hover {
   background-color: #f8f9fa;
   border-color: #d1d5db;
+}
+
+[data-theme="dark"] .word-item:hover {
+  background-color: #333;
+  border-color: #555;
 }
 
 .word-item.enabled {
@@ -931,6 +1002,90 @@ onUnmounted(() => {
   margin-top: 10px;
   font-size: 13px;
   color: #666;
+}
+
+[data-theme="dark"] .pagination-info {
+  color: #999;
+}
+
+/* Element Plus组件暗夜模式 */
+:deep(.el-card) {
+  --el-card-bg-color: white;
+  --el-card-border-color: #ebeef5;
+}
+
+[data-theme="dark"] :deep(.el-card) {
+  --el-card-bg-color: #2a2a2a !important;
+  --el-card-border-color: #444 !important;
+  background-color: #2a2a2a !important;
+  border-color: #444 !important;
+  color: #e0e0e0;
+}
+
+[data-theme="dark"] :deep(.el-card__header) {
+  border-bottom-color: #444 !important;
+  background-color: #2a2a2a !important;
+}
+
+[data-theme="dark"] :deep(.el-card__body) {
+  background-color: #2a2a2a !important;
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] :deep(.el-dialog) {
+  --el-dialog-bg-color: #2a2a2a !important;
+  background-color: #2a2a2a !important;
+  color: #e0e0e0;
+}
+
+[data-theme="dark"] :deep(.el-dialog__header) {
+  border-bottom-color: #444 !important;
+}
+
+[data-theme="dark"] :deep(.el-dialog__title) {
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] :deep(.el-dialog__close) {
+  color: #999 !important;
+}
+
+[data-theme="dark"] :deep(.el-dialog__close:hover) {
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] :deep(.el-dialog__body) {
+  color: #e0e0e0;
+}
+
+[data-theme="dark"] :deep(.el-form-item__label) {
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] :deep(.el-input__wrapper) {
+  background-color: #1a1a1a !important;
+  border-color: #444 !important;
+}
+
+[data-theme="dark"] :deep(.el-input__inner) {
+  color: #e0e0e0 !important;
+  background-color: #1a1a1a;
+}
+
+[data-theme="dark"] :deep(.el-textarea__inner) {
+  background-color: #1a1a1a !important;
+  color: #e0e0e0 !important;
+  border-color: #444 !important;
+}
+
+[data-theme="dark"] :deep(.el-pagination__item) {
+  background-color: #2a2a2a !important;
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] :deep(.el-pagination__item.active) {
+  background-color: #2196F3 !important;
+  color: white !important;
 }
 
 /* 响应式设计 */

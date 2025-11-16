@@ -2,10 +2,15 @@
   <div class="user-management">
     <div class="page-header">
       <h1>用户管理</h1>
-      <el-button @click="goBack" type="default">
-        <el-icon><ArrowLeft /></el-icon>
-        返回系统管理
-      </el-button>
+      <div class="header-actions">
+        <el-button @click="toggleDarkMode" type="default" :icon="isDarkMode ? 'sunny' : 'moon'">
+          {{ isDarkMode ? '浅色' : '暗夜' }}
+        </el-button>
+        <el-button @click="goBack" type="default">
+          <el-icon><ArrowLeft /></el-icon>
+          返回系统管理
+        </el-button>
+      </div>
     </div>
 
     <el-card class="user-table-card">
@@ -244,9 +249,26 @@ const loginHistoryPage = ref(1)
 const loginHistoryPageSize = ref(10)
 const loginHistoryTotal = ref(0)
 
+// 暗夜模式
+const isDarkMode = ref(false)
+
 // 返回系统管理
 const goBack = () => {
   router.push('/admin/system-management')
+}
+
+// 切换暗夜模式
+const toggleDarkMode = () => {
+  isDarkMode.value = !isDarkMode.value
+  const html = document.documentElement
+  if (isDarkMode.value) {
+    html.setAttribute('data-theme', 'dark')
+    localStorage.setItem('theme', 'dark')
+  } else {
+    html.removeAttribute('data-theme')
+    localStorage.setItem('theme', 'light')
+  }
+  window.dispatchEvent(new CustomEvent('theme-change', { detail: { isDark: isDarkMode.value } }))
 }
 
 // 获取用户列表
@@ -469,6 +491,18 @@ const formatTime = (timestamp) => {
 
 // 页面加载时获取数据
 onMounted(() => {
+  // 初始化主题
+  const savedTheme = localStorage.getItem('theme')
+  if (savedTheme === 'dark') {
+    isDarkMode.value = true
+    document.documentElement.setAttribute('data-theme', 'dark')
+  }
+  
+  // 监听全局主题改变事件
+  window.addEventListener('theme-change', (e) => {
+    isDarkMode.value = e.detail?.isDark ?? false
+  })
+  
   fetchUserList()
 })
 </script>
@@ -478,6 +512,12 @@ onMounted(() => {
   padding: 20px;
   max-width: 1600px;
   margin: 0 auto;
+  background-color: white;
+  min-height: 100vh;
+}
+
+[data-theme="dark"] .user-management {
+  background-color: #1a1a1a;
 }
 
 .page-header {
@@ -492,14 +532,43 @@ onMounted(() => {
   color: #333;
 }
 
+[data-theme="dark"] .page-header h1 {
+  color: #e0e0e0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
 .user-table-card {
   margin-bottom: 20px;
+}
+
+[data-theme="dark"] .user-table-card {
+  background-color: #2a2a2a !important;
+  border-color: #444 !important;
+}
+
+[data-theme="dark"] .user-table-card :deep(.el-card__body) {
+  background-color: #2a2a2a !important;
+}
+
+[data-theme="dark"] .user-table-card :deep(.el-card__header) {
+  background-color: #2a2a2a !important;
+  border-bottom-color: #444 !important;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  color: #333;
+}
+
+[data-theme="dark"] .card-header {
+  color: #e0e0e0;
 }
 
 .header-actions {
@@ -529,6 +598,10 @@ onMounted(() => {
   font-style: italic;
 }
 
+[data-theme="dark"] .no-data {
+  color: #666;
+}
+
 .pagination {
   display: flex;
   justify-content: center;
@@ -548,6 +621,10 @@ onMounted(() => {
   color: #666;
 }
 
+[data-theme="dark"] .history-tip {
+  color: #999;
+}
+
 .history-tip strong {
   color: #409EFF;
 }
@@ -564,6 +641,169 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+[data-theme="dark"] .device-info {
+  background-color: rgba(64, 158, 255, 0.1);
+  color: #b3d8ff;
+  border-left-color: #409EFF;
+}
+
+/* Element Plus 组件暗夜模式适配 */
+:deep(.el-card) {
+  --el-card-bg-color: white;
+  --el-card-border-color: #ebeef5;
+}
+
+[data-theme="dark"] :deep(.el-card) {
+  --el-card-bg-color: #2a2a2a !important;
+  --el-card-border-color: #444 !important;
+  background-color: #2a2a2a !important;
+  border-color: #444 !important;
+  color: #e0e0e0;
+}
+
+[data-theme="dark"] :deep(.el-card__header) {
+  border-bottom-color: #444 !important;
+  background-color: #2a2a2a !important;
+}
+
+[data-theme="dark"] :deep(.el-card__body) {
+  background-color: #2a2a2a !important;
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] .user-table-card :deep(.el-table),
+[data-theme="dark"] .user-table-card :deep(.el-table__header-wrapper),
+[data-theme="dark"] .user-table-card :deep(.el-table__body-wrapper) {
+  background-color: #2a2a2a !important;
+}
+
+[data-theme="dark"] :deep(.el-table) {
+  background-color: #2a2a2a !important;
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] :deep(.el-table__header) {
+  background-color: #333 !important;
+}
+
+[data-theme="dark"] :deep(.el-table__header th) {
+  background-color: #333 !important;
+  color: #e0e0e0 !important;
+  border-color: #444 !important;
+}
+
+[data-theme="dark"] :deep(.el-table__body) {
+  background-color: #2a2a2a !important;
+}
+
+[data-theme="dark"] :deep(.el-table__body tr) {
+  background-color: #2a2a2a !important;
+}
+
+[data-theme="dark"] :deep(.el-table__body tr:hover > td) {
+  background-color: #333 !important;
+}
+
+[data-theme="dark"] :deep(.el-table__body td) {
+  border-color: #444 !important;
+  color: #e0e0e0 !important;
+  background-color: #2a2a2a !important;
+}
+
+[data-theme="dark"] :deep(.el-table--striped .el-table__body tr.el-table__row--striped) {
+  background-color: #242424 !important;
+}
+
+[data-theme="dark"] :deep(.el-table__cell) {
+  background-color: #2a2a2a !important;
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] :deep(.el-scrollbar__view) {
+  background-color: #2a2a2a !important;
+}
+
+[data-theme="dark"] :deep(table) {
+  background-color: #2a2a2a !important;
+}
+
+[data-theme="dark"] :deep(.el-pagination) {
+  color: #e0e0e0;
+}
+
+[data-theme="dark"] :deep(.el-pagination__item) {
+  background-color: #2a2a2a !important;
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] :deep(.el-pagination__item.active) {
+  background-color: #2196F3 !important;
+  color: white !important;
+}
+
+[data-theme="dark"] :deep(.el-pagination button) {
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] :deep(.el-pagination button:hover) {
+  color: #fff !important;
+}
+
+[data-theme="dark"] :deep(.el-dialog) {
+  --el-dialog-bg-color: #2a2a2a !important;
+  background-color: #2a2a2a !important;
+  color: #e0e0e0;
+}
+
+[data-theme="dark"] :deep(.el-dialog__header) {
+  border-bottom-color: #444 !important;
+}
+
+[data-theme="dark"] :deep(.el-dialog__title) {
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] :deep(.el-dialog__close) {
+  color: #999 !important;
+}
+
+[data-theme="dark"] :deep(.el-dialog__close:hover) {
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] :deep(.el-dialog__body) {
+  color: #e0e0e0;
+}
+
+[data-theme="dark"] :deep(.el-descriptions) {
+  color: #e0e0e0;
+}
+
+[data-theme="dark"] :deep(.el-descriptions__header) {
+  border-bottom-color: #444 !important;
+}
+
+[data-theme="dark"] :deep(.el-descriptions__body) {
+  border-color: #444 !important;
+}
+
+[data-theme="dark"] :deep(.el-descriptions__item) {
+  border-bottom-color: #444 !important;
+}
+
+[data-theme="dark"] :deep(.el-descriptions__label) {
+  color: #999 !important;
+  border-right-color: #444 !important;
+}
+
+[data-theme="dark"] :deep(.el-descriptions__content) {
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] :deep(.el-tag) {
+  border-color: auto !important;
 }
 
 @media (max-width: 768px) {

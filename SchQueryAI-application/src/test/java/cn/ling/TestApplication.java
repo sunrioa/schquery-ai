@@ -31,7 +31,7 @@ class TestApplication {
     @Resource
     EmbeddingModel embeddingModel;
 
-    @Resource
+    @Resource(name = "openAiChatClient")
     private ChatClient chatClient;
 
     @Test

@@ -66,4 +66,26 @@
         </plugins>
     </build>
 
+<!--    打包配置 路径为 C:\Users\Administrator\Desktop\jar 文件名为 app-->
+<!--    <build>-->
+<!--        <plugins>-->
+<!--            <plugin>-->
+<!--                <groupId>org.springframework.boot</groupId>-->
+<!--                <artifactId>spring-boot-maven-plugin</artifactId>-->
+<!--                <configuration>-->
+<!--                    <mainClass>cn.ling.Application</mainClass>-->
+<!--                    <outputDirectory>C:\Users\Administrator\Desktop\jar</outputDirectory>-->
+<!--                    <finalName>app</finalName>-->
+<!--                </configuration>-->
+<!--                <executions>-->
+<!--                    <execution>-->
+<!--                        <goals>-->
+<!--                            <goal>repackage</goal>-->
+<!--                        </goals>-->
+<!--                    </execution>-->
+<!--                </executions>-->
+<!--            </plugin>-->
+<!--        </plugins>-->
+<!--    </build>-->
+
 </project>

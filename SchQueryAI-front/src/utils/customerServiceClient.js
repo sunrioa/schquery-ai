@@ -6,7 +6,10 @@
 class CustomerServiceClient {
   constructor(options = {}) {
     this.ws = null
-    this.url = options.url || 'ws://localhost:8080/ws/customer-service'
+    // 根据当前页面协议和域名动态构建 WebSocket URL
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+    this.url = options.url || `${protocol}//${host}/ws/customer-service`
     this.userId = options.userId || null
     this.userType = options.userType || 'user' // 'user' or 'admin'
     this.reconnectAttempts = 0

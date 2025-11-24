@@ -175,7 +175,7 @@ onMounted(async () => {
   // 调用API标记管理员消恫为已读（发送者类型=2）
   try {
     const token = localStorage.getItem('token')
-    await fetch('http://localhost:8080/customer-service/mark-read-by-user?userId=' + userId.value + '&senderType=2', {
+    await fetch('/api/customer-service/mark-read-by-user?userId=' + userId.value + '&senderType=2', {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -248,7 +248,7 @@ const loadMessageHistory = async () => {
   try {
     loading.value = true
     const token = localStorage.getItem('token')
-    const response = await fetch('http://localhost:8080/customer-service/history', {
+    const response = await fetch('/api/customer-service/history', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -283,7 +283,9 @@ const connectWebSocket = () => {
   try {
     console.log('[ChatWindow] ========== 开始连接WebSocket ==========')
     const token = localStorage.getItem('token')
-    const wsUrl = `ws://localhost:8080/ws/customer-service?userId=${userId.value}&userType=user`
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+    const wsUrl = `${protocol}//${host}/ws/customer-service?userId=${userId.value}&userType=user`
     console.log('[ChatWindow] WebSocket URL:', wsUrl)
     webSocket.value = new WebSocket(wsUrl)
 
@@ -403,7 +405,7 @@ const sendMessage = async () => {
       }))
     } else {
       // 降级到HTTP API
-      const response = await fetch('http://localhost:8080/customer-service/send', {
+      const response = await fetch('/api/customer-service/send', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

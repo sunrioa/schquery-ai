@@ -156,7 +156,7 @@ const loadMessageHistory = async () => {
   try {
     loading.value = true
     const token = localStorage.getItem('token')
-    const response = await fetch('http://localhost:8080/customer-service/history', {
+    const response = await fetch('/api/customer-service/history', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -187,7 +187,9 @@ const loadMessageHistory = async () => {
 const connectWebSocket = () => {
   try {
     const token = localStorage.getItem('token')
-    const wsUrl = `ws://localhost:8080/ws/customer-service?userId=${userId.value}&userType=user`
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+    const wsUrl = `${protocol}//${host}/ws/customer-service?userId=${userId.value}&userType=user`
     webSocket.value = new WebSocket(wsUrl)
 
     webSocket.value.onopen = () => {
@@ -242,7 +244,7 @@ const sendMessage = async () => {
     sending.value = true
 
     const token = localStorage.getItem('token')
-    const response = await fetch('http://localhost:8080/customer-service/send', {
+    const response = await fetch('/api/customer-service/send', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,

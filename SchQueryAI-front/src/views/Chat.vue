@@ -1150,7 +1150,7 @@ const sendMessage = async () => {
   })
 
   try {
-    const baseURL = 'http://localhost:8080'
+    const baseURL = '/api'
     const response = await fetch(`${baseURL}/user/message/send?sessionId=${currentSessionId.value}&content=${encodeURIComponent(messageContent)}`, {
       method: 'GET',
       headers: {
@@ -1386,7 +1386,7 @@ const sendCustomerServiceMessage = async () => {
     customerServiceLoading.value = true
 
     // 调用后端 API 发送客服消息
-    const response = await fetch('http://localhost:8080/customer-service/send', {
+    const response = await fetch('/api/customer-service/send', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -1469,7 +1469,7 @@ const startRecording = async () => {
   try {
     // 1. 启动流式识别会话
     const sessionId = currentSessionId.value || 'session_' + Date.now()
-    const response = await fetch('http://localhost:8080/user/streaming/start', {
+    const response = await fetch('/api/user/streaming/start', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -1637,7 +1637,7 @@ const stopRecording = async () => {
 
       // 停止流式识别会话并获取最终结果
       if (streamingSessionToken.value) {
-        const response = await fetch('http://localhost:8080/user/streaming/stop', {
+        const response = await fetch('/api/user/streaming/stop', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -1742,7 +1742,7 @@ const forceStopRecording = async () => {
   try {
     // 立即强制停止后端流式识别会话
     if (streamingSessionToken.value) {
-      await fetch('http://localhost:8080/user/streaming/forceStop', {
+      await fetch('/api/user/streaming/forceStop', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -1817,7 +1817,7 @@ const sendStreamingAudioChunk = async (audioData, sampleRate) => {
     formData.append('audioFile', wavBlob, 'chunk.wav')
     formData.append('sessionToken', streamingSessionToken.value)
 
-    const response = await fetch('http://localhost:8080/user/streaming/audio', {
+    const response = await fetch('/api/user/streaming/audio', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -1854,7 +1854,7 @@ const sendStreamingMediaRecorderChunk = async () => {
     formData.append('audioFile', combinedBlob, 'chunk.webm')
     formData.append('sessionToken', streamingSessionToken.value)
 
-    const response = await fetch('http://localhost:8080/user/streaming/audio', {
+    const response = await fetch('/api/user/streaming/audio', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`

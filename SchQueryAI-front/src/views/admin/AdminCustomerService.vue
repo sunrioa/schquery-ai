@@ -183,7 +183,9 @@ const connectAdminWebSocket = () => {
   try {
     console.log('[AdminCustomerService] ========== 开始连接管理员WebSocket ==========')
     const adminId = userStore.userInfo.id
-    const wsUrl = `ws://localhost:8080/ws/customer-service?userId=${adminId}&userType=admin`
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+    const wsUrl = `${protocol}//${host}/ws/customer-service?userId=${adminId}&userType=admin`
     console.log('[AdminCustomerService] WebSocket URL:', wsUrl)
     webSocket.value = new WebSocket(wsUrl)
     
@@ -213,7 +215,7 @@ const loadSessions = async () => {
   try {
     loading.value = true
     const token = localStorage.getItem('token')
-    const response = await fetch('http://localhost:8080/customer-service/pending-sessions', {
+    const response = await fetch('/api/customer-service/pending-sessions', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -259,7 +261,7 @@ const selectSession = async (session) => {
   try {
     const token = localStorage.getItem('token')
     // 标记senderType=1(用户)的消恫为已读
-    await fetch('http://localhost:8080/customer-service/mark-read-by-user?userId=' + session.userId + '&senderType=1', {
+    await fetch('/api/customer-service/mark-read-by-user?userId=' + session.userId + '&senderType=1', {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -365,7 +367,7 @@ const handleNewMessageEvent = async (event) => {
       // 调用API標記供略者消恫為已读（senderType=0標記所有）
       try {
         const token = localStorage.getItem('token')
-        await fetch('http://localhost:8080/customer-service/mark-read-by-user?userId=' + userId + '&senderType=2', {
+        await fetch('/api/customer-service/mark-read-by-user?userId=' + userId + '&senderType=2', {
           method: 'PUT',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -524,7 +526,7 @@ const sendReply = async () => {
     replySending.value = true
 
     const token = localStorage.getItem('token')
-    const response = await fetch('http://localhost:8080/customer-service/reply', {
+    const response = await fetch('/api/customer-service/reply', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -619,7 +621,7 @@ const markAsResolved = async () => {
     )
 
     const token = localStorage.getItem('token')
-    const response = await fetch(`http://localhost:8080/customer-service/session/${currentSession.value.id}/complete`, {
+    const response = await fetch(`/api/customer-service/session/${currentSession.value.id}/complete`, {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${token}`,

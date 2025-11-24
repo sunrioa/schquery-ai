@@ -546,7 +546,7 @@ const loadCustomerServiceData = async () => {
     console.log('[SystemManagement] 开始加载客服消息数据...')
     
     // 调用后端 API 获取客服统计信息
-    const response = await fetch('http://localhost:8080/customer-service/stats', {
+    const response = await fetch('/api/customer-service/stats', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -579,7 +579,7 @@ const loadCustomerServiceData = async () => {
         } else {
           // 如果stats接口没有返回userSessions，再调用pending-sessions接口
           console.log('[SystemManagement] userSessions为空，调用pending-sessions接口...')
-          const sessionsResponse = await fetch('http://localhost:8080/customer-service/pending-sessions', {
+          const sessionsResponse = await fetch('/api/customer-service/pending-sessions', {
             method: 'GET',
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -629,7 +629,7 @@ const openSession = async (session) => {
     // 先标记为已读
     const token = localStorage.getItem('token')
     if (session.unreadCount > 0) {
-      const response = await fetch(`http://localhost:8080/customer-service/mark-read-by-user?userId=${session.userId}&senderType=1`, {
+      const response = await fetch(`/api/customer-service/mark-read-by-user?userId=${session.userId}&senderType=1`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

@@ -30,6 +30,11 @@ spring:
       file-size-threshold: 10MB # 文件大小阈值：超过此大小将写入磁盘
       location: /data/tmp/upload # 临时文件存储目录
 
+  http:
+    client:
+      connect-timeout: 30s
+      read-timeout: 30s
+
   # AI功能配置
   ai:
     openai:
@@ -64,6 +69,11 @@ spring:
         use-tls: false              # 是否启用TLS加密
         initialize-schema: true     # 是否自动初始化数据库模式
 
+    search:
+      options:
+        apiKey: ${SEARCH_API_KEY}
+        engine: baidu
+
 
   # MySQL数据库配置
   datasource:                          # 数据库密码
@@ -96,3 +106,5 @@ parameters:
   serverIpPort: "ws://127.0.0.1:10095"  # FunASR服务器WebSocket地址
   funasr:                              # FunASR详细配置节点
     subprotocol: "funasr-ws"           # WebSocket子协议名称（1.0+版本使用）
+
+#debug: true

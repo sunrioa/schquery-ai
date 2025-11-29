@@ -1,6 +1,7 @@
 package cn.ling;
 
 import cn.ling.rpc.RerankRpc;
+import cn.ling.rpc.SearchRpc;
 import cn.ling.service.SegmentationWordsService;
 import cn.ling.service.SensitiveWordsService;
 import jakarta.annotation.Resource;
@@ -11,7 +12,6 @@ import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvi
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.*;
 import org.springframework.ai.openai.OpenAiChatModel;
-import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -21,6 +21,29 @@ import java.util.*;
 @Slf4j
 @SpringBootTest
 class TestApplication {
+
+
+
+    @Autowired
+    SearchRpc searchRpc;
+
+    @Test
+    public void search(){
+//        String data = searchRpc.getData("浙江万里学院招生");
+//
+//
+//        System.out.println(data);
+//        String data = searchRpc.getInfo("https://yzw.zwu.edu.cn/20/dc/c4952a205020/pagem.htm");
+//
+//        System.out.println(data);
+//
+//        System.out.println("结果为:"+HtmlCleaner.extractMainContent(data));
+
+        System.out.println(chatClient.prompt("广州航海学院今年的招生计划是怎么样的？").call().content());
+
+    }
+
+
 
     @Resource(name = "qdrantVectorStore")
     VectorStore vectorStore;

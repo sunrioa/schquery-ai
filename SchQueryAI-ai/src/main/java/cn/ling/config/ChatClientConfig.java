@@ -3,6 +3,7 @@ package cn.ling.config;
 import cn.ling.advisor.IntentRecognizerAdvisor;
 import cn.ling.advisor.SensitiveFilterAdvisor;
 import cn.ling.prompt.Prompts;
+import cn.ling.tools.ChatTools;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
@@ -36,7 +37,8 @@ public class ChatClientConfig {
             OpenAiChatModel openAiChatModel,
             @Qualifier("questionAnswerAdvisor") Advisor questionAnswerAdvisor,
             SensitiveFilterAdvisor sensitiveFilterAdvisor,
-            IntentRecognizerAdvisor intentRecognizerAdvisor
+            IntentRecognizerAdvisor intentRecognizerAdvisor,
+            ChatTools chatTools
     ) {
         log.info("开始配置OpenAI聊天客户端");
         
@@ -47,6 +49,7 @@ public class ChatClientConfig {
                         intentRecognizerAdvisor,    // 意图识别，顺序: 1
                         sensitiveFilterAdvisor      // 敏感词过滤，顺序: 0
                 )
+                .defaultTools(chatTools)
                 .build();
         
         log.info("OpenAI聊天客户端配置完成，已启用顾问: RAG增强, 意图识别, 敏感词过滤");

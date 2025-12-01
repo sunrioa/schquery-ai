@@ -39,7 +39,7 @@ class TestApplication {
 //
 //        System.out.println("结果为:"+HtmlCleaner.extractMainContent(data));
 
-        System.out.println(chatClient.prompt("广州航海学院今年的招生计划是怎么样的？").call().content());
+        System.out.println(chatClient.prompt("郑州工业应用技术学院录取分数线").call().content());
 
     }
 

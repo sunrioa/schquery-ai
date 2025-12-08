@@ -1,38 +1,44 @@
 <template>
-  <div class="user-management">
+  <div :class="['user-management', { 'is-embedded': embedded }]">
     <div class="page-header">
-      <h1>用户管理</h1>
+      <div class="header-left">
+        <h1>用户管理</h1>
+      </div>
       <div class="header-actions">
-        <el-button @click="toggleDarkMode" type="default" :icon="isDarkMode ? 'sunny' : 'moon'">
-          {{ isDarkMode ? '浅色' : '暗夜' }}
-        </el-button>
-        <el-button @click="goBack" type="default">
-          <el-icon><ArrowLeft /></el-icon>
-          返回系统管理
+        <el-input
+          v-model="searchKeyword"
+          placeholder="搜索用户名/邮箱..."
+          clearable
+          style="width: 180px"
+          @input="handleSearch"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
+        <el-select v-model="roleFilter" placeholder="筛选" style="width: 120px">
+          <el-option label="全部用户" value="all" />
+          <el-option label="管理员" value="admin" />
+          <el-option label="普通用户" value="user" />
+          <el-option label="已禁用" value="disabled" />
+        </el-select>
+        <el-button type="primary" @click="refreshData" size="small">
+          <el-icon><Refresh /></el-icon>
+          刷新
         </el-button>
       </div>
     </div>
 
-    <el-card class="user-table-card">
-      <template #header>
-        <div class="card-header">
-          <span>用户列表</span>
-          <div class="header-actions">
-            <el-button type="primary" @click="refreshData">
-              <el-icon><Refresh /></el-icon>
-              刷新
-            </el-button>
-          </div>
-        </div>
-      </template>
-
-      <el-table
-        :data="userList"
-        v-loading="loading"
-        stripe
-        style="width: 100%"
-        :default-sort="{ prop: 'createTime', order: 'descending' }"
-      >
+    <el-card class="user-table-card" v-loading="loading">
+      <div class="table-wrapper">
+        <el-table
+          :data="filteredUserList"
+          stripe
+          style="width: 100%"
+          height="100%"
+          :default-sort="{ prop: 'createTime', order: 'descending' }"
+          :row-class-name="tableRowClassName"
+        >
         <el-table-column type="index" label="序号" width="60" align="center" />
         
         <el-table-column prop="id" label="用户ID" width="80" align="center" />
@@ -112,6 +118,7 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
 
       <div class="pagination">
         <el-pagination
@@ -219,18 +226,26 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, defineProps, defineEmits } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ArrowLeft,
   Refresh,
-  Location
+  Location,
+  Search
 } from '@element-plus/icons-vue'
 import { userApi } from '../../api/user'
 import { getFullDeviceInfo } from '../../utils/browserUtils'
 
 const router = useRouter()
+const props = defineProps({
+  embedded: {
+    type: Boolean,
+    default: false
+  }
+})
+const emit = defineEmits(['back'])
 
 // 响应式数据
 const loading = ref(false)
@@ -241,7 +256,10 @@ const total = ref(0)
 const detailDialogVisible = ref(false)
 const loginHistoryDialogVisible = ref(false)
 const selectedUser = ref(null)
-const avatarCache = ref({}) // 头像缓存
+const avatarCache = ref({})
+const searchKeyword = ref('')
+const roleFilter = ref('all')
+
 // 登录历史数据
 const loginHistoryList = ref([])
 const loginHistoryLoading = ref(false)
@@ -252,8 +270,58 @@ const loginHistoryTotal = ref(0)
 // 暗夜模式
 const isDarkMode = ref(false)
 
+// 计算属性 - 统计数据
+const adminCount = computed(() => userList.value.filter(u => u.role === 'admin').length)
+const userCount = computed(() => userList.value.filter(u => u.role === 'user').length)
+const disabledCount = computed(() => userList.value.filter(u => u.status === 0).length)
+
+// 计算属性 - 过滤后的用户列表
+const filteredUserList = computed(() => {
+  let result = userList.value
+  
+  // 按角色/状态筛选
+  if (roleFilter.value === 'admin') {
+    result = result.filter(u => u.role === 'admin')
+  } else if (roleFilter.value === 'user') {
+    result = result.filter(u => u.role === 'user')
+  } else if (roleFilter.value === 'disabled') {
+    result = result.filter(u => u.status === 0)
+  }
+  
+  // 按关键词搜索
+  if (searchKeyword.value.trim()) {
+    const keyword = searchKeyword.value.toLowerCase()
+    result = result.filter(u => 
+      (u.userName && u.userName.toLowerCase().includes(keyword)) ||
+      (u.email && u.email.toLowerCase().includes(keyword))
+    )
+  }
+  
+  return result
+})
+
+// 设置角色筛选
+const setRoleFilter = (filter) => {
+  roleFilter.value = filter
+}
+
+// 搜索处理
+const handleSearch = () => {
+  // 搜索时自动过滤，无需额外操作
+}
+
+// 表格行样式
+const tableRowClassName = ({ row }) => {
+  if (row.status === 0) return 'disabled-row'
+  return ''
+}
+
 // 返回系统管理
 const goBack = () => {
+  if (props.embedded) {
+    emit('back')
+    return
+  }
   router.push('/admin/system-management')
 }
 
@@ -509,26 +577,63 @@ onMounted(() => {
 
 <style scoped>
 .user-management {
-  padding: 20px;
-  max-width: 1600px;
-  margin: 0 auto;
-  background-color: white;
+  padding: 12px 16px;
+  width: 100%;
+  background: #f5f7fa;
   min-height: 100vh;
 }
 
 [data-theme="dark"] .user-management {
-  background-color: #1a1a1a;
+  background-color: #0f172a;
+}
+
+.user-management.is-embedded {
+  padding: 8px;
+  background: transparent;
+  max-width: 100%;
+  min-height: auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-theme="dark"] .user-management.is-embedded {
+  background: transparent;
 }
 
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(31, 45, 61, 0.05);
+  border: 1px solid #edf2f7;
+}
+
+.user-management.is-embedded .page-header {
+  margin-bottom: 8px;
+  box-shadow: none;
+  border-color: #e5e7eb;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.back-button {
+  padding: 6px 12px;
+  border-radius: 6px;
 }
 
 .page-header h1 {
   margin: 0;
+  font-size: 16px;
+  font-weight: 600;
   color: #333;
 }
 
@@ -536,28 +641,77 @@ onMounted(() => {
   color: #e0e0e0;
 }
 
+[data-theme="dark"] .page-header {
+  background: #111827;
+  border-color: #1f2937;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .user-management.is-embedded .page-header {
+  border-color: #1f2937;
+  box-shadow: none;
+}
+
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
 }
 
 .user-table-card {
-  margin-bottom: 20px;
+  margin-bottom: 10px;
+  border: none;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(31, 45, 61, 0.06);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.user-table-card :deep(.el-card__body) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 12px;
+}
+
+.table-wrapper {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.user-management.is-embedded .user-table-card {
+  margin-bottom: 10px;
+  box-shadow: none;
+  border: 1px solid #e5e7eb;
+}
+
+.user-table-card :deep(.el-card__header) {
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 [data-theme="dark"] .user-table-card {
-  background-color: #2a2a2a !important;
-  border-color: #444 !important;
+  background-color: #111827 !important;
+  border: 1px solid #1f2937 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .user-management.is-embedded .user-table-card {
+  box-shadow: none;
 }
 
 [data-theme="dark"] .user-table-card :deep(.el-card__body) {
-  background-color: #2a2a2a !important;
+  background-color: #111827 !important;
+  border-radius: 0 0 16px 16px;
 }
 
 [data-theme="dark"] .user-table-card :deep(.el-card__header) {
-  background-color: #2a2a2a !important;
-  border-bottom-color: #444 !important;
+  background-color: #111827 !important;
+  border-bottom-color: #1f2937 !important;
 }
 
 .card-header {
@@ -605,7 +759,9 @@ onMounted(() => {
 .pagination {
   display: flex;
   justify-content: center;
-  margin-top: 20px;
+  padding: 12px;
+  flex-shrink: 0;
+  border-top: 1px solid #f0f0f0;
 }
 
 .user-detail {
@@ -804,6 +960,15 @@ onMounted(() => {
 
 [data-theme="dark"] :deep(.el-tag) {
   border-color: auto !important;
+}
+
+/* 禁用行样式 */
+:deep(.el-table .disabled-row) {
+  background-color: #fef0f0 !important;
+}
+
+[data-theme="dark"] :deep(.el-table .disabled-row) {
+  background-color: rgba(245, 108, 108, 0.1) !important;
 }
 
 @media (max-width: 768px) {

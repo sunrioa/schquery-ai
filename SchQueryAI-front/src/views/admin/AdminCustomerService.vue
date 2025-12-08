@@ -1,131 +1,191 @@
 <template>
   <div class="admin-customer-service">
-    <el-container class="service-container">
-      <!-- 头部 -->
-      <el-header class="service-header">
-        <div class="header-left">
-          <el-button type="text" @click="goBack" class="back-btn">
-            <el-icon><ArrowLeft /></el-icon>
-            返回
-          </el-button>
-          <h2>客服消息管理</h2>
-        </div>
-        <div class="header-right">
-          <el-input
-              v-model="searchKeyword"
-              placeholder="搜索用户名或主题..."
-              style="width: 250px"
-              @input="handleSearch"
-          />
-          <el-select v-model="filterStatus" placeholder="筛选状态" @change="handleStatusFilter">
-            <el-option label="全部" value="" />
-            <el-option label="待处理" value="pending" />
-            <el-option label="已处理" value="completed" />
-          </el-select>
-        </div>
-      </el-header>
+    <div class="top-bar">
+      <div class="top-left">
+        <el-button type="text" @click="goBack" class="back-btn">
+          <el-icon><ArrowLeft /></el-icon>
+          返回
+        </el-button>
+        <h2>客服消息管理</h2>
+        <el-tag v-if="pendingCount > 0" type="danger" effect="dark" size="small">待处理 {{ pendingCount }}</el-tag>
+      </div>
+      <div class="top-right">
+        <el-button class="theme-toggle" circle plain @click="toggleDarkMode">
+          <el-icon><Moon /></el-icon>
+        </el-button>
+        <el-button type="primary" @click="refreshSessions" plain>
+          <el-icon><Upload /></el-icon>
+          刷新
+        </el-button>
+      </div>
+    </div>
 
-      <!-- 主区域 -->
-      <el-container class="service-content">
-        <!-- 会话列表侧边栏 -->
-        <el-aside width="300px" class="sessions-sidebar">
-          <div class="sidebar-header">
+    <div class="metrics-row">
+      <div
+        class="metric-card primary"
+        :class="{ active: filterStatus === 'all' }"
+        @click="setFilter('all')"
+      >
+        <div class="metric-top">
+          <p class="metric-label">会话总数</p>
+          <span class="metric-badge">总览</span>
+        </div>
+        <p class="metric-value">{{ totalSessions }}</p>
+        <span class="metric-desc">全部客服会话</span>
+      </div>
+      <div
+        class="metric-card warning"
+        :class="{ active: filterStatus === 'pending' }"
+        @click="setFilter('pending')"
+      >
+        <div class="metric-top">
+          <p class="metric-label">待处理会话</p>
+          <span class="metric-badge badge-warning">跟进</span>
+        </div>
+        <p class="metric-value">{{ pendingCount }}</p>
+        <span class="metric-desc">含未读或未完成</span>
+      </div>
+      <div
+        class="metric-card success"
+        :class="{ active: filterStatus === 'unread' }"
+        @click="setFilter('unread')"
+      >
+        <div class="metric-top">
+          <p class="metric-label">未读消息</p>
+          <span class="metric-badge badge-success">提醒</span>
+        </div>
+        <p class="metric-value">{{ unreadTotal }}</p>
+        <span class="metric-desc">列表红点汇总</span>
+      </div>
+      <div
+        class="metric-card info"
+        :class="{ active: filterStatus === 'active' }"
+        @click="setFilter('active')"
+      >
+        <div class="metric-top">
+          <p class="metric-label">进行中</p>
+          <span class="metric-badge badge-info">处理中</span>
+        </div>
+        <p class="metric-value">{{ activeSessions }}</p>
+        <span class="metric-desc">状态为处理中</span>
+      </div>
+    </div>
+
+    <div class="workspace">
+      <el-card class="sessions-card" shadow="never" v-loading="loading">
+        <div class="card-header">
+          <div>
             <h3>客服会话</h3>
-            <el-badge v-if="pendingCount > 0" :value="pendingCount" :max="99" />
           </div>
-          <div class="sessions-list" v-loading="loading">
-            <div v-if="filteredSessions.length === 0" class="empty-sessions">
-              <p>暂无会话</p>
-            </div>
-            <div
-                v-for="session in filteredSessions"
-                :key="session.id"
-                class="session-item"
-                :class="{ active: currentSession?.id === session.id }"
-                @click="selectSession(session)"
+          <el-badge v-if="pendingCount > 0" :value="pendingCount" :max="99" />
+        </div>
+        <div class="sessions-list">
+          <div v-if="filteredSessions.length === 0" class="empty-sessions">
+            <el-empty description="暂无会话" :image-size="80" />
+          </div>
+          <div
+              v-for="session in filteredSessions"
+              :key="session.id"
+              class="session-item"
+              :class="{ active: currentSession?.id === session.id }"
+              @click="selectSession(session)"
             >
-              <div class="session-info">
-                <div class="user-name">{{ session.userName }}</div>
-                <div class="session-topic">{{ formatTopic(session.topic) }}</div>
-                <div class="session-last-message">{{ session.lastMessage }}</div>
-              </div>
-              <el-badge v-if="session.unreadCount > 0" :value="session.unreadCount" class="unread-badge" />
-            </div>
-          </div>
-        </el-aside>
-
-        <!-- 聊天区域 -->
-        <el-main class="chat-area">
-          <div v-if="!currentSession" class="empty-state">
-            <el-empty description="选择一个会话开始处理" :image-size="120">
-              <el-button type="primary" @click="refreshSessions">刷新会话列表</el-button>
-            </el-empty>
-          </div>
-
-          <div v-else class="chat-wrapper">
-            <!-- 会话头部 -->
-            <div class="chat-header">
-              <div class="header-info">
-                <h3>{{ currentSession.userName }}</h3>
-                <span class="topic-tag">{{ formatTopic(currentSession.topic) }}</span>
-                <span class="status-tag" :class="{ 'is-completed': currentSession.status === 'completed' }">
-                  {{ currentSession.status === 'completed' ? '已完成' : '处理中' }}
+              <div class="session-main">
+                <div class="session-top">
+                <div class="user-name-row">
+                  <span class="user-name">{{ session.userName }}</span>
+                  <span class="topic-inline">{{ formatTopic(session.topic) }}</span>
+                </div>
+                <span class="status-dot" :class="session.status === 'completed' ? 'done' : 'processing'">
+                  {{ session.status === 'completed' ? '已完成' : '处理中' }}
                 </span>
               </div>
-              <div class="header-actions">
-                <el-button type="success" size="small" @click="markAsResolved" v-if="currentSession.status !== 'completed'">
-                  标记为已处理
-                </el-button>
-                <el-button type="danger" size="small" @click="deleteSession">删除会话</el-button>
+              <div class="session-last-message">{{ session.lastMessage }}</div>
+            </div>
+            <el-badge v-if="session.unreadCount > 0" :value="session.unreadCount" class="unread-badge" />
+          </div>
+        </div>
+      </el-card>
+
+      <el-card class="chat-card" shadow="never">
+        <div v-if="!currentSession" class="empty-state">
+          <el-empty description="选择一个会话开始处理" :image-size="120">
+            <el-button type="primary" @click="refreshSessions">刷新会话列表</el-button>
+          </el-empty>
+        </div>
+
+        <div v-else class="chat-wrapper">
+          <div class="chat-header">
+            <div class="header-info">
+              <h3>{{ currentSession.userName }}</h3>
+              <span class="topic-tag">{{ formatTopic(currentSession.topic) }}</span>
+              <span class="status-tag" :class="{ 'is-completed': currentSession.status === 'completed' }">
+                {{ currentSession.status === 'completed' ? '已完成' : '处理中' }}
+              </span>
+            </div>
+            <div class="header-actions">
+              <el-button type="success" size="small" @click="markAsResolved" v-if="currentSession.status !== 'completed'">
+                标记为已处理
+              </el-button>
+              <el-button type="danger" size="small" @click="deleteSession">删除会话</el-button>
+            </div>
+          </div>
+
+          <div class="messages-area" ref="messagesContainer">
+            <div v-for="msg in sortedMessages" :key="msg.id" class="message-item" :class="{ 'admin-msg': msg.senderType === 2, 'user-msg': msg.senderType === 1 }">
+              <div class="message-avatar">
+                <el-avatar :size="36" :src="msg.senderType === 1 ? getUserAvatar() : getAdminAvatar()" />
+              </div>
+              <div class="message-content">
+                <div class="sender-name">{{ msg.senderType === 1 ? currentSession.userName : '我' }}</div>
+                <div class="message-text">{{ msg.messageContent }}</div>
+                <div class="message-meta">
+                  <span class="message-time">{{ formatTime(msg.createTime) }}</span>
+                </div>
               </div>
             </div>
+          </div>
 
-            <!-- 消息区域 -->
-            <div class="messages-area" ref="messagesContainer">
-              <div v-for="msg in sortedMessages" :key="msg.id" class="message-item" :class="{ 'admin-msg': msg.senderType === 2, 'user-msg': msg.senderType === 1 }">
-                <div class="message-avatar">
-                  <el-avatar :size="36" :src="msg.senderType === 1 ? getUserAvatar() : getAdminAvatar()" />
-                </div>
-                <div class="message-content">
-                  <div class="sender-name">{{ msg.senderType === 1 ? currentSession.userName : '我' }}</div>
-                  <div class="message-text">{{ msg.messageContent }}</div>
-                  <div class="message-meta">
-                    <span class="message-time">{{ formatTime(msg.createTime) }}</span>
-                  </div>
-                </div>
+          <div class="reply-area" v-if="currentSession.status !== 'completed'">
+            <div class="reply-box" :class="{ 'is-focused': isInputFocused }">
+              <div class="input-icon">
+                <el-icon><ChatDotRound /></el-icon>
               </div>
-            </div>
-
-            <!-- 回复区域 -->
-            <div class="reply-area" v-if="currentSession.status !== 'completed'">
               <el-input
                   ref="replyInput"
                   v-model="replyMessage"
                   type="textarea"
-                  :rows="3"
+                  :rows="1"
                   placeholder="输入您的回复..."
                   @keydown.enter.prevent="handleEnterKey"
+                  @focus="isInputFocused = true"
+                  @blur="isInputFocused = false"
                   resize="none"
               />
-              <div class="reply-actions">
-                <el-button type="primary" @click="sendReply" :loading="replySending" :disabled="!replyMessage.trim()">
-                  发送回复
+              <div class="input-actions">
+                <span class="char-count" v-if="replyMessage.length > 0">{{ replyMessage.length }}</span>
+                <el-button
+                  class="send-btn"
+                  :class="{ 'can-send': replyMessage.trim() }"
+                  circle
+                  @click="sendReply"
+                  :loading="replySending"
+                  :disabled="!replyMessage.trim()"
+                >
+                  <el-icon><Position /></el-icon>
                 </el-button>
-                <el-button @click="replyMessage = ''">清除</el-button>
               </div>
             </div>
-            <div v-else class="completed-notice">
-              <el-alert
-                  title="此会话已完成"
-                  type="success"
-                  description="用户发送新消息后会话将自动重新激活"
-                  :closable="false"
-              />
+          </div>
+          <div v-else class="completed-notice">
+            <div class="completed-box">
+              <el-icon class="completed-icon"><CircleCheck /></el-icon>
+              <span class="completed-text">此会话已完成，用户发送新消息后将自动重新激活</span>
             </div>
           </div>
-        </el-main>
-      </el-container>
-    </el-container>
+        </div>
+      </el-card>
+    </div>
   </div>
 </template>
 
@@ -133,7 +193,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Upload } from '@element-plus/icons-vue'
+import { ArrowLeft, Upload, Moon, Position, ChatDotRound, CircleCheck } from '@element-plus/icons-vue'
 import { useUserStore } from '../../stores/userStore'
 
 const router = useRouter()
@@ -145,27 +205,41 @@ const currentSession = ref(null)
 const replyMessage = ref('')
 const loading = ref(false)
 const replySending = ref(false)
-const searchKeyword = ref('')
-const filterStatus = ref('')
+const filterStatus = ref('all')
 const messagesContainer = ref(null)
 const replyInput = ref(null)
+const isInputFocused = ref(false)
 const webSocket = ref(null)
 const pendingCount = ref(0)
+const isDarkMode = ref(false)
 
 // 计算过滤后的会话
 const filteredSessions = computed(() => {
   return sessions.value.filter(session => {
-    const matchesKeyword = !searchKeyword.value || 
-      session.userName.toLowerCase().includes(searchKeyword.value.toLowerCase()) ||
-      session.topic.toLowerCase().includes(searchKeyword.value.toLowerCase())
-    
-    const matchesStatus = !filterStatus.value || 
-      (filterStatus.value === 'pending' && session.status !== 'completed') ||
-      (filterStatus.value === 'completed' && session.status === 'completed')
-    
-    return matchesKeyword && matchesStatus
+    let matchesStatus = true
+    switch (filterStatus.value) {
+      case 'pending':
+        matchesStatus = session.status !== 'completed'
+        break
+      case 'completed':
+        matchesStatus = session.status === 'completed'
+        break
+      case 'active':
+        matchesStatus = session.status !== 'completed'
+        break
+      case 'unread':
+        matchesStatus = (session.unreadCount || 0) > 0
+        break
+      default:
+        matchesStatus = true
+    }
+    return matchesStatus
   })
 })
+
+const totalSessions = computed(() => sessions.value.length)
+const activeSessions = computed(() => sessions.value.filter(s => s.status !== 'completed').length)
+const unreadTotal = computed(() => sessions.value.reduce((sum, s) => sum + (s.unreadCount || 0), 0))
 
 // 按时间排序的消息（从上到下，最早的在上面）
 const sortedMessages = computed(() => {
@@ -269,7 +343,7 @@ const selectSession = async (session) => {
       }
     })
     
-    // 本地立即更新消恫状态，实时显示已读
+    // 本地立即更新消除状态，实时显示已读
     if (currentSession.value && currentSession.value.messages) {
       currentSession.value.messages.forEach(msg => {
         if (msg.senderType === 1) {
@@ -467,6 +541,13 @@ onMounted(async () => {
   if (!userStore.userInfo || !userStore.userInfo.id) {
     console.log('[AdminCustomerService] 用户信息未加载，先获取用户信息...')
     await userStore.fetchUserInfo()
+  }
+
+  // 初始化主题
+  const savedTheme = localStorage.getItem('theme')
+  if (savedTheme === 'dark') {
+    isDarkMode.value = true
+    document.documentElement.setAttribute('data-theme', 'dark')
   }
   
   // 检查WebSocket连接状态
@@ -678,17 +759,36 @@ const deleteSession = async () => {
 
 // 处理搜索
 const handleSearch = () => {
-  // 搜索由computed自动处理
+  // 已移除搜索框，保留占位以兼容潜在引用
 }
 
 // 处理状态筛选
 const handleStatusFilter = () => {
-  // 筛选由computed自动处理
+  // 已移除下拉筛选，改由顶部指标卡点击触发
+}
+
+// 通过点击指标卡设置筛选
+const setFilter = (status) => {
+  filterStatus.value = status
 }
 
 // 返回上一页
 const goBack = () => {
   router.back()
+}
+
+// 切换暗夜模式
+const toggleDarkMode = () => {
+  isDarkMode.value = !isDarkMode.value
+  const html = document.documentElement
+  if (isDarkMode.value) {
+    html.setAttribute('data-theme', 'dark')
+    localStorage.setItem('theme', 'dark')
+  } else {
+    html.removeAttribute('data-theme')
+    localStorage.setItem('theme', 'light')
+  }
+  window.dispatchEvent(new CustomEvent('theme-change', { detail: { isDark: isDarkMode.value } }))
 }
 
 // 获取用户头像
@@ -733,117 +833,219 @@ const formatTopic = (topic) => {
 .admin-customer-service {
   width: 100%;
   height: 100vh;
+  padding: 10px 12px;
+  background: #f5f7fa;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
 }
 
 [data-theme="dark"] .admin-customer-service {
-  background-color: #1a1a1a;
+  background-color: #0f172a;
 }
 
-.service-container {
-  width: 100%;
-  height: 100%;
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(31, 45, 61, 0.06);
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+[data-theme="dark"] .top-bar {
+  background: #111827;
+  border-color: #1f2937;
+}
+
+.top-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.top-left h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.top-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.theme-toggle {
+  border-radius: 50%;
+}
+
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+  margin: 4px 0 8px;
+  flex-shrink: 0;
+}
+
+.metric-card {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid #edf2f7;
+  box-shadow: 0 8px 20px rgba(31, 45, 61, 0.05);
   display: flex;
   flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.service-header {
+[data-theme="dark"] .metric-card {
+  background: #111827;
+  border-color: #1f2937;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.metric-card.active {
+  border-color: #409EFF;
+  box-shadow: 0 10px 24px rgba(64, 158, 255, 0.16);
+}
+
+.metric-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 24px;
-  border-bottom: 1px solid #e5e7eb;
-  background-color: white;
 }
 
-[data-theme="dark"] .service-header {
-  background-color: #2a2a2a;
-  border-bottom-color: #444;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.header-left h2 {
+.metric-label {
   margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #111827;
-}
-
-[data-theme="dark"] .header-left h2 {
-  color: #e0e0e0;
-}
-
-.back-btn {
+  font-size: 12px;
   color: #6b7280;
 }
 
-[data-theme="dark"] .back-btn {
-  color: #999;
-}
-
-.back-btn:hover {
+.metric-value {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
   color: #111827;
 }
 
-[data-theme="dark"] .back-btn:hover {
-  color: #e0e0e0;
+.metric-desc {
+  font-size: 12px;
+  color: #9ca3af;
 }
 
-.header-right {
-  display: flex;
+.metric-badge {
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 12px;
+}
+
+.badge-warning {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.badge-success {
+  background: #ecfdf3;
+  color: #15803d;
+}
+
+.badge-info {
+  background: #e0f2fe;
+  color: #0ea5e9;
+}
+
+.metric-card.primary { border-left: 4px solid #409EFF; }
+.metric-card.warning { border-left: 4px solid #f59e0b; }
+.metric-card.success { border-left: 4px solid #22c55e; }
+.metric-card.info { border-left: 4px solid #0ea5e9; }
+
+[data-theme="dark"] .metric-value { color: #e0e0e0; }
+[data-theme="dark"] .metric-label,
+[data-theme="dark"] .metric-desc { color: #a3a3a3; }
+
+.workspace {
+  display: grid;
+  grid-template-columns: 340px 1fr;
   gap: 12px;
-}
-
-.service-content {
+  align-items: stretch;
   flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 
-.sessions-sidebar {
-  border-right: 1px solid #e5e7eb;
-  background-color: #f9fafb;
-  overflow: hidden;
+@media (max-width: 1200px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sessions-card, .chat-card {
+  min-height: 0;
+  border-radius: 14px;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 8px 20px rgba(31, 45, 61, 0.06);
+  overflow: hidden;
 }
 
-[data-theme="dark"] .sessions-sidebar {
-  background-color: #252525;
-  border-right-color: #444;
+:deep(.sessions-card .el-card__body),
+:deep(.chat-card .el-card__body) {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  padding: 12px;
+  overflow: hidden;
 }
 
-.sidebar-header {
+.card-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 16px;
-  background-color: white;
-  border-bottom: 1px solid #e5e7eb;
+  align-items: flex-start;
+  padding: 0 0 10px 0;
+  border-bottom: 1px solid #edf2f7;
 }
 
-[data-theme="dark"] .sidebar-header {
-  background-color: #2a2a2a;
-  border-bottom-color: #444;
+[data-theme="dark"] .card-header {
+  border-bottom-color: #1f2937;
 }
 
-.sidebar-header h3 {
+.card-header h3 {
   margin: 0;
   font-size: 16px;
   color: #111827;
 }
 
-[data-theme="dark"] .sidebar-header h3 {
-  color: #e0e0e0;
+[data-theme="dark"] .card-header h3 {
+  color: #e5e7eb;
+}
+
+.card-subtitle {
+  margin: 4px 0 0;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+[data-theme="dark"] .card-subtitle {
+  color: #94a3b8;
 }
 
 .sessions-list {
+  margin-top: 12px;
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 8px;
+  padding-right: 2px;
+  padding-bottom: 8px;
 }
 
 .empty-sessions {
@@ -855,80 +1057,97 @@ const formatTopic = (topic) => {
   font-size: 14px;
 }
 
-[data-theme="dark"] .empty-sessions {
-  color: #666;
-}
-
 .session-item {
-  padding: 12px;
+  padding: 10px;
   margin-bottom: 8px;
   background-color: white;
   border: 1px solid #e5e7eb;
-  border-radius: 6px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.25s;
   position: relative;
   color: #111827;
 }
 
 [data-theme="dark"] .session-item {
-  background-color: #333;
-  border-color: #444;
+  background-color: #1f2937;
+  border-color: #293548;
   color: #e0e0e0;
 }
 
 .session-item:hover {
-  background-color: #f0f5ff;
-  border-color: #409EFF;
-}
-
-[data-theme="dark"] .session-item:hover {
-  background-color: #3a4a5a;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px rgba(31, 45, 61, 0.08);
   border-color: #409EFF;
 }
 
 .session-item.active {
-  background-color: #e6f7ff;
   border-color: #409EFF;
+  box-shadow: 0 12px 28px rgba(64, 158, 255, 0.12);
 }
 
-[data-theme="dark"] .session-item.active {
-  background-color: #1e3a4a;
-  border-color: #409EFF;
-}
-
-.session-info {
+.session-main {
   padding-right: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.session-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.user-name-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .user-name {
   font-weight: 600;
   color: #111827;
   font-size: 14px;
-  margin-bottom: 4px;
 }
 
 [data-theme="dark"] .user-name {
   color: #e0e0e0;
 }
 
+.topic-inline {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.status-dot {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #f0f4ff;
+  color: #1d4ed8;
+}
+
+.status-dot.processing {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.status-dot.done {
+  background: #f0fdf4;
+  color: #15803d;
+}
+
 .session-topic {
   color: #6b7280;
   font-size: 12px;
-  margin-bottom: 4px;
 }
 
-[data-theme="dark"] .session-topic {
-  color: #999;
-}
-
-.session-time {
-  color: #9ca3af;
-  font-size: 12px;
-}
-
-[data-theme="dark"] .session-time {
-  color: #777;
+.session-last-message {
+  color: #4b5563;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .unread-badge {
@@ -937,15 +1156,14 @@ const formatTopic = (topic) => {
   top: 12px;
 }
 
-.chat-area {
+[data-theme="dark"] .session-topic { color: #9ca3af; }
+[data-theme="dark"] .session-last-message { color: #cbd5e1; }
+
+.chat-card {
   display: flex;
   flex-direction: column;
-  background-color: white;
-  overflow: hidden;
-}
-
-[data-theme="dark"] .chat-area {
-  background-color: #1f1f1f;
+  flex: 1;
+  min-height: 0;
 }
 
 .empty-state {
@@ -958,28 +1176,29 @@ const formatTopic = (topic) => {
 .chat-wrapper {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  gap: 0;
+  flex: 1;
+  min-height: 0;
 }
 
 .chat-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 24px;
+  padding: 14px 18px;
   border-bottom: 1px solid #e5e7eb;
-  background-color: #fafafa;
+  background: #f9fafb;
+  border-radius: 10px;
 }
 
 [data-theme="dark"] .chat-header {
-  background-color: #2a2a2a;
-  border-bottom-color: #444;
+  background-color: #1f2937;
+  border-bottom-color: #293548;
 }
 
 .header-info {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .header-info h3 {
@@ -1001,11 +1220,6 @@ const formatTopic = (topic) => {
   font-weight: 500;
 }
 
-[data-theme="dark"] .topic-tag {
-  background-color: rgba(0, 80, 179, 0.2);
-  color: #65b1ff;
-}
-
 .status-tag {
   background-color: #fde3cf;
   color: #ad6000;
@@ -1015,19 +1229,9 @@ const formatTopic = (topic) => {
   font-weight: 500;
 }
 
-[data-theme="dark"] .status-tag {
-  background-color: rgba(173, 96, 0, 0.2);
-  color: #ffb366;
-}
-
 .status-tag.is-completed {
   background-color: #f6ffed;
   color: #274e20;
-}
-
-[data-theme="dark"] .status-tag.is-completed {
-  background-color: rgba(82, 196, 26, 0.2);
-  color: #85ce61;
 }
 
 .header-actions {
@@ -1037,16 +1241,17 @@ const formatTopic = (topic) => {
 
 .messages-area {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 24px;
+  padding: 10px 14px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background-color: #f8f9fa;
+  background-color: #ffffff;
 }
 
 [data-theme="dark"] .messages-area {
-  background-color: #252525;
+  background-color: #111827;
 }
 
 .message-item {
@@ -1080,10 +1285,6 @@ const formatTopic = (topic) => {
   padding: 0 8px;
 }
 
-[data-theme="dark"] .sender-name {
-  color: #777;
-}
-
 .message-text {
   background-color: #f3f4f6;
   border-radius: 8px;
@@ -1092,35 +1293,6 @@ const formatTopic = (topic) => {
   word-break: break-word;
   line-height: 1.5;
   color: #333;
-}
-
-[data-theme="dark"] .message-text {
-  background-color: #333;
-  color: #e0e0e0;
-}
-
-.message-item.user-msg .message-text {
-  background-color: #f3f4f6;
-  color: #333;
-}
-
-[data-theme="dark"] .message-item.user-msg .message-text {
-  background-color: #333;
-  color: #e0e0e0;
-}
-
-.message-time {
-  font-size: 12px;
-  color: #9ca3af;
-  padding: 0 8px;
-}
-
-[data-theme="dark"] .message-time {
-  color: #777;
-}
-
-.message-item.user-msg .message-time {
-  text-align: left;
 }
 
 .message-item.admin-msg {
@@ -1136,11 +1308,6 @@ const formatTopic = (topic) => {
   color: white;
 }
 
-.message-item.admin-msg .message-time {
-  text-align: right;
-}
-
-/* 消恫元信息容器 */
 .message-meta {
   display: flex;
   align-items: center;
@@ -1149,54 +1316,231 @@ const formatTopic = (topic) => {
   font-size: 12px;
 }
 
-.message-item.user-msg .message-meta {
-  justify-content: flex-start;
-}
-
 .message-item.admin-msg .message-meta {
   justify-content: flex-end;
 }
 
-/* 已读/未读状态 */
-.read-status {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 2px 6px;
-  border-radius: 8px;
+.message-item.admin-msg .message-time {
+  text-align: right;
 }
 
-.read-status.read {
-  color: #52c41a;
-  background-color: #f6ffed;
-}
-
-[data-theme="dark"] .read-status.read {
-  background-color: rgba(82, 196, 26, 0.1);
-  color: #85ce61;
-}
-
-.read-status.unread {
-  color: #ff4d4f;
-  background-color: #fff1f0;
-}
-
-[data-theme="dark"] .read-status.unread {
-  background-color: rgba(255, 77, 79, 0.1);
-  color: #ff7875;
-}
+[data-theme="dark"] .sender-name { color: #94a3b8; }
+[data-theme="dark"] .message-text { background-color: #1f2937; color: #e0e0e0; }
+[data-theme="dark"] .message-item.user-msg .message-text { background-color: #1f2937; color: #e0e0e0; }
+[data-theme="dark"] .message-meta { color: #94a3b8; }
 
 .reply-area {
-  padding: 16px 24px;
+  padding: 8px 12px;
   border-top: 1px solid #e5e7eb;
-  background-color: #fafafa;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  flex-shrink: 0;
+  border-radius: 0 0 14px 14px;
+}
+
+.reply-box {
+  position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  align-items: center;
+  width: 100%;
+  background: #fff;
+  border: 2px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 4px 60px 4px 40px;
+  box-shadow: 0 4px 12px rgba(31, 45, 61, 0.06),
+              0 0 0 0 rgba(99, 102, 241, 0);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.reply-box:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 6px 16px rgba(31, 45, 61, 0.08),
+              0 0 0 4px rgba(99, 102, 241, 0.05);
+}
+
+.reply-box.is-focused {
+  border-color: #818cf8;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.12),
+              0 0 0 4px rgba(99, 102, 241, 0.1);
+}
+
+.input-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.3s ease;
+}
+
+.reply-box.is-focused .input-icon {
+  color: #6366f1;
+}
+
+.input-actions {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.char-count {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+  min-width: 24px;
+  text-align: right;
+}
+
+:deep(.reply-area .el-textarea__inner) {
+  min-height: 32px !important;
+  max-height: 80px;
+  padding: 6px 0;
+  border: none;
+  box-shadow: none;
+  background-color: transparent;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #334155;
+  resize: none;
+}
+
+:deep(.reply-area .el-textarea__inner::placeholder) {
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+:deep(.reply-area .el-textarea__inner:focus) {
+  outline: none;
+}
+
+.send-btn {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #c7d2fe 0%, #a5b4fc 100%);
+  border: none;
+  color: #6366f1;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+
+.send-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.25);
+}
+
+.send-btn.can-send {
+  background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.35);
+}
+
+.send-btn.can-send:hover {
+  transform: scale(1.1);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.45);
+}
+
+.send-btn:active {
+  transform: scale(0.95);
+}
+
+.send-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.send-btn .el-icon {
+  font-size: 14px;
+  transition: transform 0.3s ease;
+}
+
+.send-btn.can-send .el-icon {
+  animation: pulse-icon 2s ease-in-out infinite;
+}
+
+@keyframes pulse-icon {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.input-hint {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.input-hint kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  margin: 0 2px;
+  font-size: 11px;
+  font-family: inherit;
+  line-height: 1.2;
+  color: #64748b;
+  background: #e2e8f0;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 [data-theme="dark"] .reply-area {
-  background-color: #2a2a2a;
-  border-top-color: #444;
+  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+  border-top-color: #334155;
+}
+
+[data-theme="dark"] .reply-box {
+  background: #1e293b;
+  border-color: #334155;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .reply-box:hover {
+  border-color: #4f46e5;
+}
+
+[data-theme="dark"] .reply-box.is-focused {
+  border-color: #6366f1;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.2),
+              0 0 0 4px rgba(99, 102, 241, 0.15);
+}
+
+[data-theme="dark"] .input-icon {
+  color: #64748b;
+}
+
+[data-theme="dark"] .reply-box.is-focused .input-icon {
+  color: #818cf8;
+}
+
+[data-theme="dark"] :deep(.reply-area .el-textarea__inner) {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] :deep(.reply-area .el-textarea__inner::placeholder) {
+  color: #64748b;
+}
+
+[data-theme="dark"] .char-count {
+  color: #64748b;
+}
+
+[data-theme="dark"] .input-hint {
+  color: #64748b;
+}
+
+[data-theme="dark"] .input-hint kbd {
+  background: #334155;
+  color: #94a3b8;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .reply-actions {
@@ -1206,78 +1550,94 @@ const formatTopic = (topic) => {
 }
 
 .completed-notice {
-  padding: 20px;
-  background-color: #f5f7fa;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, #f0fdf4 0%, #dcfce7 100%);
+  border-top: 1px solid #bbf7d0;
+  flex-shrink: 0;
+  border-radius: 0 0 14px 14px;
+}
+
+.completed-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: #fff;
+  border: 2px solid #86efac;
+  border-radius: 16px;
+  color: #15803d;
+}
+
+.completed-icon {
+  font-size: 16px;
+  color: #22c55e;
+}
+
+.completed-text {
+  font-size: 13px;
+  font-weight: 500;
 }
 
 [data-theme="dark"] .completed-notice {
-  background-color: #2a2a2a;
+  background: linear-gradient(180deg, #14532d 0%, #0f172a 100%);
+  border-top-color: #166534;
 }
 
-.completed-notice .el-alert {
-  border-radius: 4px;
+[data-theme="dark"] .completed-box {
+  background: #1e293b;
+  border-color: #166534;
+  color: #86efac;
 }
 
-/* el-card暗夜模式适配 */
+[data-theme="dark"] .completed-icon {
+  color: #4ade80;
+}
+
+[data-theme="dark"] .completed-text {
+  color: #86efac;
+}
+
+.back-btn {
+  color: #6b7280;
+}
+
+[data-theme="dark"] .back-btn {
+  color: #cbd5e1;
+}
+
 :deep(.el-card) {
   --el-card-bg-color: white;
   --el-card-border-color: #ebeef5;
   --el-card-text-color: #333;
+  background-color: white;
+  border-color: #ebeef5;
 }
 
 [data-theme="dark"] :deep(.el-card) {
-  --el-card-bg-color: #2a2a2a !important;
-  --el-card-border-color: #444 !important;
+  --el-card-bg-color: #111827 !important;
+  --el-card-border-color: #1f2937 !important;
   --el-card-text-color: #e0e0e0 !important;
-  background-color: #2a2a2a !important;
-  border-color: #444 !important;
-  color: #e0e0e0 !important;
-}
-
-[data-theme="dark"] :deep(.el-card__header) {
-  border-bottom-color: #444 !important;
-  background-color: #2a2a2a !important;
+  background-color: #111827 !important;
+  border-color: #1f2937 !important;
 }
 
 [data-theme="dark"] :deep(.el-card__body) {
-  color: #e0e0e0 !important;
-  background-color: #2a2a2a !important;
+  background-color: #111827 !important;
 }
 
-[data-theme="dark"] :deep(.el-card__title) {
-  color: #e0e0e0 !important;
+[data-theme="dark"] .sessions-card,
+[data-theme="dark"] .chat-card {
+  background-color: #111827 !important;
+  border-color: #1f2937 !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
-/* el-dialog暗夜模式适配 */
-:deep(.el-dialog) {
-  --el-dialog-bg-color: white;
+[data-theme="dark"] .messages-area {
+  background-color: #111827 !important;
 }
 
-[data-theme="dark"] :deep(.el-dialog) {
-  --el-dialog-bg-color: #2a2a2a;
-}
-
-[data-theme="dark"] :deep(.el-dialog__header) {
-  border-bottom-color: #444;
-}
-
-[data-theme="dark"] :deep(.el-dialog__title) {
-  color: #e0e0e0;
-}
-
-[data-theme="dark"] :deep(.el-dialog__close) {
-  color: #999;
-}
-
-[data-theme="dark"] :deep(.el-dialog__close:hover) {
-  color: #e0e0e0;
-}
-
-[data-theme="dark"] :deep(.el-dialog__body) {
-  color: #e0e0e0;
-}
-
-[data-theme="dark"] :deep(.el-dialog__footer) {
-  border-top-color: #444;
+[data-theme="dark"] .sessions-list {
+  background-color: transparent;
 }
 </style>

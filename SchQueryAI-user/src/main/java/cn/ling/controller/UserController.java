@@ -223,4 +223,25 @@ public class UserController {
         }
     }
 
+    // 管理员功能：获取每日访问量统计
+    @GetMapping("/admin/dailyVisitStats")
+    public Result<List<Map<String, Object>>> getDailyVisitStats(
+            @RequestParam(required = false, defaultValue = "7") Integer days) {
+        return loginHistoryService.getDailyVisitStats(days);
+    }
+
+    // 管理员功能：获取每小时访问量统计
+    @GetMapping("/admin/hourlyVisitStats")
+    public Result<List<Map<String, Object>>> getHourlyVisitStats(
+            @RequestParam(required = false, defaultValue = "12") Integer hours) {
+        return loginHistoryService.getHourlyVisitStats(hours);
+    }
+
+    // 管理员功能：获取最近登录记录
+    @GetMapping("/admin/recentLogins")
+    public Result<List<LoginHistoryVO>> getRecentLogins(
+            @RequestParam(required = false, defaultValue = "10") Integer limit) {
+        return loginHistoryService.getRecentLogins(limit);
+    }
+
 }

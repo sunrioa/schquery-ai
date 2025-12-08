@@ -9,6 +9,7 @@ import Chat from '../views/Chat.vue'
 import CustomerService from '../views/CustomerService.vue'
 import ChatWindow from '../views/ChatWindow.vue'
 import AdminCustomerService from '../views/admin/AdminCustomerService.vue'
+import SystemMonitor from '../views/admin/SystemMonitor.vue'
 import ConversationManagement from '../views/worker/ConversationManagement.vue'
 import SystemManagement from '../views/admin/SystemManagement.vue'
 import SensitiveWordsManagement from '../views/admin/sensitive-words.vue'
@@ -113,6 +114,12 @@ const routes = [
     path: '/admin/customer-service',
     name: 'AdminCustomerService',
     component: AdminCustomerService,
+    meta: { requiresAuth: true, requiresRole: ['admin'] }
+  },
+  {
+    path: '/admin/system-monitor',
+    name: 'SystemMonitor',
+    component: SystemMonitor,
     meta: { requiresAuth: true, requiresRole: ['admin'] }
   },
   {

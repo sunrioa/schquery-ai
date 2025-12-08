@@ -2,14 +2,18 @@ package cn.ling.interceptor;
 
 import cn.ling.utils.ContextUtils;
 import cn.ling.exception.CustomException;
+import cn.ling.utils.IpUtils;
 import cn.ling.utils.JwtUtils;
 import cn.ling.role.UserInfo;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+import java.util.Collections;
 import java.util.HashMap;
 
 /**
@@ -24,6 +28,29 @@ public class JwtInterceptor implements HandlerInterceptor {
 
     private static final String TOKEN_BLACKLIST_KEY = "token_blacklist:";
     private static final long TOKEN_BLACKLIST_TTL = 2 * 60 * 60; // 2小时，与JWT过期时间一致
+
+    private static final String LOGIN_RATE_LIMIT_KEY_PREFIX = "login_rate_limit:";
+    private static final long LOGIN_RATE_LIMIT_WINDOW_MILLIS = 60 * 1000L;
+    private static final long LOGIN_RATE_LIMIT_WINDOW_SECONDS = 60L;
+    private static final int LOGIN_RATE_LIMIT_THRESHOLD = 1000;
+    private static final long LOGIN_RATE_LIMIT_KEY_TTL_SECONDS = LOGIN_RATE_LIMIT_WINDOW_SECONDS * 2;
+
+    private static final String LUA_SLIDING_WINDOW_SCRIPT =
+            "local key = KEYS[1]\n" +
+            "local now = tonumber(ARGV[1])\n" +
+            "local window = tonumber(ARGV[2])\n" +
+            "local limit = tonumber(ARGV[3])\n" +
+            "local ttl = tonumber(ARGV[4])\n" +
+            "redis.call('ZREMRANGEBYSCORE', key, 0, now - window)\n" +
+            "local current = redis.call('ZCARD', key)\n" +
+            "if current >= limit then\n" +
+            "    return -1\n" +
+            "end\n" +
+            "redis.call('ZADD', key, now, now)\n" +
+            "redis.call('EXPIRE', key, ttl)\n" +
+            "return current + 1";
+    private static final RedisScript<Long> LOGIN_RATE_LIMIT_SCRIPT =
+            new DefaultRedisScript<>(LUA_SLIDING_WINDOW_SCRIPT, Long.class);
 
     public JwtInterceptor(StringRedisTemplate stringRedisTemplate) {
         this.stringRedisTemplate = stringRedisTemplate;
@@ -95,6 +122,9 @@ public class JwtInterceptor implements HandlerInterceptor {
                 log.debug("用户{}的令牌在强制下线后签发，允许访问", userId);
             }
 
+            //设置限流
+            enforceLoginRateLimit(userId, username, request, requestUri, response);
+
             // 6. 令牌有效：将用户信息存入上下文（方便后续Controller获取）
             UserInfo userInfo = new UserInfo();
             userInfo.setUserId(userId);
@@ -121,6 +151,44 @@ public class JwtInterceptor implements HandlerInterceptor {
             }
             return false;
         }
+    }
+
+    private void enforceLoginRateLimit(Long userId, String username, HttpServletRequest request,
+                                       String requestUri, HttpServletResponse response) throws Exception {
+        String clientIp = IpUtils.getClientIp(request);
+        if (clientIp == null) {
+            clientIp = "unknown";
+        } else {
+            clientIp = clientIp.trim();
+            if (clientIp.isEmpty()) {
+                clientIp = "unknown";
+            }
+        }
+
+        String rateLimitKey = LOGIN_RATE_LIMIT_KEY_PREFIX + userId + ":" + clientIp;
+        long now = System.currentTimeMillis();
+
+        Long scriptResult = stringRedisTemplate.execute(
+                LOGIN_RATE_LIMIT_SCRIPT,
+                Collections.singletonList(rateLimitKey),
+                String.valueOf(now),
+                String.valueOf(LOGIN_RATE_LIMIT_WINDOW_MILLIS),
+                String.valueOf(LOGIN_RATE_LIMIT_THRESHOLD),
+                String.valueOf(LOGIN_RATE_LIMIT_KEY_TTL_SECONDS)
+        );
+
+        if (scriptResult == null) {
+            log.warn("执行Redis限流脚本失败，允许请求通过，key: {}", rateLimitKey);
+            return;
+        }
+
+        if (scriptResult == -1L) {
+            log.warn("用户{}({})在IP {}上一分钟内访问次数超过限制，请求路径: {}", username, userId, clientIp, requestUri);
+            handleError(response, "用户访问过于频繁，请稍后再试");
+            return;
+        }
+
+        log.debug("刷新访问窗口，用户{}({})在IP {}上的计数: {}", username, userId, clientIp, scriptResult);
     }
 
     /**

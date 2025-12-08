@@ -1,11 +1,7 @@
 <template>
-  <div class="sensitive-words-management">
+  <div :class="['sensitive-words-management', { 'is-embedded': embedded }]">
     <div class="page-header">
       <div class="header-left">
-        <el-button @click="goBack" type="info" plain class="back-button">
-          <el-icon><ArrowLeft /></el-icon>
-          返回
-        </el-button>
         <h1>敏感词管理</h1>
       </div>
       <div class="header-actions">
@@ -13,17 +9,14 @@
           v-model="searchKeyword"
           placeholder="搜索敏感词..."
           clearable
-          style="width: 250px; margin-right: 10px"
+          style="width: 180px; margin-right: 8px"
           @input="filterWords"
         >
           <template #prefix>
             <el-icon><Search /></el-icon>
           </template>
         </el-input>
-        <el-button @click="toggleDarkMode" type="default" :icon="isDarkMode ? 'sunny' : 'moon'">
-          {{ isDarkMode ? '浅色' : '暗夜' }}
-        </el-button>
-        <el-button type="primary" @click="showAddDialog = true">
+        <el-button type="primary" size="small" @click="showAddDialog = true">
           <el-icon><Plus /></el-icon>
           添加敏感词
         </el-button>
@@ -38,7 +31,7 @@
         @click="toggleStatusFilter('all')"
       >
         <div class="stat-content">
-          <div class="stat-number">{{ wordsData.length }}</div>
+          <div class="stat-number">{{ stats.total }}</div>
           <div class="stat-label">数据库总计</div>
         </div>
       </el-card>
@@ -92,7 +85,7 @@
         </div>
 
         <!-- 空状态 -->
-        <div v-if="filteredWords.length === 0" class="empty-state">
+        <div v-if="paginatedWords.length === 0 && !loading" class="empty-state">
           <el-empty description="当前条件下暂无敏感词数据">
             <el-button type="primary" @click="showAddDialog = true">添加敏感词</el-button>
           </el-empty>
@@ -100,16 +93,16 @@
       </div>
 
       <!-- 分页 -->
-      <div class="pagination-container" v-if="filteredWords.length > pageSize">
+      <div class="pagination-container" v-if="total > pageSize">
         <el-pagination
           v-model:current-page="currentPage"
           :page-size="pageSize"
-          :total="filteredWords.length"
+          :total="total"
           layout="prev, pager, next, total, jumper"
           @current-change="handlePageChange"
         />
         <div class="pagination-info">
-          当前显示第 {{ (currentPage - 1) * pageSize + 1 }}-{{ Math.min(currentPage * pageSize, filteredWords.length) }} 项，共 {{ filteredWords.length }} 项
+          当前显示第 {{ (currentPage - 1) * pageSize + 1 }}-{{ Math.min(currentPage * pageSize, total) }} 项，共 {{ total }} 项
         </div>
       </div>
     </el-card>
@@ -199,7 +192,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, computed, nextTick } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, nextTick, defineProps, defineEmits } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search, Edit, Delete, CircleCheck, CircleClose, ArrowLeft } from '@element-plus/icons-vue'
 import { useHttp } from '@/utils/http'
@@ -207,6 +200,13 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const http = useHttp()
+const props = defineProps({
+  embedded: {
+    type: Boolean,
+    default: false
+  }
+})
+const emit = defineEmits(['back'])
 
 // 响应式数据
 const loading = ref(false)
@@ -220,7 +220,8 @@ const isDarkMode = ref(false)
 
 // 分页数据
 const currentPage = ref(1)
-const pageSize = ref(100) // 每页显示100个敏感词
+const pageSize = ref(50) // 每页显示50个敏感词
+const total = ref(0) // 总数据数
 
 // 筛选状态：'all', 'enabled', 'disabled'
 const statusFilter = ref('all')
@@ -274,26 +275,6 @@ const handleGlobalClick = () => {
 }
 
 // 计算属性
-const filteredWords = computed(() => {
-  let result = wordsData.value
-
-  // 按状态筛选
-  if (statusFilter.value === 'enabled') {
-    result = result.filter(word => word.status === 1)
-  } else if (statusFilter.value === 'disabled') {
-    result = result.filter(word => word.status === 0)
-  }
-
-  // 按关键词搜索
-  if (searchKeyword.value.trim()) {
-    result = result.filter(word =>
-      word.word.toLowerCase().includes(searchKeyword.value.toLowerCase())
-    )
-  }
-
-  return result
-})
-
 const enabledWordsCount = computed(() => {
   return stats.value.enabled
 })
@@ -302,11 +283,14 @@ const disabledWordsCount = computed(() => {
   return stats.value.disabled
 })
 
-// 分页显示的敏感词
+// 分页显示的敏感词（直接使用服务端返回的数据）
 const paginatedWords = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value
-  const end = start + pageSize.value
-  return filteredWords.value.slice(start, end)
+  return wordsData.value
+})
+
+// 过滤后的总数（用于分页组件）
+const filteredTotal = computed(() => {
+  return total.value
 })
 
 // 获取统计数据
@@ -340,55 +324,43 @@ const getSensitiveWordsStats = async () => {
   }
 }
 
-// 获取敏感词列表
+// 获取敏感词列表（服务端分页）
 const getSensitiveWordsList = async () => {
   loading.value = true
   try {
-    let allWords = []
-    let current = 1
-    let size = 100 // 每次获取100条
-    let hasMore = true
-
-    // 循环获取所有数据，直到没有更多数据
-    while (hasMore) {
-      const params = {
-        current: current,
-        size: size
-      }
-
-      const response = await http.get('/admin/UGC/sensitive/query', { params })
-
-      if (response.code === 200) {
-        const records = response.data.records || []
-
-        if (records.length === 0) {
-          hasMore = false
-        } else {
-          allWords = allWords.concat(records)
-
-          // 如果返回的数据少于请求的数量，说明已经获取完所有数据
-          if (records.length < size) {
-            hasMore = false
-          } else {
-            current++
-          }
-        }
-      } else {
-        ElMessage.error(response.message || '获取敏感词列表失败')
-        hasMore = false
-      }
+    const params = {
+      current: currentPage.value,
+      size: pageSize.value
     }
 
-    // 设置状态字段
-    allWords.forEach(word => {
-      if (word.status === undefined) {
-        word.status = 1
-      }
-    })
+    // 添加状态筛选参数
+    if (statusFilter.value === 'enabled') {
+      params.status = 1
+    } else if (statusFilter.value === 'disabled') {
+      params.status = 0
+    }
 
-    wordsData.value = allWords
-    stats.value.total = allWords.length
-    console.log(`获取到 ${allWords.length} 个敏感词`)
+    // 添加搜索关键词
+    if (searchKeyword.value.trim()) {
+      params.word = searchKeyword.value.trim()
+    }
+
+    const response = await http.get('/admin/UGC/sensitive/query', { params })
+
+    if (response.code === 200) {
+      const records = response.data.records || []
+      // 设置状态字段
+      records.forEach(word => {
+        if (word.status === undefined) {
+          word.status = 1
+        }
+      })
+      wordsData.value = records
+      total.value = response.data.total || 0
+      console.log(`获取到 ${records.length} 个敏感词，总共 ${total.value} 个`)
+    } else {
+      ElMessage.error(response.message || '获取敏感词列表失败')
+    }
 
     // 获取详细统计数据
     await getSensitiveWordsStats()
@@ -400,26 +372,39 @@ const getSensitiveWordsList = async () => {
   }
 }
 
-// 过滤敏感词
+// 过滤敏感词（触发服务端搜索）
+let searchTimer = null
 const filterWords = () => {
-  // 筛选时重置到第一页
-  currentPage.value = 1
+  // 防抖处理
+  if (searchTimer) {
+    clearTimeout(searchTimer)
+  }
+  searchTimer = setTimeout(() => {
+    currentPage.value = 1
+    getSensitiveWordsList()
+  }, 300)
 }
 
 // 切换状态筛选
 const toggleStatusFilter = (filter) => {
   statusFilter.value = filter
   currentPage.value = 1
+  getSensitiveWordsList()
 }
 
 // 返回管理员界面
 const goBack = () => {
+  if (props.embedded) {
+    emit('back')
+    return
+  }
   router.push('/admin/system-management')
 }
 
 // 处理分页变化
 const handlePageChange = (page) => {
   currentPage.value = page
+  getSensitiveWordsList()
 }
 
 // 切换敏感词状态
@@ -691,24 +676,50 @@ onUnmounted(() => {
 
 <style scoped>
 .sensitive-words-management {
-  padding: 20px;
+  padding: 12px 16px;
+  background: #f5f7fa;
+  min-height: 100vh;
 }
 
 [data-theme="dark"] .sensitive-words-management {
-  background-color: #1a1a1a;
+  background-color: #0f172a;
+}
+
+.sensitive-words-management.is-embedded {
+  padding: 8px;
+  background: transparent;
+  min-height: auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-theme="dark"] .sensitive-words-management.is-embedded {
+  background: transparent;
 }
 
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(31, 45, 61, 0.05);
+  border: 1px solid #edf2f7;
+}
+
+.sensitive-words-management.is-embedded .page-header {
+  margin-bottom: 8px;
+  box-shadow: none;
+  border-color: #e5e7eb;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 12px;
 }
 
 .back-button {
@@ -718,7 +729,7 @@ onUnmounted(() => {
 
 .page-header h1 {
   margin: 0;
-  font-size: 24px;
+  font-size: 16px;
   font-weight: 600;
   color: #333;
   text-align: center;
@@ -728,30 +739,45 @@ onUnmounted(() => {
   color: #e0e0e0;
 }
 
+[data-theme="dark"] .page-header {
+  background: #111827;
+  border-color: #1f2937;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] .sensitive-words-management.is-embedded .page-header {
+  border-color: #1f2937;
+  box-shadow: none;
+}
+
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 /* 统计卡片样式 */
 .stats-cards {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 .stat-card {
-  flex: 1;
   text-align: center;
   cursor: pointer;
   user-select: none;
   position: relative;
   transition: all 0.2s ease;
+  border: none;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(31, 45, 61, 0.06);
 }
 
 .stat-card:hover {
-  background-color: #f8f9fa;
+  background-color: #f7f9ff;
+  transform: translateY(-2px);
 }
 
 .stat-card.active {
@@ -765,12 +791,13 @@ onUnmounted(() => {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 3px;
+  height: 2px;
   background-color: #2196F3;
+  border-radius: 0 0 10px 10px;
 }
 
 .stat-card.enabled {
-  border-left: 4px solid #67C23A;
+  border-left: 3px solid #67C23A;
 }
 
 .stat-card.enabled.active {
@@ -778,7 +805,7 @@ onUnmounted(() => {
 }
 
 .stat-card.disabled {
-  border-left: 4px solid #F56C6C;
+  border-left: 3px solid #F56C6C;
 }
 
 .stat-card.disabled.active {
@@ -786,14 +813,14 @@ onUnmounted(() => {
 }
 
 .stat-content {
-  padding: 20px;
+  padding: 8px 10px;
 }
 
 .stat-number {
-  font-size: 28px;
+  font-size: 18px;
   font-weight: bold;
   color: #333;
-  margin-bottom: 5px;
+  margin-bottom: 0;
 }
 
 [data-theme="dark"] .stat-number {
@@ -801,9 +828,19 @@ onUnmounted(() => {
 }
 
 .stat-label {
-  font-size: 14px;
+  font-size: 11px;
   color: #666;
   font-weight: 500;
+}
+
+[data-theme="dark"] .stat-card {
+  background: #111827 !important;
+  border: 1px solid #1f2937 !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] .stat-card:hover {
+  background: #1b2538 !important;
 }
 
 [data-theme="dark"] .stat-label {
@@ -826,23 +863,49 @@ onUnmounted(() => {
 
 /* 敏感词列表样式 */
 .words-list-card {
-  min-height: 500px;
+  margin-top: 0;
+  border: none;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(31, 45, 61, 0.06);
+  background: #ffffff;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sensitive-words-management.is-embedded .stat-card,
+.sensitive-words-management.is-embedded .words-list-card {
+  box-shadow: none;
+  border: 1px solid #e5e7eb;
+}
+
+.sensitive-words-management.is-embedded .words-list-card {
+  margin-top: 12px;
 }
 
 [data-theme="dark"] .words-list-card {
-  background-color: #2a2a2a !important;
-  border-color: #444 !important;
+  background-color: #111827 !important;
+  border: 1px solid #1f2937 !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] .sensitive-words-management.is-embedded .stat-card,
+[data-theme="dark"] .sensitive-words-management.is-embedded .words-list-card {
+  box-shadow: none;
+  border-color: #1f2937;
 }
 
 .words-container {
   display: flex;
   flex-wrap: wrap;
   align-content: flex-start;
-  padding: 20px;
-  min-height: 400px;
-  gap: 8px 12px;
+  padding: 12px;
+  flex: 1;
+  gap: 6px 8px;
   justify-content: flex-start;
   align-items: stretch;
+  overflow-y: auto;
 }
 
 .word-item {
@@ -856,10 +919,10 @@ onUnmounted(() => {
   white-space: nowrap;
   border: 1px solid transparent;
   transition: all 0.2s ease;
-  padding: 8px 12px;
-  margin: 2px;
-  min-width: 80px;
-  max-width: 200px;
+  padding: 6px 10px;
+  margin: 1px;
+  min-width: 70px;
+  max-width: 180px;
   flex: 0 1 auto;
 }
 
@@ -895,8 +958,8 @@ onUnmounted(() => {
 
 .word-text {
   flex: 1;
-  margin-right: 8px;
-  font-size: 14px;
+  margin-right: 6px;
+  font-size: 13px;
   line-height: 1.4;
   word-break: break-all;
   overflow: hidden;
@@ -911,7 +974,7 @@ onUnmounted(() => {
 }
 
 .status-icon {
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .status-icon.enabled {
@@ -973,7 +1036,7 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 400px;
+  flex: 1;
   color: #909399;
   text-align: center;
   width: 100%;
@@ -988,14 +1051,15 @@ onUnmounted(() => {
 
 /* 分页样式 */
 .pagination-container {
-  margin-top: 20px;
+  margin-top: 0;
   text-align: center;
-  padding: 20px;
+  padding: 12px;
   border-top: 1px solid #f0f0f0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .pagination-info {
@@ -1182,5 +1246,14 @@ onUnmounted(() => {
 /* 加载状态样式 */
 .words-list-card :deep(.el-loading-mask) {
   border-radius: 8px;
+}
+
+.words-list-card :deep(.el-card__body) {
+  border-radius: 16px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
 }
 </style>

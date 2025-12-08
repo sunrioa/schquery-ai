@@ -3,6 +3,7 @@ package cn.ling.controller;
 import cn.ling.Result;
 import cn.ling.domain.vo.OperationLogVO;
 import cn.ling.service.OperationLogService;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,6 +18,19 @@ public class OperationLogController {
 
     @Resource
     private OperationLogService operationLogService;
+
+    /**
+     * 分页获取所有操作日志
+     */
+    @GetMapping("/admin/logs")
+    public Result<IPage<OperationLogVO>> getAllLogs(
+            @RequestParam(required = false, defaultValue = "1") Integer pageNum,
+            @RequestParam(required = false, defaultValue = "20") Integer pageSize,
+            @RequestParam(required = false) String action,
+            @RequestParam(required = false) String operator,
+            @RequestParam(required = false) Integer status) {
+        return operationLogService.getAllLogs(pageNum, pageSize, action, operator, status);
+    }
 
     /**
      * 获取最近的操作日志

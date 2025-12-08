@@ -128,5 +128,26 @@ export const userApi = {
     return request.post('/user/admin/unblacklistUser', {}, {
       params: { userId }
     })
+  },
+
+  // 管理员功能：获取每日访问量统计
+  getDailyVisitStats(days = 7) {
+    return request.get('/user/admin/dailyVisitStats', {
+      params: { days }
+    })
+  },
+
+  // 管理员功能：获取每小时访问量统计
+  getHourlyVisitStats(hours = 12) {
+    return request.get('/user/admin/hourlyVisitStats', {
+      params: { hours }
+    })
+  },
+
+  // 管理员功能：获取最近登录记录
+  getRecentLogins(limit = 10) {
+    return request.get('/user/admin/recentLogins', {
+      params: { limit }
+    })
   }
 }

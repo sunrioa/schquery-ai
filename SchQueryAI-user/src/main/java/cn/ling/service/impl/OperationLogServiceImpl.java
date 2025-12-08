@@ -137,6 +137,62 @@ public class OperationLogServiceImpl extends ServiceImpl<OperationLogMapper, Ope
     }
 
     /**
+     * 分页获取所有操作日志记录
+     * 支持按操作类型、操作人、状态筛选
+     *
+     * @param pageNum 页码，从1开始
+     * @param pageSize 每页记录数
+     * @param action 操作类型筛选（可选）
+     * @param operator 操作人筛选（可选）
+     * @param status 状态筛选（可选）
+     * @return 包含操作日志分页结果的对象
+     */
+    @Override
+    public Result<IPage<OperationLogVO>> getAllLogs(Integer pageNum, Integer pageSize, String action, String operator, Integer status) {
+        log.info("开始获取所有操作日志，页码: {}, 每页大小: {}, 操作类型: {}, 操作人: {}, 状态: {}",
+            pageNum, pageSize, action, operator, status);
+
+        try {
+            // 参数校验和默认值设置
+            if (pageNum == null || pageNum < 1) {
+                pageNum = 1;
+            }
+            if (pageSize == null || pageSize < 1) {
+                pageSize = 20;
+            }
+            if (pageSize > 100) {
+                pageSize = 100;
+            }
+
+            // 创建分页查询对象
+            Page<OperationLog> page = new Page<>(pageNum, pageSize);
+
+            // 执行查询，按创建时间降序排列
+            IPage<OperationLog> result = lambdaQuery()
+                    .like(action != null && !action.isEmpty(), OperationLog::getAction, action)
+                    .like(operator != null && !operator.isEmpty(), OperationLog::getOperator, operator)
+                    .eq(status != null, OperationLog::getStatus, status)
+                    .orderByDesc(OperationLog::getCreateTime)
+                    .page(page);
+
+            // 转换为VO对象
+            List<OperationLogVO> voList = result.getRecords().stream()
+                    .map(this::convertToVO)
+                    .collect(Collectors.toList());
+
+            // 构建返回结果
+            Page<OperationLogVO> voPage = new Page<>(result.getCurrent(), result.getSize(), result.getTotal());
+            voPage.setRecords(voList);
+
+            log.info("成功获取操作日志，当前页 {} 条记录，总记录数: {}", voList.size(), result.getTotal());
+            return Result.success(voPage);
+        } catch (Exception e) {
+            log.error("获取操作日志时发生异常: {}", e.getMessage(), e);
+            return Result.error("获取操作日志失败：" + e.getMessage());
+        }
+    }
+
+    /**
      * 获取最近的操作日志记录
      * 按时间降序返回最新的操作日志，用于展示最近系统活动
      *

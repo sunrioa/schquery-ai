@@ -1,273 +1,407 @@
 <template>
-  <div class="system-management">
-    <div class="management-header">
-      <h1>系统管理</h1>
-      <div class="header-actions">
-        <el-button @click="toggleDarkMode" type="default" :icon="isDarkMode ? 'sunny' : 'moon'">
-          {{ isDarkMode ? '浅色' : '暗夜' }}
-        </el-button>
-        <el-button @click="goBack" type="default">
-          <el-icon><ArrowLeft /></el-icon>
-          返回聊天
-        </el-button>
+  <div class="ruoyi-shell">
+    <aside class="ruoyi-shell__sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">AI</div>
+        <div>
+          <p class="brand-name">SchQueryAI 控制台</p>
+          <span class="brand-version">{{ versionInfo.version }}</span>
+        </div>
+      </div>
+      <el-menu
+        class="sidebar-menu"
+        :default-active="activeMenu"
+        background-color="transparent"
+        text-color="#6b7280"
+        active-text-color="#111827"
+        @select="handleMenuSelect"
+      >
+        <el-menu-item index="overview">
+          <el-icon><House /></el-icon>
+          <span>首页总览</span>
+        </el-menu-item>
+        <el-menu-item index="user">
+          <el-icon><User /></el-icon>
+          <span>用户管理</span>
+        </el-menu-item>
+        <el-menu-item index="sensitive">
+          <el-icon><Warning /></el-icon>
+          <span>敏感词管理</span>
+        </el-menu-item>
+        <el-menu-item index="segmentation">
+          <el-icon><Collection /></el-icon>
+          <span>分词管理</span>
+        </el-menu-item>
+        <el-menu-item index="customer">
+          <el-icon><Service /></el-icon>
+          <span>客服管理</span>
+        </el-menu-item>
+        <el-menu-item index="logs">
+          <el-icon><Document /></el-icon>
+          <span>系统日志</span>
+        </el-menu-item>
+        <el-sub-menu index="monitor">
+          <template #title>
+            <el-icon><Monitor /></el-icon>
+            <span>系统监控</span>
+          </template>
+          <el-menu-item index="server-monitor">
+            <el-icon><Cpu /></el-icon>
+            <span>服务器监控</span>
+          </el-menu-item>
+          <el-menu-item index="mysql-monitor">
+            <el-icon><Coin /></el-icon>
+            <span>数据库监控</span>
+          </el-menu-item>
+          <el-menu-item index="redis-monitor">
+            <el-icon><Key /></el-icon>
+            <span>Redis监控</span>
+          </el-menu-item>
+        </el-sub-menu>
+      </el-menu>
+    </aside>
+
+    <div class="ruoyi-shell__main">
+      <header class="shell-toolbar">
+        <div class="toolbar-info">
+          <el-breadcrumb separator="/">
+            <el-breadcrumb-item>首页</el-breadcrumb-item>
+            <el-breadcrumb-item>系统管理</el-breadcrumb-item>
+            <el-breadcrumb-item>{{ contentView === 'overview' ? '工作台' : panelTitle }}</el-breadcrumb-item>
+          </el-breadcrumb>
+          <h2>{{ contentView === 'overview' ? '系统管理工作台' : panelTitle }}</h2>
+        </div>
+        <div class="toolbar-actions">
+          <el-input
+            v-model="searchKeyword"
+            placeholder="搜索操作或模块"
+            size="small"
+            class="toolbar-search"
+            clearable
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
+          <el-button text class="toolbar-icon" @click="toggleDarkMode" :title="isDarkMode ? '切换浅色模式' : '切换暗夜模式'">
+            <el-icon><Moon v-if="!isDarkMode" /><Sunny v-else /></el-icon>
+          </el-button>
+          <el-badge :value="unreadMessageCount" :hidden="unreadMessageCount === 0" :max="99">
+            <el-button text class="toolbar-icon" @click="goToCustomerServiceManagement">
+              <el-icon><Bell /></el-icon>
+            </el-button>
+          </el-badge>
+          <el-button text class="toolbar-icon" @click="refreshSystemStatus">
+            <el-icon><Refresh /></el-icon>
+          </el-button>
+        </div>
+      </header>
+
+      <div v-if="contentView === 'overview'" class="shell-content">
+        <section class="hero-card" ref="overviewSection">
+          <div class="hero-card__main">
+            <p class="hero-tag">SchQueryAI 管理台</p>
+            <h3>对话与治理的统一中枢</h3>
+            <p class="hero-desc">
+              轻量的管理视图，与聊天端保持一致的观感。聚焦用户、内容和客服三大核心，随时掌握运行态势。
+            </p>
+            <div class="hero-meta">
+              <span class="version">当前版本：{{ versionInfo.version }}</span>
+              <el-tag type="success" size="small">在线</el-tag>
+              <el-tag type="info" size="small">{{ versionInfo.releaseDate }}</el-tag>
+            </div>
+            <div class="hero-actions">
+              <el-button type="primary" size="small" @click="refreshSystemStatus">
+                <el-icon><Refresh /></el-icon>
+                更新状态
+              </el-button>
+              <el-button size="small" @click="goBack">
+                <el-icon><ArrowLeft /></el-icon>
+                返回聊天
+              </el-button>
+            </div>
+          </div>
+          <div class="hero-card__tech">
+            <h4>核心能力</h4>
+            <div class="tech-columns">
+              <div v-for="block in capabilityHighlights" :key="block.title">
+                <p class="tech-title">{{ block.title }}</p>
+                <ul>
+                  <li v-for="item in block.items" :key="item">{{ item }}</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel-group">
+          <el-row :gutter="20">
+            <el-col :xs="24" :sm="12" :lg="6">
+              <el-card class="stat-card" shadow="hover">
+                <div class="stat-card__icon primary">
+                  <el-icon><User /></el-icon>
+                </div>
+                <div class="stat-card__body">
+                  <p class="stat-card__label">总用户数</p>
+                  <p class="stat-card__value">{{ totalUsers }}</p>
+                  <p class="stat-card__desc">活跃 {{ activeUsers }} · 管理员 {{ adminCount }}</p>
+                </div>
+              </el-card>
+            </el-col>
+            <el-col :xs="24" :sm="12" :lg="6">
+              <el-card class="stat-card" shadow="hover">
+                <div class="stat-card__icon success">
+                  <el-icon><UserFilled /></el-icon>
+                </div>
+                <div class="stat-card__body">
+                  <p class="stat-card__label">今日新增用户</p>
+                  <p class="stat-card__value">{{ todayNewUsers }}</p>
+                  <p class="stat-card__desc">累计 {{ totalUsers }}</p>
+                </div>
+              </el-card>
+            </el-col>
+            <el-col :xs="24" :sm="12" :lg="6">
+              <el-card class="stat-card" shadow="hover">
+                <div class="stat-card__icon warning">
+                  <el-icon><Warning /></el-icon>
+                </div>
+                <div class="stat-card__body">
+                  <p class="stat-card__label">敏感词库</p>
+                  <p class="stat-card__value">{{ totalSensitiveWords }}</p>
+                  <p class="stat-card__desc">今日新增 {{ todayNewSensitiveWords }}</p>
+                </div>
+              </el-card>
+            </el-col>
+            <el-col :xs="24" :sm="12" :lg="6">
+              <el-card class="stat-card" shadow="hover">
+                <div class="stat-card__icon info">
+                  <el-icon><Collection /></el-icon>
+                </div>
+                <div class="stat-card__body">
+                  <p class="stat-card__label">分词词库</p>
+                  <p class="stat-card__value">{{ totalSegmentations }}</p>
+                  <p class="stat-card__desc">今日新增 {{ todayNewSegmentations }}</p>
+                </div>
+              </el-card>
+            </el-col>
+          </el-row>
+        </section>
+
+        <!-- 访问量统计图表 -->
+        <section class="chart-row">
+          <el-card class="ruoyi-card chart-card" shadow="never">
+            <template #header>
+              <div class="ruoyi-card__header">
+                <span>流量统计</span>
+                <div class="chart-actions">
+                  <el-radio-group v-model="chartTimeRange" size="small" @change="onChartTimeRangeChange">
+                    <el-radio-button value="12h">近12小时</el-radio-button>
+                    <el-radio-button value="15d">近15天</el-radio-button>
+                    <el-radio-button value="30d">近30天</el-radio-button>
+                  </el-radio-group>
+                </div>
+              </div>
+            </template>
+            <div ref="visitChartRef" class="visit-chart"></div>
+          </el-card>
+        </section>
+
+        <section class="monitor-row">
+          <el-row :gutter="20">
+            <el-col :xs="24" :lg="12">
+              <el-card class="ruoyi-card monitor-card" shadow="never">
+                <template #header>
+                  <div class="ruoyi-card__header">
+                    <span>系统状态</span>
+                    <el-button text size="small" @click="refreshSystemStatus">
+                      <el-icon><Refresh /></el-icon>
+                      刷新
+                    </el-button>
+                  </div>
+                </template>
+
+                <div class="system-status">
+                  <div class="status-item">
+                    <span class="status-label">API服务状态</span>
+                    <el-tag :type="apiStatus.type">{{ apiStatus.text }}</el-tag>
+                  </div>
+                  <div class="status-item">
+                    <span class="status-label">数据库连接</span>
+                    <el-tag :type="dbStatus.type">{{ dbStatus.text }}</el-tag>
+                  </div>
+                  <div class="status-item">
+                    <span class="status-label">Redis缓存</span>
+                    <el-tag :type="redisStatus.type">{{ redisStatus.text }}</el-tag>
+                  </div>
+                  <div class="status-item">
+                    <span class="status-label">系统负载</span>
+                    <el-progress :percentage="systemLoad" :color="getLoadColor(systemLoad)" />
+                  </div>
+                </div>
+              </el-card>
+            </el-col>
+
+            <el-col :xs="24" :lg="12">
+              <el-card class="ruoyi-card logs-card" shadow="never" ref="logsSection">
+                <template #header>
+                  <span>最近操作日志</span>
+                </template>
+                <div class="operation-logs">
+                  <div v-if="recentLogs.length === 0" class="no-logs">暂无操作日志</div>
+                  <div v-for="log in recentLogs" :key="log.id" class="log-item">
+                    <div class="log-item__header">
+                      <span class="log-operator">{{ log.operator }}</span>
+                      <span class="log-action">{{ log.action }}</span>
+                      <span class="log-time">{{ formatTime(log.timestamp) }}</span>
+                    </div>
+                    <p class="log-detail">{{ log.detail }}</p>
+                  </div>
+                </div>
+              </el-card>
+            </el-col>
+          </el-row>
+        </section>
+
+        <section class="operations-row">
+          <el-row :gutter="20">
+            <!-- 最近访问IP -->
+            <el-col :xs="24" :lg="12">
+              <el-card class="ruoyi-card recent-ip-card" shadow="never">
+                <template #header>
+                  <div class="ruoyi-card__header">
+                    <span>最近访问IP</span>
+                    <el-button text size="small" @click="loadRecentLogins">
+                      <el-icon><Refresh /></el-icon>
+                      刷新
+                    </el-button>
+                  </div>
+                </template>
+                <div class="recent-ip-list">
+                  <div v-if="recentLogins.length === 0" class="empty-data">暂无访问记录</div>
+                  <div v-for="login in recentLogins" :key="login.id" class="ip-item">
+                    <div class="ip-info">
+                      <span class="ip-address">{{ login.loginIp }}</span>
+                      <span class="ip-location">{{ login.location }}</span>
+                    </div>
+                    <div class="ip-meta">
+                      <span class="ip-user">{{ login.userName }}</span>
+                      <span class="ip-time">{{ formatTime(login.loginTime) }}</span>
+                    </div>
+                  </div>
+                </div>
+              </el-card>
+            </el-col>
+
+            <el-col :xs="24" :lg="12">
+              <el-card class="ruoyi-card customer-card" shadow="never">
+                <template #header>
+                  <div class="ruoyi-card__header">
+                    <div>
+                      <span>客服消息</span>
+<!--                      <p class="meta">同步客服渠道待处理会话</p>-->
+                    </div>
+                    <div class="header-action-group">
+                      <el-tag v-if="unreadMessageCount > 0" type="danger" size="small">未读 {{ unreadMessageCount }}</el-tag>
+                      <el-button text size="small" @click="loadCustomerServiceData">
+                        <el-icon><Refresh /></el-icon>
+                        重新获取
+                      </el-button>
+                    </div>
+                  </div>
+                </template>
+
+                <div class="service-stats">
+                  <div class="stat-box">
+                    <div class="stat-number">{{ pendingSessionCount }}</div>
+                    <div class="stat-name">待处理</div>
+                  </div>
+                  <div class="stat-box">
+                    <div class="stat-number">{{ unreadMessageCount }}</div>
+                    <div class="stat-name">未读消息</div>
+                  </div>
+                </div>
+
+                <div class="sessions-wrapper">
+                  <div v-if="customerServiceSessions.length === 0" class="empty-sessions">
+                    暂无客服消息
+                  </div>
+                  <div v-else class="sessions-list">
+                    <div
+                      v-for="session in customerServiceSessions.slice(0, 3)"
+                      :key="session.id"
+                      class="session-item"
+                      @click="openSession(session)"
+                    >
+                      <div class="session-item__header">
+                        <span class="user-name">{{ session.userName }}</span>
+                        <span class="session-time">{{ formatTime(session.lastMessageTime) }}</span>
+                      </div>
+                      <p class="session-preview" v-if="session.lastMessage">{{ session.lastMessage }}</p>
+                      <el-tag v-if="session.unreadCount > 0" type="danger" size="small" class="unread-tag">
+                        {{ session.unreadCount }}条未读
+                      </el-tag>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="customer-service-actions">
+                  <el-button type="primary" size="small" @click="loadCustomerServiceData">刷新</el-button>
+                  <el-button type="default" size="small" @click="goToCustomerServiceManagement">查看全部</el-button>
+                </div>
+              </el-card>
+            </el-col>
+          </el-row>
+        </section>
+      </div>
+
+      <div v-else class="shell-content panel-mode">
+        <div class="panel-body">
+          <component
+            :is="activePanelComponent"
+            v-if="activePanelComponent"
+            :key="contentView"
+            embedded
+            @back="backToOverview"
+          />
+        </div>
       </div>
     </div>
 
-    <div class="management-content">
-      <!-- 系统概览统计 -->
-      <el-row :gutter="20" class="stats-row">
-        <el-col :span="6">
-          <el-card class="stat-card">
-            <div class="stat-content">
-              <div class="stat-number">{{ totalUsers }}</div>
-              <div class="stat-label">总用户数</div>
-            </div>
-            <el-icon class="stat-icon"><User /></el-icon>
-          </el-card>
-        </el-col>
-        <el-col :span="6">
-          <el-card class="stat-card">
-            <div class="stat-content">
-              <div class="stat-number">{{ todayNewUsers }}</div>
-              <div class="stat-label">今日新增用户</div>
-            </div>
-            <el-icon class="stat-icon"><UserFilled /></el-icon>
-          </el-card>
-        </el-col>
-        <el-col :span="6">
-          <el-card class="stat-card">
-            <div class="stat-content">
-              <div class="stat-number">{{ totalSensitiveWords }}</div>
-              <div class="stat-label">敏感词总数</div>
-            </div>
-            <el-icon class="stat-icon"><Warning /></el-icon>
-          </el-card>
-        </el-col>
-        <el-col :span="6">
-          <el-card class="stat-card">
-            <div class="stat-content">
-              <div class="stat-number">{{ totalSegmentations }}</div>
-              <div class="stat-label">分词总数</div>
-            </div>
-            <el-icon class="stat-icon"><Collection /></el-icon>
-          </el-card>
-        </el-col>
-      </el-row>
-
-      <!-- 管理功能模块 -->
-      <el-row :gutter="20" class="modules-row">
-        <el-col :span="8">
-          <el-card class="module-card" @click="goToUserManagement">
-            <div class="module-content">
-              <el-icon class="module-icon"><User /></el-icon>
-              <h3>用户管理</h3>
-              <p>管理系统用户，包括用户信息、角色分配、状态管理等</p>
-              <div class="module-stats">
-                <span>活跃用户: {{ activeUsers }}</span>
-                <span>管理员: {{ adminCount }}</span>
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-
-        <el-col :span="8">
-          <el-card class="module-card" @click="goToSensitiveWords">
-            <div class="module-content">
-              <el-icon class="module-icon"><Warning /></el-icon>
-              <h3>敏感词管理</h3>
-              <p>管理敏感词库，添加、编辑、删除敏感词，配置过滤级别</p>
-              <div class="module-stats">
-                <span>敏感词: {{ totalSensitiveWords }}</span>
-                <span>今日新增: {{ todayNewSensitiveWords }}</span>
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-
-        <el-col :span="8">
-          <el-card class="module-card" @click="goToSegmentation">
-            <div class="module-content">
-              <el-icon class="module-icon"><Collection /></el-icon>
-              <h3>分词管理</h3>
-              <p>管理分词词库，优化AI对话的语义理解和回复质量</p>
-              <div class="module-stats">
-                <span>分词数: {{ totalSegmentations }}</span>
-                <span>今日新增: {{ todayNewSegmentations }}</span>
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-      </el-row>
-
-      <!-- 客服消息卡片 -->
-      <el-row :gutter="20" class="customer-service-row">
-        <el-col :span="24">
-          <el-card class="customer-service-card">
-            <template #header>
-              <div class="card-header">
-                <el-icon class="header-icon"><ChatDotRound /></el-icon>
-                <span>客服消息</span>
-                <el-badge v-if="unreadMessageCount > 0" :value="unreadMessageCount" :max="99" class="badge-item" />
-              </div>
-            </template>
-
-            <div class="customer-service-content">
-              <!-- 统计信息 -->
-              <div class="service-stats">
-                <div class="stat-box">
-                  <div class="stat-number">{{ pendingSessionCount }}</div>
-                  <div class="stat-name">待处理</div>
-                </div>
-                <div class="stat-box">
-                  <div class="stat-number">{{ unreadMessageCount }}</div>
-                  <div class="stat-name">未读消息</div>
-                </div>
-              </div>
-
-              <!-- 最近会话 -->
-              <div class="recent-sessions">
-                <div v-if="customerServiceSessions.length === 0" class="empty-sessions">
-                  <p>暂无客服消息</p>
-                </div>
-                <div v-else class="sessions-list">
-                  <div v-for="session in customerServiceSessions.slice(0, 3)" :key="session.id" class="session-item" @click="openSession(session)">
-                    <div class="session-header">
-                      <span class="user-name">{{ session.userName }}</span>
-                      <span class="session-time">{{ formatTime(session.lastMessageTime) }}</span>
-                    </div>
-                    <div v-if="session.unreadCount > 0" class="session-preview">{{ session.lastMessage }}</div>
-                    <el-tag v-if="session.unreadCount > 0" type="danger" size="small" class="unread-tag">
-                      {{ session.unreadCount }}条未读
-                    </el-tag>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 快捷按钮 -->
-              <div class="service-actions">
-                <el-button type="primary" size="small" @click="loadCustomerServiceData">刷新</el-button>
-                <el-button type="default" size="small" @click="goToCustomerServiceManagement">查看全部</el-button>
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-      </el-row>
-
-      <!-- 客服回复模态框 -->
-      <el-dialog
-          v-model="showCustomerServiceModal"
-          title="处理客服消息"
-          width="600px"
-          v-if="selectedSession"
-      >
-        <div class="modal-content">
-          <div class="session-header">
-            <span>用户: {{ selectedSession.userName }}</span>
-            <span>主题: {{ selectedSession.topic }}</span>
-          </div>
-          <div class="session-messages">
-            <div v-for="msg in selectedSession.messages" :key="msg.id" class="message" :class="{ 'user-message': msg.senderType === 1, 'admin-message': msg.senderType === 2 }">
-              <span class="message-content">{{ msg.messageContent }}</span>
-              <span class="message-time">{{ formatTime(msg.createTime) }}</span>
-            </div>
+    <el-dialog
+      v-model="showCustomerServiceModal"
+      title="处理客服消息"
+      width="600px"
+      v-if="selectedSession"
+    >
+      <div class="modal-content">
+        <div class="session-header">
+          <span>用户: {{ selectedSession.userName }}</span>
+          <span>主题: {{ selectedSession.topic }}</span>
+        </div>
+        <div class="session-messages">
+          <div
+            v-for="msg in selectedSession.messages"
+            :key="msg.id"
+            class="message"
+            :class="{ 'user-message': msg.senderType === 1, 'admin-message': msg.senderType === 2 }"
+          >
+            <span class="message-content">{{ msg.messageContent }}</span>
+            <span class="message-time">{{ formatTime(msg.createTime) }}</span>
           </div>
         </div>
-        <template #footer>
-          <el-button @click="showCustomerServiceModal = false">关闭</el-button>
-        </template>
-      </el-dialog>
-
-      <!-- 系统监控面板 -->
-      <el-row :gutter="20" class="monitoring-row">
-        <el-col :span="12">
-          <el-card class="monitoring-card">
-            <template #header>
-              <div class="card-header">
-                <span>系统状态</span>
-                <el-button type="text" @click="refreshSystemStatus">
-                  <el-icon><Refresh /></el-icon>
-                  刷新
-                </el-button>
-              </div>
-            </template>
-
-            <div class="system-status">
-              <div class="status-item">
-                <span class="status-label">API服务状态</span>
-                <el-tag :type="apiStatus.type">{{ apiStatus.text }}</el-tag>
-              </div>
-              <div class="status-item">
-                <span class="status-label">数据库连接</span>
-                <el-tag :type="dbStatus.type">{{ dbStatus.text }}</el-tag>
-              </div>
-              <div class="status-item">
-                <span class="status-label">Redis缓存</span>
-                <el-tag :type="redisStatus.type">{{ redisStatus.text }}</el-tag>
-              </div>
-              <div class="status-item">
-                <span class="status-label">系统负载</span>
-                <el-progress :percentage="systemLoad" :color="getLoadColor(systemLoad)" />
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-
-        <el-col :span="12">
-          <el-card class="monitoring-card">
-            <template #header>
-              <span>最近操作日志</span>
-            </template>
-
-            <div class="operation-logs">
-              <div v-if="recentLogs.length === 0" class="no-logs">
-                <p>暂无操作日志</p>
-              </div>
-              <div v-for="log in recentLogs" :key="log.id" class="log-item">
-                <div class="log-header">
-                  <span class="log-operator">{{ log.operator }}</span>
-                  <span class="log-action">{{ log.action }}</span>
-                  <span class="log-time">{{ formatTime(log.timestamp) }}</span>
-                </div>
-                <div class="log-detail">{{ log.detail }}</div>
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-      </el-row>
-
-      <!-- 快速操作 -->
-      <el-card class="quick-actions-card">
-        <template #header>
-          <span>快速操作</span>
-        </template>
-
-        <div class="quick-actions">
-          <el-button type="danger" @click="clearCache">
-            <el-icon><Delete /></el-icon>
-            清除系统缓存
-          </el-button>
-          <el-button type="warning" @click="exportData">
-            <el-icon><Download /></el-icon>
-            导出系统数据
-          </el-button>
-          <el-button type="primary" @click="backupData">
-            <el-icon><FolderOpened /></el-icon>
-            备份数据库
-          </el-button>
-          <el-button type="success" @click="showSystemLogs">
-            <el-icon><Document /></el-icon>
-            查看系统日志
-          </el-button>
-        </div>
-      </el-card>
-    </div>
+      </div>
+      <template #footer>
+        <el-button @click="showCustomerServiceModal = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import * as echarts from 'echarts'
 import {
   ArrowLeft,
   User,
@@ -279,12 +413,27 @@ import {
   Download,
   FolderOpened,
   Document,
-  ChatDotRound,
-  Bell
+  Bell,
+  House,
+  Search,
+  Service,
+  Moon,
+  Sunny,
+  Monitor,
+  Cpu,
+  Coin,
+  Key
 } from '@element-plus/icons-vue'
 import { userApi } from '../../api/user'
 import { operationLogApi } from '../../api/operationLog'
 import request from '../../api/request'
+import UserManagement from './UserManagement.vue'
+import SensitiveWordsManagement from './sensitive-words.vue'
+import SegmentationWordsManagement from './segmentation-words.vue'
+import SystemLogsManagement from './system-logs.vue'
+import ServerMonitor from './ServerMonitor.vue'
+import MySQLMonitor from './MySQLMonitor.vue'
+import RedisMonitor from './RedisMonitor.vue'
 
 const router = useRouter()
 
@@ -301,6 +450,54 @@ const todayNewSegmentations = ref(0)
 // 暗夜模式
 const isDarkMode = ref(false)
 
+// 侧栏 & 顶部
+const activeMenu = ref('overview')
+const contentView = ref('overview')
+const searchKeyword = ref('')
+const overviewSection = ref(null)
+const logsSection = ref(null)
+const panelTitleMap = {
+  user: '用户管理',
+  sensitive: '敏感词管理',
+  segmentation: '分词管理',
+  logs: '系统日志',
+  'server-monitor': '服务器监控',
+  'mysql-monitor': '数据库监控',
+  'redis-monitor': 'Redis监控'
+}
+const panelComponents = {
+  user: UserManagement,
+  sensitive: SensitiveWordsManagement,
+  segmentation: SegmentationWordsManagement,
+  logs: SystemLogsManagement,
+  'server-monitor': ServerMonitor,
+  'mysql-monitor': MySQLMonitor,
+  'redis-monitor': RedisMonitor
+}
+const activePanelComponent = computed(() => panelComponents[contentView.value] || null)
+const panelTitle = computed(() => panelTitleMap[contentView.value] || '系统管理')
+
+const versionInfo = ref({
+  version: 'v1.0.0',
+  releaseDate: '2025-12-05',
+  description: 'SchQueryAI 管理台聚焦对话、治理与客服运营。'
+})
+
+const capabilityHighlights = [
+  {
+    title: '对话引擎',
+    items: ['多轮上下文', '知识检索', '安全审查']
+  },
+  {
+    title: '运营治理',
+    items: ['用户与权限', '敏感词与分词', '客服协同']
+  },
+  {
+    title: '数据洞察',
+    items: ['实时指标', '会话记录', '操作审计']
+  }
+]
+
 // 系统状态
 const apiStatus = ref({ type: 'success', text: '正常' })
 const dbStatus = ref({ type: 'success', text: '正常' })
@@ -310,6 +507,12 @@ const systemLoad = ref(45)
 // 操作日志
 const recentLogs = ref([])
 
+// 访问量统计和最近登录
+const visitChartRef = ref(null)
+const dailyVisitStats = ref([])
+const recentLogins = ref([])
+let visitChart = null
+
 // 客服消息
 const customerServiceSessions = ref([])
 const pendingSessionCount = ref(0)
@@ -317,6 +520,32 @@ const unreadMessageCount = ref(0)
 const showCustomerServiceModal = ref(false)
 const selectedSession = ref(null)
 const customerServiceLoading = ref(false)
+
+const scrollToSection = (sectionRef) => {
+  nextTick(() => {
+    sectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
+}
+
+const handleMenuSelect = (key) => {
+  activeMenu.value = key
+  // 监控子菜单项在右侧展示
+  if (['user', 'sensitive', 'segmentation', 'logs', 'server-monitor', 'mysql-monitor', 'redis-monitor'].includes(key)) {
+    contentView.value = key
+    return
+  }
+  contentView.value = 'overview'
+  switch (key) {
+    case 'overview':
+      scrollToSection(overviewSection)
+      break
+    case 'customer':
+      goToCustomerServiceManagement()
+      break
+    default:
+      break
+  }
+}
 
 // 返回聊天界面
 const goBack = () => {
@@ -340,15 +569,24 @@ const toggleDarkMode = () => {
 
 // 导航到各个管理页面
 const goToUserManagement = () => {
-  router.push('/admin/user-management')
+  contentView.value = 'user'
+  activeMenu.value = 'user'
 }
 
 const goToSensitiveWords = () => {
-  router.push('/admin/sensitive-words')
+  contentView.value = 'sensitive'
+  activeMenu.value = 'sensitive'
 }
 
 const goToSegmentation = () => {
-  router.push('/admin/segmentation-words')
+  contentView.value = 'segmentation'
+  activeMenu.value = 'segmentation'
+}
+
+const backToOverview = () => {
+  contentView.value = 'overview'
+  activeMenu.value = 'overview'
+  scrollToSection(overviewSection)
 }
 
 // 刷新系统状态
@@ -487,8 +725,18 @@ const savedTheme = localStorage.getItem('theme')
   loadRecentLogs()
   loadCustomerServiceData()
   refreshSystemStatus()
+  loadVisitStats()
+  loadRecentLogins()
   
   console.log('[SystemManagement] 所有加载函数已调用')
+})
+
+// 组件卸载时销毁图表
+onUnmounted(() => {
+  if (visitChart) {
+    visitChart.dispose()
+    visitChart = null
+  }
 })
 
 // 获取仪表板统计数据
@@ -665,194 +913,621 @@ const goToCustomerServiceManagement = () => {
   router.push('/admin/customer-service')
 }
 
+// 图表时间范围
+const chartTimeRange = ref('15d')
+
+// 时间范围切换处理
+const onChartTimeRangeChange = () => {
+  loadVisitStats()
+}
+
+// 加载访问量统计
+const loadVisitStats = async () => {
+  try {
+    let response
+    if (chartTimeRange.value === '12h') {
+      response = await userApi.getHourlyVisitStats(12)
+    } else if (chartTimeRange.value === '15d') {
+      response = await userApi.getDailyVisitStats(15)
+    } else {
+      response = await userApi.getDailyVisitStats(30)
+    }
+    
+    if (response.code === 200) {
+      dailyVisitStats.value = response.data || []
+      // 初始化图表
+      nextTick(() => {
+        initVisitChart()
+      })
+    }
+  } catch (error) {
+    console.error('获取访问量统计失败:', error)
+  }
+}
+
+// 初始化访问量图表
+const initVisitChart = () => {
+  if (!visitChartRef.value) return
+  
+  if (visitChart) {
+    visitChart.dispose()
+  }
+  
+  visitChart = echarts.init(visitChartRef.value)
+  
+  const dates = dailyVisitStats.value.map(item => item.date)
+  const counts = dailyVisitStats.value.map(item => item.count)
+  
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: isDarkMode.value ? '#1f2937' : '#fff',
+      borderColor: isDarkMode.value ? '#374151' : '#e5e7eb',
+      textStyle: {
+        color: isDarkMode.value ? '#e5e7eb' : '#333'
+      }
+    },
+    grid: {
+      left: '1%',
+      right: '2%',
+      bottom: '1%',
+      top: '5%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      boundaryGap: false,
+      axisLine: {
+        show: false
+      },
+      axisTick: {
+        show: false
+      },
+      axisLabel: {
+        color: isDarkMode.value ? '#9ca3af' : '#999',
+        margin: 12,
+        interval: 0,
+        rotate: 45,
+        fontSize: 11
+      },
+      splitLine: {
+        show: true,
+        interval: 0,
+        lineStyle: {
+          color: isDarkMode.value ? '#374151' : '#e8e8e8',
+          type: 'solid'
+        }
+      }
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: {
+        show: false
+      },
+      axisTick: {
+        show: false
+      },
+      axisLabel: {
+        color: isDarkMode.value ? '#9ca3af' : '#999'
+      },
+      splitLine: {
+        show: true,
+        lineStyle: {
+          color: isDarkMode.value ? '#374151' : '#e8e8e8',
+          type: 'solid'
+        }
+      }
+    },
+    series: [{
+      name: '访问量',
+      type: 'line',
+      smooth: true,
+      data: counts,
+      areaStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
+          { offset: 1, color: 'rgba(59, 130, 246, 0.05)' }
+        ])
+      },
+      lineStyle: {
+        color: '#3B82F6',
+        width: 2
+      },
+      itemStyle: {
+        color: '#3B82F6'
+      }
+    }]
+  }
+  
+  visitChart.setOption(option)
+  
+  // 窗口大小变化时重新调整图表
+  window.addEventListener('resize', () => {
+    visitChart?.resize()
+  })
+}
+
+// 加载最近登录记录
+const loadRecentLogins = async () => {
+  try {
+    const response = await userApi.getRecentLogins(8)
+    if (response.code === 200) {
+      recentLogins.value = response.data || []
+    }
+  } catch (error) {
+    console.error('获取最近登录记录失败:', error)
+  }
+}
+
 </script>
 
+
 <style scoped>
-.system-management {
-  padding: 20px;
-  max-width: 1400px;
-  margin: 0 auto;
-  background-color: white;
+.ruoyi-shell {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background: #f5f7fa;
+  color: #111827;
 }
 
-[data-theme="dark"] .system-management {
-  background-color: #1a1a1a;
+[data-theme="dark"] .ruoyi-shell {
+  background: #0f172a;
+  color: #e5e7eb;
 }
 
-.management-header {
+.ruoyi-shell__sidebar {
+  width: 230px;
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
+  color: #1f2937;
+  padding: 16px 12px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+[data-theme="dark"] .ruoyi-shell__sidebar {
+  background: #111827;
+  border-right-color: #1f2937;
+  color: #e5e7eb;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 4px 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+[data-theme="dark"] .sidebar-brand {
+  border-bottom-color: #1f2937;
+}
+
+.brand-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #6366f1 0%, #0ea5e9 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: white;
+  letter-spacing: 1px;
+}
+
+.brand-name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.brand-version {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.sidebar-menu {
+  border-right: none;
+  background: transparent;
+  flex-grow: 1;
+}
+
+.sidebar-menu :deep(.el-menu-item) {
+  border-radius: 10px;
+  margin-bottom: 6px;
+  color: #4b5563;
+}
+
+.sidebar-menu :deep(.el-menu-item.is-active) {
+  background: #eef2ff;
+  color: #111827;
+}
+
+[data-theme="dark"] .sidebar-menu :deep(.el-menu-item) {
+  color: #e5e7eb;
+}
+
+[data-theme="dark"] .sidebar-menu :deep(.el-menu-item.is-active) {
+  background: #1e293b;
+  color: #f9fafb;
+}
+
+[data-theme="dark"] .brand-name {
+  color: #f9fafb;
+}
+
+[data-theme="dark"] .brand-version {
+  color: #9ca3af;
+}
+
+.ruoyi-shell__main {
+  flex: 1;
+  height: 100vh;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+[data-theme="dark"] .ruoyi-shell__main {
+  background: #0f172a;
+}
+
+.shell-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
-[data-theme="dark"] .management-header {
+.shell-toolbar h2 {
+  margin: 6px 0 0;
+  font-size: 20px;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toolbar-search {
+  width: 240px;
+}
+
+.toolbar-icon {
+  padding: 6px;
+}
+
+.shell-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.shell-content.panel-mode {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
   justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(31, 45, 61, 0.06);
 }
 
-.header-actions {
+[data-theme="dark"] .panel-header {
+  background: #111827;
+  border-color: #1f2937;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #111827;
+}
+
+[data-theme="dark"] .panel-title {
+  color: #e5e7eb;
+}
+
+.panel-body {
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 10px 24px rgba(31, 45, 61, 0.06);
+  padding: 10px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+[data-theme="dark"] .panel-body {
+  background: #111827;
+  border-color: #1f2937;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+
+.hero-card {
+  display: flex;
+  gap: 18px;
+  padding: 18px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
+  box-shadow: 0 12px 30px rgba(99, 102, 241, 0.2);
+  color: #f8fafc;
+  overflow: hidden;
+  align-items: center;
+}
+
+[data-theme="dark"] .hero-card {
+  background: linear-gradient(135deg, #1f2937 0%, #0b1224 100%);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+}
+
+.hero-card__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 60%;
+}
+
+.hero-card__tech {
+  width: 280px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+.hero-tag {
+  margin: 0;
+  font-size: 14px;
+  color: #dbeafe;
+}
+
+.hero-desc {
+  margin: 12px 0 16px;
+  line-height: 1.6;
+  color: #e5e7eb;
+  max-width: 640px;
+}
+
+[data-theme="dark"] .hero-desc {
+  color: #c4c4c4;
+}
+
+.hero-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.hero-meta .version {
+  font-weight: 600;
+  color: #e0f2fe;
+}
+
+.hero-actions {
   display: flex;
   gap: 12px;
-  align-items: center;
 }
 
-.management-header h1 {
+.hero-card__main h3 {
+  margin: 6px 0 4px;
+  color: #fff;
+  letter-spacing: 0.3px;
+}
+
+.hero-card__tech h4 {
+  margin: 0 0 10px;
+  color: #fff;
+}
+
+.hero-card__tech ul {
+  padding-left: 16px;
   margin: 0;
-  color: #333;
+  color: #e5e7eb;
+  line-height: 1.6;
 }
 
-[data-theme="dark"] .management-header h1 {
-  color: #e0e0e0;
+.hero-card__tech .tech-title {
+  color: #f8fafc;
 }
 
-.stats-row {
-  margin-bottom: 20px;
+:deep(.hero-card .el-tag) {
+  background: rgba(255, 255, 255, 0.12);
+  border: none;
+  color: #e5e7eb;
+}
+
+.tech-columns {
+  display: flex;
+  gap: 20px;
+}
+
+.tech-columns > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.tech-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.tech-columns ul {
+  padding-left: 16px;
+  margin: 0;
+  color: #e5e7eb;
+  line-height: 1.6;
+}
+
+.panel-group {
+  margin-top: 6px;
+}
+
+.panel-group :deep(.el-col) {
+  display: flex;
 }
 
 .stat-card {
-  position: relative;
-  overflow: hidden;
-  cursor: default;
-}
-
-[data-theme="dark"] .stat-card {
-  background-color: #2a2a2a !important;
-  border-color: #444 !important;
-}
-
-[data-theme="dark"] .stat-card :deep(.el-card__body) {
-  background-color: #2a2a2a !important;
+  border-radius: 12px;
+  border: none;
+  background: #fff;
+  flex: 1;
 }
 
 .stat-card :deep(.el-card__body) {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 14px;
+  padding: 14px;
 }
 
-.stat-content {
-  z-index: 2;
+[data-theme="dark"] .stat-card {
+  background: #1f2025;
+  border: 1px solid #2f2f2f;
+  color: #e9e9e9;
 }
 
-.stat-number {
-  font-size: 32px;
-  font-weight: bold;
+.stat-card__icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+}
+
+.stat-card__icon.primary {
+  background: rgba(64, 158, 255, 0.15);
   color: #409EFF;
-  margin-bottom: 5px;
 }
 
-.stat-label {
-  font-size: 14px;
-  color: #666;
+.stat-card__icon.success {
+  background: rgba(103, 194, 58, 0.15);
+  color: #67C23A;
 }
 
-[data-theme="dark"] .stat-label {
-  color: #999;
+.stat-card__icon.warning {
+  background: rgba(230, 162, 60, 0.2);
+  color: #E6A23C;
 }
 
-.stat-icon {
-  font-size: 48px;
-  color: rgba(64, 158, 255, 0.2);
-  position: absolute;
-  right: 20px;
-  top: 50%;
-  transform: translateY(-50%);
+.stat-card__icon.info {
+  background: rgba(64, 158, 255, 0.1);
+  color: #409EFF;
 }
 
-.modules-row {
-  margin-bottom: 20px;
+.stat-card__label {
+  margin: 0;
+  font-size: 13px;
+  color: #909399;
 }
 
-.module-card {
-  cursor: pointer;
-  transition: all 0.3s ease;
-  height: 200px;
+.stat-card__value {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 600;
 }
 
-[data-theme="dark"] .module-card {
-  background-color: #2a2a2a !important;
-  border-color: #444 !important;
+.stat-card__desc {
+  margin: 4px 0 0;
+  color: #8c8c8c;
+  font-size: 12px;
+}
+.monitor-row .ruoyi-card,
+.operations-row .ruoyi-card {
+  margin-bottom: 0;
 }
 
-[data-theme="dark"] .module-card :deep(.el-card__body) {
-  background-color: #2a2a2a !important;
+.monitor-row :deep(.el-col),
+.operations-row :deep(.el-col) {
+  display: flex;
 }
 
-.module-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-}
-
-[data-theme="dark"] .module-card:hover {
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
-}
-
-.module-content {
-  height: 100%;
+.monitor-row .ruoyi-card,
+.operations-row .ruoyi-card {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  height: 100%;
 }
 
-.module-icon {
-  font-size: 48px;
-  color: #409EFF;
-  margin-bottom: 15px;
+.ruoyi-card {
+  border-radius: 12px;
+  border: none;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(31, 45, 61, 0.08);
 }
 
-.module-content h3 {
-  margin: 0 0 10px 0;
-  color: #333;
-  font-size: 18px;
+.ruoyi-card :deep(.el-card__header) {
+  border-bottom: 1px solid #f0f0f0;
+  padding: 14px 16px;
 }
 
-[data-theme="dark"] .module-content h3 {
-  color: #e0e0e0;
-}
-
-.module-content p {
-  margin: 0 0 15px 0;
-  color: #666;
-  font-size: 14px;
-  line-height: 1.5;
-  flex-grow: 1;
-}
-
-[data-theme="dark"] .module-content p {
-  color: #999;
-}
-
-.module-stats {
+.ruoyi-card :deep(.el-card__body) {
   display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: #999;
+  flex-direction: column;
+  height: 100%;
 }
 
-.monitoring-row {
-  margin-bottom: 20px;
+[data-theme="dark"] .ruoyi-card {
+  background: #1f2025;
+  border: 1px solid #2c2c2c;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
-.card-header {
+[data-theme="dark"] .ruoyi-card :deep(.el-card__header) {
+  border-bottom-color: #2f2f2f;
+}
+
+.monitor-row .system-status {
+  padding: 10px 0;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.system-status {
-  space-y: 15px;
+  flex-direction: column;
+  gap: 18px;
 }
 
 .status-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
 }
 
 .status-label {
-  color: #333;
-  font-weight: 500;
+  font-weight: 600;
+  color: #3a3a3a;
 }
 
 [data-theme="dark"] .status-label {
@@ -860,28 +1535,31 @@ const goToCustomerServiceManagement = () => {
 }
 
 .operation-logs {
-  max-height: 200px;
+  max-height: 320px;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .log-item {
-  padding: 10px 0;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f9fbff;
+  border-left: 3px solid #409EFF;
+  border: 1px solid #eef3ff;
 }
 
-.log-item:last-child {
-  border-bottom: none;
-}
-
-.log-header {
+.log-item__header {
   display: flex;
-  justify-content: space-between;
-  margin-bottom: 5px;
-  font-size: 13px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 12px;
 }
 
 .log-operator {
-  font-weight: bold;
+  font-weight: 600;
   color: #409EFF;
 }
 
@@ -890,269 +1568,47 @@ const goToCustomerServiceManagement = () => {
 }
 
 .log-time {
-  color: #999;
+  margin-left: auto;
+  color: #909399;
 }
 
 .log-detail {
+  margin: 0;
   font-size: 12px;
-  color: #666;
-  line-height: 1.4;
-}
-
-.quick-actions-card {
-  margin-bottom: 20px;
-}
-
-[data-theme="dark"] .quick-actions-card {
-  background-color: #2a2a2a !important;
-  border-color: #444 !important;
-}
-
-[data-theme="dark"] .quick-actions-card :deep(.el-card__body) {
-  background-color: #2a2a2a !important;
-}
-
-[data-theme="dark"] .quick-actions-card :deep(.el-card__header) {
-  background-color: #2a2a2a !important;
-}
-
-.quick-actions {
-  display: flex;
-  gap: 15px;
-  flex-wrap: wrap;
-}
-
-.monitoring-card {
-  height: auto;
-  max-height: 320px;
-}
-
-[data-theme="dark"] .monitoring-card {
-  background-color: #2a2a2a !important;
-  border-color: #444 !important;
-}
-
-[data-theme="dark"] .monitoring-card :deep(.el-card__body) {
-  background-color: #2a2a2a !important;
-}
-
-[data-theme="dark"] .monitoring-card :deep(.el-card__header) {
-  background-color: #2a2a2a !important;
-}
-
-.system-status {
-  min-height: 240px;
-  space-y: 15px;
-}
-
-.operation-logs {
-  max-height: 240px;
-  min-height: 150px;
-  overflow-y: auto;
-  padding: 10px;
-  box-sizing: border-box;
-}
-
-.no-logs {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 40px 20px;
-  color: #999;
-  font-size: 14px;
-}
-
-[data-theme="dark"] .no-logs {
-  color: #666;
-}
-
-.log-item {
-  padding: 12px;
-  margin-bottom: 8px;
-  background-color: #f9f9f9;
-  border-left: 3px solid #409EFF;
-  border-radius: 2px;
-  box-sizing: border-box;
+  color: #606266;
 }
 
 [data-theme="dark"] .log-item {
-  background-color: #333;
-  border-left-color: #409EFF;
-}
-
-.log-item:last-child {
-  margin-bottom: 5px;
-}
-
-.log-header {
-  display: flex;
-  gap: 15px;
-  margin-bottom: 8px;
-  font-size: 12px;
-}
-
-.log-operator {
-  padding: 2px 6px;
-  background-color: #e6f7ff;
-  border-radius: 2px;
-  color: #0050b3;
-  font-weight: 500;
-}
-
-[data-theme="dark"] .log-operator {
-  background-color: rgba(0, 80, 179, 0.2);
-  color: #65b1ff;
-  font-weight: 500;
-}
-
-.log-action {
-  padding: 2px 6px;
-  background-color: #f6ffed;
-  border-radius: 2px;
-  color: #274e20;
-  font-weight: 500;
-}
-
-[data-theme="dark"] .log-action {
-  background-color: rgba(82, 196, 26, 0.2);
-  color: #85ce61;
-  font-weight: 500;
-}
-
-.log-time {
-  color: #999;
-  margin-left: auto;
-}
-
-[data-theme="dark"] .log-time {
-  color: #999;
-  margin-left: auto;
-}
-
-.log-detail {
-  font-size: 12px;
-  color: #666;
-  padding-left: 5px;
-  line-height: 1.4;
-  word-wrap: break-word;
-  word-break: break-word;
-  white-space: normal;
+  background: #24252a;
+  border-color: #323339;
 }
 
 [data-theme="dark"] .log-detail {
-  color: #ccc;
+  color: #d0d0d0;
 }
 
-@media (max-width: 768px) {
-  .management-header {
-    flex-direction: column;
-    gap: 15px;
-    align-items: flex-start;
-  }
-
-  .stats-row :deep(.el-col) {
-    margin-bottom: 10px;
-  }
-
-  .modules-row :deep(.el-col) {
-    margin-bottom: 15px;
-  }
-
-  .monitoring-row :deep(.el-col) {
-    margin-bottom: 15px;
-  }
-
-  .quick-actions {
-    justify-content: center;
-  }
-
-  .module-card {
-    height: auto;
-    min-height: 200px;
-  }
-}
-
-/* 客服消息卡片样式 */
-.customer-service-row {
-  margin-bottom: 20px;
-}
-
-.customer-service-card {
-  position: relative;
-  overflow: hidden;
-}
-
-[data-theme="dark"] .customer-service-card {
-  background-color: #2a2a2a !important;
-  border-color: #444 !important;
-}
-
-[data-theme="dark"] .customer-service-card :deep(.el-card__body) {
-  background-color: #2a2a2a !important;
-}
-
-[data-theme="dark"] .customer-service-card :deep(.el-card__header) {
-  background-color: #2a2a2a !important;
-}
-
-.customer-service-card :deep(.el-card__header) {
-  border-bottom-color: #ebeef5;
-  padding: 15px 20px;
-}
-
-[data-theme="dark"] .customer-service-card :deep(.el-card__header) {
-  border-bottom-color: #444;
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 600;
-  color: #333;
-}
-
-[data-theme="dark"] .card-header {
-  color: #e0e0e0;
-}
-
-.header-icon {
-  color: #409EFF;
-  font-size: 20px;
-}
-
-.badge-item {
-  margin-left: auto;
-}
-
-.customer-service-content {
-  padding: 20px 0;
-}
-
-.service-stats {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 20px;
-  padding: 0 20px;
+.customer-card .service-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .stat-box {
-  flex: 1;
-  padding: 15px;
-  background-color: #f5f7fa;
-  border-radius: 6px;
+  padding: 16px;
+  border-radius: 12px;
+  background: #f5f7fa;
   text-align: center;
 }
 
 [data-theme="dark"] .stat-box {
-  background-color: #333;
+  background: #2a2c33;
 }
 
 .stat-number {
-  font-size: 28px;
-  font-weight: bold;
+  font-size: 26px;
+  font-weight: 600;
   color: #409EFF;
-  margin-bottom: 5px;
 }
 
 .stat-name {
@@ -1160,26 +1616,15 @@ const goToCustomerServiceManagement = () => {
   color: #909399;
 }
 
-[data-theme="dark"] .stat-name {
-  color: #999;
+.sessions-wrapper {
+  border: 1px dashed #e4e7ed;
+  border-radius: 12px;
+  padding: 12px;
+  min-height: 140px;
 }
 
-.recent-sessions {
-  margin-bottom: 20px;
-  padding: 0 20px;
-}
-
-.empty-sessions {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100px;
-  color: #909399;
-  font-size: 14px;
-}
-
-[data-theme="dark"] .empty-sessions {
-  color: #666;
+[data-theme="dark"] .sessions-wrapper {
+  border-color: #3c3c3c;
 }
 
 .sessions-list {
@@ -1190,89 +1635,48 @@ const goToCustomerServiceManagement = () => {
 
 .session-item {
   padding: 12px;
-  background-color: #f9f9f9;
-  border: 1px solid #e5e7eb;
-  border-radius: 4px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #eef2f8;
   cursor: pointer;
-  transition: all 0.3s;
-  color: #333;
-}
-
-[data-theme="dark"] .session-item {
-  background-color: #333;
-  border-color: #444;
-  color: #e0e0e0;
+  transition: all 0.2s ease;
 }
 
 .session-item:hover {
-  background-color: #f0f5ff;
   border-color: #409EFF;
+  background: #f0f6ff;
 }
 
-[data-theme="dark"] .session-item:hover {
-  background-color: #3a4a5a;
-  border-color: #409EFF;
+[data-theme="dark"] .session-item {
+  background: #1f2025;
+  border-color: #31323b;
 }
 
-.session-item .session-header {
+.session-item__header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
+  font-size: 13px;
 }
 
-.user-name {
-  font-weight: 600;
-  color: #333;
-  font-size: 14px;
-}
-
-[data-theme="dark"] .user-name {
-  color: #e0e0e0;
-}
-
-.session-time {
-  color: #999;
-  font-size: 12px;
-}
-
-[data-theme="dark"] .session-time {
-  color: #777;
-}
-
-.session-preview {
-  color: #666;
-  font-size: 12px;
-  margin-bottom: 8px;
-  line-height: 1.4;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-[data-theme="dark"] .session-preview {
-  color: #999;
-}
-
-.unread-tag {
-  align-self: flex-start;
-}
-
-.service-actions {
+.customer-service-actions {
+  margin-top: 16px;
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  padding: 0 20px;
-  border-top: 1px solid #ebeef5;
-  padding-top: 15px;
+  border-top: 1px solid #f0f0f0;
+  padding-top: 12px;
 }
 
-[data-theme="dark"] .service-actions {
-  border-top-color: #444;
+[data-theme="dark"] .customer-service-actions {
+  border-top-color: #2f2f2f;
 }
 
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
 .modal-content {
   padding: 20px 0;
 }
@@ -1280,128 +1684,272 @@ const goToCustomerServiceManagement = () => {
 .modal-content .session-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 10px;
+  margin-bottom: 12px;
   border-bottom: 1px solid #ebeef5;
-  color: #333;
-}
-
-[data-theme="dark"] .modal-content .session-header {
-  border-bottom-color: #444;
-  color: #e0e0e0;
+  padding-bottom: 12px;
 }
 
 .session-messages {
   max-height: 400px;
   overflow-y: auto;
-  padding: 0 10px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
 .message {
-  padding: 10px;
-  border-radius: 6px;
+  padding: 10px 14px;
+  border-radius: 10px;
   font-size: 14px;
-  line-height: 1.5;
 }
 
 .message.user-message {
-  background-color: #e6f7ff;
-  color: #0050b3;
+  background: #e6f7ff;
   align-self: flex-end;
   max-width: 80%;
 }
 
-[data-theme="dark"] .message.user-message {
-  background-color: rgba(0, 80, 179, 0.2);
-  color: #65b1ff;
-}
-
 .message.admin-message {
-  background-color: #f6ffed;
-  color: #274e20;
+  background: #f6ffed;
   align-self: flex-start;
   max-width: 80%;
 }
 
+[data-theme="dark"] .message.user-message {
+  background: rgba(64, 158, 255, 0.2);
+  color: #d1e8ff;
+}
+
 [data-theme="dark"] .message.admin-message {
-  background-color: rgba(82, 196, 26, 0.2);
-  color: #85ce61;
-}
-
-/* el-card暗夜模式适配 */
-:deep(.el-card) {
-  --el-card-bg-color: white;
-  --el-card-border-color: #ebeef5;
-  --el-card-text-color: #333;
-}
-
-[data-theme="dark"] :deep(.el-card) {
-  --el-card-bg-color: #2a2a2a !important;
-  --el-card-border-color: #444 !important;
-  --el-card-text-color: #e0e0e0 !important;
-  background-color: #2a2a2a !important;
-  border-color: #444 !important;
-  color: #e0e0e0 !important;
-}
-
-[data-theme="dark"] :deep(.el-card__header) {
-  border-bottom-color: #444 !important;
-  background-color: #2a2a2a !important;
-}
-
-[data-theme="dark"] :deep(.el-card__body) {
-  color: #e0e0e0 !important;
-  background-color: #2a2a2a !important;
-}
-
-[data-theme="dark"] :deep(.el-card__title) {
-  color: #e0e0e0 !important;
-}
-
-/* el-dialog暗夜模式适配 */
-:deep(.el-dialog) {
-  --el-dialog-bg-color: white;
-}
-
-[data-theme="dark"] :deep(.el-dialog) {
-  --el-dialog-bg-color: #2a2a2a;
-}
-
-[data-theme="dark"] :deep(.el-dialog__header) {
-  border-bottom-color: #444;
-}
-
-[data-theme="dark"] :deep(.el-dialog__title) {
-  color: #e0e0e0;
-}
-
-[data-theme="dark"] :deep(.el-dialog__close) {
-  color: #999;
-}
-
-[data-theme="dark"] :deep(.el-dialog__close:hover) {
-  color: #e0e0e0;
-}
-
-[data-theme="dark"] :deep(.el-dialog__body) {
-  color: #e0e0e0;
-}
-
-[data-theme="dark"] :deep(.el-dialog__footer) {
-  border-top-color: #444;
-}
-
-.message-content {
-  display: block;
-  margin-bottom: 5px;
+  background: rgba(103, 194, 58, 0.2);
+  color: #def7d8;
 }
 
 .message-time {
+  display: block;
+  margin-top: 6px;
   font-size: 12px;
-  opacity: 0.7;
+  color: #a0a0a0;
+}
+
+:deep(.el-dialog) {
+  border-radius: 12px;
+}
+
+[data-theme="dark"] :deep(.el-dialog) {
+  background: #1f1f1f;
+  color: #f2f2f2;
+}
+
+@media (max-width: 992px) {
+  .ruoyi-shell {
+    flex-direction: column;
+  }
+
+  .ruoyi-shell__sidebar {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .sidebar-menu {
+    width: 100%;
+  }
+
+  .hero-card {
+    flex-direction: column;
+  }
+
+  .hero-card__tech {
+    width: 100%;
+  }
+
+  .hero-card__main {
+    max-width: 100%;
+  }
+
+  .toolbar-search {
+    width: 160px;
+  }
+}
+
+@media (max-width: 768px) {
+  .shell-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .toolbar-actions {
+    width: 100%;
+  }
+
+  .toolbar-search {
+    flex: 1;
+  }
+
+  .operations-row .ruoyi-card,
+  .monitor-row .ruoyi-card {
+    margin-bottom: 16px;
+  }
+
+  .quick-actions {
+    flex-direction: column;
+  }
+}
+
+/* 访问量图表 */
+.chart-row {
+  margin-bottom: 20px;
+}
+
+.chart-card {
+  border-radius: 12px;
+}
+
+.chart-card :deep(.el-card__header) {
+  padding: 14px 20px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+[data-theme="dark"] .chart-card :deep(.el-card__header) {
+  border-bottom-color: #1f2937;
+}
+
+.chart-card .ruoyi-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chart-card .ruoyi-card__header > span {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+[data-theme="dark"] .chart-card .ruoyi-card__header > span {
+  color: #f3f4f6;
+}
+
+.chart-actions {
+  display: flex;
+  align-items: center;
+}
+
+.chart-actions .el-radio-group {
+  --el-radio-button-checked-bg-color: #6366f1;
+  --el-radio-button-checked-border-color: #6366f1;
+  --el-radio-button-checked-text-color: #fff;
+}
+
+.chart-actions :deep(.el-radio-button__inner) {
+  padding: 6px 14px;
+  font-size: 12px;
+  border-radius: 0;
+}
+
+.chart-actions :deep(.el-radio-button:first-child .el-radio-button__inner) {
+  border-radius: 6px 0 0 6px;
+}
+
+.chart-actions :deep(.el-radio-button:last-child .el-radio-button__inner) {
+  border-radius: 0 6px 6px 0;
+}
+
+[data-theme="dark"] .chart-actions .el-radio-group {
+  --el-fill-color-blank: #1f2937;
+  --el-border-color: #374151;
+  --el-text-color-regular: #9ca3af;
+}
+
+.visit-chart {
+  width: 100%;
+  height: 280px;
+}
+
+/* 最近访问IP */
+.recent-ip-card {
+  border-radius: 12px;
+}
+
+.recent-ip-list {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.ip-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.ip-item:last-child {
+  border-bottom: none;
+}
+
+[data-theme="dark"] .ip-item {
+  border-bottom-color: #1f2937;
+}
+
+.ip-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ip-address {
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 13px;
+  color: #333;
+  font-weight: 500;
+}
+
+[data-theme="dark"] .ip-address {
+  color: #e5e7eb;
+}
+
+.ip-location {
+  font-size: 12px;
+  color: #999;
+}
+
+[data-theme="dark"] .ip-location {
+  color: #6b7280;
+}
+
+.ip-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.ip-user {
+  font-size: 12px;
+  color: #6366f1;
+  font-weight: 500;
+}
+
+.ip-time {
+  font-size: 11px;
+  color: #999;
+}
+
+[data-theme="dark"] .ip-time {
+  color: #6b7280;
+}
+
+.empty-data {
+  text-align: center;
+  color: #999;
+  padding: 40px 0;
+}
+
+[data-theme="dark"] .empty-data {
+  color: #6b7280;
 }
 </style>

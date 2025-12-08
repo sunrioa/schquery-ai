@@ -12,6 +12,13 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.stream.Collectors;
 
 /**
@@ -232,6 +239,172 @@ public class LoginHistoryServiceImpl extends ServiceImpl<LoginHistoryMapper, Log
                     .failReason(history.getFailReason())
                     .userAgent(history.getUserAgent())
                     .build();
+        }
+    }
+
+    /**
+     * 获取每日访问量统计（最近N天）
+     * 统计每天的登录次数，用于生成访问量趋势图
+     *
+     * @param days 天数
+     * @return 每日访问量列表
+     */
+    @Override
+    public Result<List<Map<String, Object>>> getDailyVisitStats(Integer days) {
+        log.info("开始获取每日访问量统计，天数: {}", days);
+
+        try {
+            if (days == null || days < 1) {
+                days = 7;
+            }
+            if (days > 30) {
+                days = 30;
+            }
+
+            LocalDate endDate = LocalDate.now();
+            LocalDate startDate = endDate.minusDays(days - 1);
+            LocalDateTime startDateTime = startDate.atStartOfDay();
+
+            // 查询最近N天的所有登录记录
+            List<LoginHistory> loginList = lambdaQuery()
+                    .ge(LoginHistory::getLoginTime, startDateTime)
+                    .eq(LoginHistory::getStatus, 1) // 只统计成功登录
+                    .list();
+
+            // 按日期分组统计
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM-dd");
+            Map<String, Long> dailyCount = new HashMap<>();
+
+            // 初始化所有日期为0
+            for (int i = 0; i < days; i++) {
+                LocalDate date = startDate.plusDays(i);
+                dailyCount.put(date.format(formatter), 0L);
+            }
+
+            // 统计每天的登录数
+            for (LoginHistory login : loginList) {
+                String dateKey = login.getLoginTime().toLocalDate().format(formatter);
+                dailyCount.merge(dateKey, 1L, Long::sum);
+            }
+
+            // 转换为结果列表
+            List<Map<String, Object>> result = new ArrayList<>();
+            for (int i = 0; i < days; i++) {
+                LocalDate date = startDate.plusDays(i);
+                String dateKey = date.format(formatter);
+                Map<String, Object> item = new HashMap<>();
+                item.put("date", dateKey);
+                item.put("count", dailyCount.get(dateKey));
+                result.add(item);
+            }
+
+            log.info("成功获取每日访问量统计，共 {} 天数据", result.size());
+            return Result.success(result);
+        } catch (Exception e) {
+            log.error("获取每日访问量统计失败: {}", e.getMessage(), e);
+            return Result.error("获取访问量统计失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取每小时访问量统计（最近N小时）
+     * 统计每小时的登录次数，用于生成访问量趋势图
+     *
+     * @param hours 小时数
+     * @return 每小时访问量列表
+     */
+    @Override
+    public Result<List<Map<String, Object>>> getHourlyVisitStats(Integer hours) {
+        log.info("开始获取每小时访问量统计，小时数: {}", hours);
+
+        try {
+            if (hours == null || hours < 1) {
+                hours = 12;
+            }
+            if (hours > 24) {
+                hours = 24;
+            }
+
+            LocalDateTime endTime = LocalDateTime.now();
+            LocalDateTime startTime = endTime.minusHours(hours - 1).withMinute(0).withSecond(0).withNano(0);
+
+            // 查询最近N小时的所有登录记录
+            List<LoginHistory> loginList = lambdaQuery()
+                    .ge(LoginHistory::getLoginTime, startTime)
+                    .eq(LoginHistory::getStatus, 1) // 只统计成功登录
+                    .list();
+
+            // 按小时分组统计
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:00");
+            Map<String, Long> hourlyCount = new HashMap<>();
+
+            // 初始化所有小时为0
+            for (int i = 0; i < hours; i++) {
+                LocalDateTime time = startTime.plusHours(i);
+                hourlyCount.put(time.format(formatter), 0L);
+            }
+
+            // 统计每小时的登录数
+            for (LoginHistory login : loginList) {
+                String hourKey = login.getLoginTime().withMinute(0).withSecond(0).withNano(0).format(formatter);
+                hourlyCount.merge(hourKey, 1L, Long::sum);
+            }
+
+            // 转换为结果列表
+            List<Map<String, Object>> result = new ArrayList<>();
+            for (int i = 0; i < hours; i++) {
+                LocalDateTime time = startTime.plusHours(i);
+                String hourKey = time.format(formatter);
+                Map<String, Object> item = new HashMap<>();
+                item.put("date", hourKey);
+                item.put("count", hourlyCount.get(hourKey));
+                result.add(item);
+            }
+
+            log.info("成功获取每小时访问量统计，共 {} 小时数据", result.size());
+            return Result.success(result);
+        } catch (Exception e) {
+            log.error("获取每小时访问量统计失败: {}", e.getMessage(), e);
+            return Result.error("获取访问量统计失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取最近的登录记录
+     * 用于展示最近访问的IP列表
+     *
+     * @param limit 数量限制
+     * @return 最近登录记录列表
+     */
+    @Override
+    public Result<List<LoginHistoryVO>> getRecentLogins(Integer limit) {
+        log.info("开始获取最近登录记录，限制: {}", limit);
+
+        try {
+            if (limit == null || limit < 1) {
+                limit = 10;
+            }
+            if (limit > 50) {
+                limit = 50;
+            }
+
+            // 查询最近的登录记录
+            Page<LoginHistory> page = new Page<>(1, limit);
+            Page<LoginHistory> result = lambdaQuery()
+                    .eq(LoginHistory::getStatus, 1) // 只查询成功登录
+                    .orderByDesc(LoginHistory::getLoginTime)
+                    .page(page);
+
+            // 转换为VO对象
+            List<LoginHistoryVO> voList = result.getRecords().stream()
+                    .map(this::convertToVO)
+                    .collect(Collectors.toList());
+
+            log.info("成功获取最近登录记录，共 {} 条", voList.size());
+            return Result.success(voList);
+        } catch (Exception e) {
+            log.error("获取最近登录记录失败: {}", e.getMessage(), e);
+            return Result.error("获取最近登录记录失败：" + e.getMessage());
         }
     }
 }

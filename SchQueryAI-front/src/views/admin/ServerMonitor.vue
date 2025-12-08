@@ -1,7 +1,7 @@
 <template>
   <div class="server-monitor">
     <div class="monitor-header">
-      <h3>系统监控</h3>
+      <h3>服务器监控</h3>
       <div class="header-actions">
         <span class="last-update">最后更新: {{ lastUpdateTime }}</span>
         <el-button type="primary" size="small" @click="loadData" :loading="loading">
@@ -12,151 +12,99 @@
       </div>
     </div>
 
+    <!-- 系统信息表格 -->
+    <el-card class="info-card" shadow="never">
+      <template #header>
+        <span class="card-title">系统信息</span>
+      </template>
+      <table class="info-table">
+        <tbody>
+          <tr>
+            <td class="label">操作系统</td>
+            <td class="value">{{ systemData.osName || '-' }}</td>
+            <td class="label">系统版本</td>
+            <td class="value">{{ systemData.osVersion || '-' }}</td>
+            <td class="label">系统架构</td>
+            <td class="value">{{ systemData.osArch || '-' }}</td>
+          </tr>
+          <tr>
+            <td class="label">主机名</td>
+            <td class="value">{{ systemData.hostName || '-' }}</td>
+            <td class="label">JDK版本</td>
+            <td class="value">{{ systemData.javaVersion || '-' }}</td>
+            <td class="label">运行时间</td>
+            <td class="value">{{ formatUptime(systemData.uptime) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </el-card>
+
+    <!-- CPU信息表格 -->
+    <el-card class="info-card" shadow="never">
+      <template #header>
+        <span class="card-title">CPU信息</span>
+      </template>
+      <table class="info-table">
+        <tbody>
+          <tr>
+            <td class="label">CPU名称</td>
+            <td class="value" colspan="3">{{ cpuData.name || '-' }}</td>
+            <td class="label">核心数</td>
+            <td class="value">{{ cpuData.cores || '-' }}</td>
+          </tr>
+          <tr>
+            <td class="label">型号</td>
+            <td class="value" colspan="3">{{ cpuData.model || '-' }}</td>
+            <td class="label">使用率</td>
+            <td class="value">{{ (cpuData.usage || 0).toFixed(1) }}%</td>
+          </tr>
+        </tbody>
+      </table>
+    </el-card>
+
+    <!-- 网络信息表格 -->
+    <el-card class="info-card" shadow="never">
+      <template #header>
+        <span class="card-title">网络信息</span>
+      </template>
+      <table class="info-table">
+        <tbody>
+          <tr>
+            <td class="label">总上传</td>
+            <td class="value">{{ formatBytes(networkData.totalUpload) }}</td>
+            <td class="label">总下载</td>
+            <td class="value">{{ formatBytes(networkData.totalDownload) }}</td>
+            <td class="label">上传速率</td>
+            <td class="value">{{ formatSpeed(networkData.uploadSpeed) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </el-card>
+
+    <!-- 统计图表 -->
     <el-row :gutter="16">
-      <!-- CPU使用率饼状图 -->
-      <el-col :xs="24" :lg="8">
-        <el-card class="monitor-card" shadow="never">
+      <el-col :span="8">
+        <el-card class="chart-card" shadow="never">
           <template #header>
-            <span>CPU 使用率</span>
+            <span class="card-title">CPU使用率</span>
           </template>
           <div ref="cpuChartRef" class="chart-container"></div>
-          <div class="chart-info">
-            <el-table :data="cpuTableData" size="small">
-              <el-table-column prop="name" label="信息" width="100" />
-              <el-table-column prop="value" label="值" />
-            </el-table>
-          </div>
         </el-card>
       </el-col>
-
-      <!-- 内存使用率饼状图 -->
-      <el-col :xs="24" :lg="8">
-        <el-card class="monitor-card" shadow="never">
+      <el-col :span="8">
+        <el-card class="chart-card" shadow="never">
           <template #header>
-            <span>内存使用率</span>
+            <span class="card-title">内存使用率</span>
           </template>
           <div ref="memoryChartRef" class="chart-container"></div>
-          <div class="chart-info">
-            <el-table :data="memoryTableData" size="small">
-              <el-table-column prop="name" label="信息" width="100" />
-              <el-table-column prop="value" label="值" />
-            </el-table>
-          </div>
         </el-card>
       </el-col>
-
-      <!-- 磁盘使用率饼状图 -->
-      <el-col :xs="24" :lg="8">
-        <el-card class="monitor-card" shadow="never">
+      <el-col :span="8">
+        <el-card class="chart-card" shadow="never">
           <template #header>
-            <span>磁盘使用率</span>
+            <span class="card-title">磁盘使用率</span>
           </template>
           <div ref="diskChartRef" class="chart-container"></div>
-          <div class="chart-info">
-            <el-table :data="diskTableData" size="small">
-              <el-table-column prop="name" label="信息" width="100" />
-              <el-table-column prop="value" label="值" />
-            </el-table>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
-
-    <!-- 系统基本信息和网络流量合并为一行 -->
-    <el-row :gutter="16">
-      <el-col :xs="24" :lg="12">
-        <el-card class="monitor-card" shadow="never">
-          <template #header>
-            <span>系统信息</span>
-          </template>
-          <div class="info-grid-compact">
-            <div class="info-item-compact">
-              <span class="label">操作系统</span>
-              <span class="value">{{ systemData.osName || '-' }}</span>
-            </div>
-            <div class="info-item-compact">
-              <span class="label">系统版本</span>
-              <span class="value">{{ systemData.osVersion || '-' }}</span>
-            </div>
-            <div class="info-item-compact">
-              <span class="label">系统架构</span>
-              <span class="value">{{ systemData.osArch || '-' }}</span>
-            </div>
-            <div class="info-item-compact">
-              <span class="label">主机名</span>
-              <span class="value">{{ systemData.hostName || '-' }}</span>
-            </div>
-            <div class="info-item-compact">
-              <span class="label">JDK版本</span>
-              <span class="value">{{ systemData.javaVersion || '-' }}</span>
-            </div>
-            <div class="info-item-compact">
-              <span class="label">JVM内存</span>
-              <span class="value">{{ formatBytes(systemData.jvmTotalMemory) }}</span>
-            </div>
-            <div class="info-item-compact">
-              <span class="label">CPU核心数</span>
-              <span class="value">{{ cpuData.cores || '-' }}</span>
-            </div>
-            <div class="info-item-compact">
-              <span class="label">运行时间</span>
-              <span class="value">{{ formatUptime(systemData.uptime) }}</span>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-
-      <el-col :xs="24" :lg="12">
-        <el-card class="monitor-card" shadow="never">
-          <template #header>
-            <span>网络流量</span>
-          </template>
-          <el-row :gutter="12">
-            <el-col :span="12">
-              <div class="stat-card-compact">
-                <div class="stat-icon-small upload">
-                  <el-icon size="18"><Upload /></el-icon>
-                </div>
-                <div class="stat-info">
-                  <span class="stat-label">上传速率</span>
-                  <span class="stat-value-small">{{ formatSpeed(networkData.uploadSpeed) }}</span>
-                </div>
-              </div>
-            </el-col>
-            <el-col :span="12">
-              <div class="stat-card-compact">
-                <div class="stat-icon-small download">
-                  <el-icon size="18"><Download /></el-icon>
-                </div>
-                <div class="stat-info">
-                  <span class="stat-label">下载速率</span>
-                  <span class="stat-value-small">{{ formatSpeed(networkData.downloadSpeed) }}</span>
-                </div>
-              </div>
-            </el-col>
-            <el-col :span="12">
-              <div class="stat-card-compact">
-                <div class="stat-icon-small total-upload">
-                  <el-icon size="18"><TopRight /></el-icon>
-                </div>
-                <div class="stat-info">
-                  <span class="stat-label">总上传</span>
-                  <span class="stat-value-small">{{ formatBytes(networkData.totalUpload) }}</span>
-                </div>
-              </div>
-            </el-col>
-            <el-col :span="12">
-              <div class="stat-card-compact">
-                <div class="stat-icon-small total-download">
-                  <el-icon size="18"><BottomRight /></el-icon>
-                </div>
-                <div class="stat-info">
-                  <span class="stat-label">总下载</span>
-                  <span class="stat-value-small">{{ formatBytes(networkData.totalDownload) }}</span>
-                </div>
-              </div>
-            </el-col>
-          </el-row>
         </el-card>
       </el-col>
     </el-row>
@@ -164,8 +112,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
-import { Refresh, Upload, Download, TopRight, BottomRight } from '@element-plus/icons-vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { Refresh } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
 import monitorApi from '@/api/monitor'
@@ -184,24 +132,6 @@ const cpuChartRef = ref(null)
 const memoryChartRef = ref(null)
 const diskChartRef = ref(null)
 
-// CPU表格数据
-const cpuTableData = computed(() => [
-  { name: '核心数', value: cpuData.value.cores || '-' },
-  { name: '使用率', value: (cpuData.value.usage || 0).toFixed(1) + '%' }
-])
-
-// 内存表格数据
-const memoryTableData = computed(() => [
-  { name: '总内存', value: formatBytes(memoryData.value.total) },
-  { name: '已使用', value: formatBytes(memoryData.value.used) }
-])
-
-// 磁盘表格数据
-const diskTableData = computed(() => [
-  { name: '总容量', value: formatBytes(diskData.value.total) },
-  { name: '已使用', value: formatBytes(diskData.value.used) }
-])
-
 const loadData = async () => {
   try {
     loading.value = true
@@ -215,9 +145,11 @@ const loadData = async () => {
       if (disks.length > 0) {
         const totalSpace = disks.reduce((sum, d) => sum + (d.total || 0), 0)
         const usedSpace = disks.reduce((sum, d) => sum + (d.used || 0), 0)
+        const freeSpace = disks.reduce((sum, d) => sum + (d.free || 0), 0)
         diskData.value = {
           total: totalSpace,
           used: usedSpace,
+          free: freeSpace,
           usage: totalSpace > 0 ? (usedSpace / totalSpace * 100) : 0
         }
       }
@@ -369,7 +301,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .monitor-header h3 {
@@ -394,157 +326,118 @@ onUnmounted(() => {
   color: #6b7280;
 }
 
-.monitor-card {
-  margin-bottom: 12px;
-  border-radius: 8px;
+/* 信息卡片样式 */
+.info-card {
+  margin-bottom: 10px;
+  border-radius: 4px;
   border: 1px solid #e5e7eb;
 }
 
-.monitor-card :deep(.el-card__header) {
-  padding: 10px 16px;
-  font-size: 14px;
+.info-card :deep(.el-card__header) {
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
 }
 
-.monitor-card :deep(.el-card__body) {
-  padding: 12px 16px;
+.info-card :deep(.el-card__body) {
+  padding: 0;
 }
 
-[data-theme="dark"] .monitor-card {
+[data-theme="dark"] .info-card {
   background: #1e293b;
   border-color: #374151;
 }
 
-[data-theme="dark"] .monitor-card :deep(.el-card__header) {
+[data-theme="dark"] .info-card :deep(.el-card__header) {
+  background: #111827;
   border-bottom-color: #374151;
   color: #f3f4f6;
 }
 
-[data-theme="dark"] .monitor-card :deep(.el-card__body) {
+[data-theme="dark"] .info-card :deep(.el-card__body) {
+  background: #1e293b;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+[data-theme="dark"] .card-title {
+  color: #f3f4f6;
+}
+
+/* 信息表格样式 */
+.info-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.info-table td {
+  padding: 6px 12px;
+  border: 1px solid #e5e7eb;
+  font-size: 12px;
+}
+
+.info-table td.label {
+  background: #f8fafc;
+  color: #6b7280;
+  width: 100px;
+  font-weight: 500;
+}
+
+.info-table td.value {
+  color: #1f2937;
+}
+
+[data-theme="dark"] .info-table td {
+  border-color: #374151;
+}
+
+[data-theme="dark"] .info-table td.label {
+  background: #111827;
+  color: #9ca3af;
+}
+
+[data-theme="dark"] .info-table td.value {
+  color: #e5e7eb;
+}
+
+/* 图表卡片样式 */
+.chart-card {
+  margin-bottom: 0;
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+}
+
+.chart-card :deep(.el-card__header) {
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.chart-card :deep(.el-card__body) {
+  padding: 8px;
+}
+
+[data-theme="dark"] .chart-card {
+  background: #1e293b;
+  border-color: #374151;
+}
+
+[data-theme="dark"] .chart-card :deep(.el-card__header) {
+  background: #111827;
+  border-bottom-color: #374151;
+  color: #f3f4f6;
+}
+
+[data-theme="dark"] .chart-card :deep(.el-card__body) {
   background: #1e293b;
 }
 
 .chart-container {
   width: 100%;
   height: 130px;
-}
-
-.chart-info {
-  margin-top: 6px;
-}
-
-.info-grid-compact {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 4px 16px;
-}
-
-.info-item-compact {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 4px 0;
-  border-bottom: 1px dashed #e5e7eb;
-}
-
-.info-item-compact:nth-last-child(-n+2) {
-  border-bottom: none;
-}
-
-[data-theme="dark"] .info-item-compact {
-  border-bottom-color: #374151;
-}
-
-.info-item-compact .label {
-  font-size: 12px;
-  color: #6b7280;
-}
-
-[data-theme="dark"] .info-item-compact .label {
-  color: #9ca3af;
-}
-
-.info-item-compact .value {
-  font-size: 12px;
-  font-weight: 500;
-  color: #1f2937;
-}
-
-[data-theme="dark"] .info-item-compact .value {
-  color: #e5e7eb;
-}
-
-.stat-card-compact {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-  background: #f9fafb;
-  border-radius: 8px;
-  margin-bottom: 8px;
-}
-
-[data-theme="dark"] .stat-card-compact {
-  background: #111827;
-}
-
-.stat-icon-small {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  color: #fff;
-}
-
-.stat-icon-small.upload {
-  background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);
-}
-
-.stat-icon-small.download {
-  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
-}
-
-.stat-icon-small.total-upload {
-  background: linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%);
-}
-
-.stat-icon-small.total-download {
-  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
-}
-
-.stat-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.stat-label {
-  font-size: 11px;
-  color: #6b7280;
-}
-
-[data-theme="dark"] .stat-label {
-  color: #9ca3af;
-}
-
-.stat-value-small {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-[data-theme="dark"] .stat-value-small {
-  color: #f3f4f6;
-}
-
-[data-theme="dark"] :deep(.el-table) {
-  --el-table-bg-color: transparent;
-  --el-table-tr-bg-color: transparent;
-  --el-table-header-bg-color: #111827;
-  --el-table-row-hover-bg-color: #1f2937;
-  --el-table-text-color: #e5e7eb;
-  --el-table-header-text-color: #9ca3af;
-  --el-table-border-color: #374151;
 }
 </style>

@@ -1,7 +1,7 @@
 <template>
-  <div class="mysql-monitor">
+  <div class="data-service-monitor">
     <div class="monitor-header">
-      <h3>数据库监控</h3>
+      <h3>数据服务监控</h3>
       <div class="header-actions">
         <span class="last-update">最后更新: {{ lastUpdateTime }}</span>
         <el-button type="primary" size="small" @click="loadData" :loading="loading">
@@ -12,89 +12,89 @@
       </div>
     </div>
 
-    <el-row :gutter="20">
-      <!-- 连接状态 -->
-      <el-col :xs="24" :lg="8">
-        <el-card class="monitor-card" shadow="never">
+    <!-- MySQL信息表格 -->
+    <el-card class="info-card" shadow="never">
+      <template #header>
+        <div class="card-header-with-status">
+          <span class="card-title">MySQL信息</span>
+          <el-tag :type="mysqlData.connected ? 'success' : 'danger'" size="small">
+            {{ mysqlData.connected ? '已连接' : '未连接' }}
+          </el-tag>
+        </div>
+      </template>
+      <table class="info-table">
+        <tbody>
+          <tr>
+            <td class="label">版本</td>
+            <td class="value">{{ mysqlData.version || '-' }}</td>
+            <td class="label">运行时间</td>
+            <td class="value">{{ formatUptime(mysqlData.uptime) }}</td>
+            <td class="label">查询次数</td>
+            <td class="value">{{ formatNumber(mysqlData.questions) }}</td>
+          </tr>
+          <tr>
+            <td class="label">当前连接</td>
+            <td class="value">{{ mysqlData.threadsConnected || 0 }}</td>
+            <td class="label">最大连接</td>
+            <td class="value">{{ mysqlData.maxConnections || 0 }}</td>
+            <td class="label">连接使用率</td>
+            <td class="value">{{ connectionUsagePercent }}%</td>
+          </tr>
+        </tbody>
+      </table>
+    </el-card>
+
+    <!-- Redis信息表格 -->
+    <el-card class="info-card" shadow="never">
+      <template #header>
+        <div class="card-header-with-status">
+          <span class="card-title">Redis信息</span>
+          <el-tag :type="redisData.connected ? 'success' : 'danger'" size="small">
+            {{ redisData.connected ? '已连接' : '未连接' }}
+          </el-tag>
+        </div>
+      </template>
+      <table class="info-table">
+        <tbody>
+          <tr>
+            <td class="label">版本</td>
+            <td class="value">{{ redisData.version || '-' }}</td>
+            <td class="label">运行时间</td>
+            <td class="value">{{ formatUptime(redisData.uptime) }}</td>
+            <td class="label">Key数量</td>
+            <td class="value">{{ redisData.keyCount || 0 }}</td>
+          </tr>
+          <tr>
+            <td class="label">客户端连接</td>
+            <td class="value">{{ redisData.connectedClients || 0 }}</td>
+            <td class="label">已用内存</td>
+            <td class="value">{{ formatBytes(redisData.usedMemory) }}</td>
+            <td class="label">内存使用率</td>
+            <td class="value">{{ redisMemoryPercent }}%</td>
+          </tr>
+        </tbody>
+      </table>
+    </el-card>
+
+    <!-- 统计图表 -->
+    <el-row :gutter="16">
+      <el-col :span="12">
+        <el-card class="chart-card" shadow="never">
           <template #header>
-            <div class="card-header">
-              <span>连接状态</span>
-              <el-tag :type="mysqlData.connected ? 'success' : 'danger'" size="small">
-                {{ mysqlData.connected ? '已连接' : '未连接' }}
-              </el-tag>
-            </div>
+            <span class="card-title">MySQL连接使用率</span>
           </template>
-          <div class="status-list">
-            <div class="status-item">
-              <span class="label">版本</span>
-              <span class="value">{{ mysqlData.version || '-' }}</span>
-            </div>
-            <div class="status-item">
-              <span class="label">运行时间</span>
-              <span class="value">{{ formatUptime(mysqlData.uptime) }}</span>
-            </div>
-            <div class="status-item">
-              <span class="label">当前连接数</span>
-              <span class="value">{{ mysqlData.threadsConnected || 0 }}</span>
-            </div>
-            <div class="status-item">
-              <span class="label">最大连接数</span>
-              <span class="value">{{ mysqlData.maxConnections || 0 }}</span>
-            </div>
-          </div>
+          <div ref="mysqlChartRef" class="chart-container"></div>
         </el-card>
       </el-col>
-
-      <!-- 连接数饼状图 -->
-      <el-col :xs="24" :lg="8">
-        <el-card class="monitor-card" shadow="never">
+      <el-col :span="12">
+        <el-card class="chart-card" shadow="never">
           <template #header>
-            <span>连接数使用</span>
+            <span class="card-title">Redis内存使用率</span>
           </template>
-          <div ref="connectionChartRef" class="chart-container"></div>
-          <div class="chart-legend">
-            <span>已使用: {{ mysqlData.threadsConnected || 0 }}</span>
-            <span>最大: {{ mysqlData.maxConnections || 0 }}</span>
-          </div>
-        </el-card>
-      </el-col>
-
-      <!-- 查询统计 -->
-      <el-col :xs="24" :lg="8">
-        <el-card class="monitor-card" shadow="never">
-          <template #header>
-            <span>运行指标</span>
-          </template>
-          <el-table :data="metricsData" style="width: 100%" size="small">
-            <el-table-column prop="name" label="指标" width="120" />
-            <el-table-column prop="value" label="值" />
-          </el-table>
+          <div ref="redisChartRef" class="chart-container"></div>
         </el-card>
       </el-col>
     </el-row>
-
-    <!-- 连接使用率进度 -->
-    <el-card class="monitor-card progress-card" shadow="never">
-      <template #header>
-        <span>连接池使用率</span>
-      </template>
-      <div class="progress-container">
-        <div class="progress-info">
-          <span>当前连接: {{ mysqlData.threadsConnected || 0 }} / {{ mysqlData.maxConnections || 0 }}</span>
-          <span class="usage-percent">{{ connectionUsagePercent }}%</span>
-        </div>
-        <el-progress 
-          :percentage="connectionUsagePercent" 
-          :color="getProgressColor(connectionUsagePercent)"
-          :stroke-width="20"
-        />
-        <div class="progress-tips">
-          <span v-if="connectionUsagePercent < 50" class="tip-success">连接池状态良好</span>
-          <span v-else-if="connectionUsagePercent < 80" class="tip-warning">连接池使用率较高，请关注</span>
-          <span v-else class="tip-danger">连接池使用率过高，请及时处理！</span>
-        </div>
-      </div>
-    </el-card>
   </div>
 </template>
 
@@ -109,90 +109,90 @@ const loading = ref(false)
 const autoRefresh = ref(false)
 const lastUpdateTime = ref('-')
 const mysqlData = ref({})
+const redisData = ref({})
 let refreshTimer = null
-let connectionChart = null
-const connectionChartRef = ref(null)
+let mysqlChart = null, redisChart = null
+const mysqlChartRef = ref(null)
+const redisChartRef = ref(null)
 
-// 连接使用率百分比
 const connectionUsagePercent = computed(() => {
   if (!mysqlData.value.maxConnections) return 0
   return Math.round((mysqlData.value.threadsConnected / mysqlData.value.maxConnections) * 100)
 })
 
-// 计算指标数据
-const metricsData = computed(() => [
-  { name: '版本', value: mysqlData.value.version || '-' },
-  { name: '当前连接', value: mysqlData.value.threadsConnected || 0 },
-  { name: '最大连接', value: mysqlData.value.maxConnections || 0 },
-  { name: '查询次数', value: formatNumber(mysqlData.value.questions) },
-  { name: '运行时间', value: formatUptime(mysqlData.value.uptime) }
-])
+const redisMemoryPercent = computed(() => {
+  if (!redisData.value.totalMemory) return 0
+  return Math.round((redisData.value.usedMemory / redisData.value.totalMemory) * 100)
+})
 
 const loadData = async () => {
   try {
     loading.value = true
-    const response = await monitorApi.getMySQLInfo()
-    if (response.code === 200) {
-      mysqlData.value = response.data || {}
-      lastUpdateTime.value = new Date().toLocaleString('zh-CN')
-      nextTick(() => {
-        initConnectionChart()
-      })
+    const [mysqlRes, redisRes] = await Promise.all([
+      monitorApi.getMySQLInfo(),
+      monitorApi.getRedisInfo()
+    ])
+    if (mysqlRes.code === 200) {
+      mysqlData.value = mysqlRes.data || {}
     }
+    if (redisRes.code === 200) {
+      redisData.value = redisRes.data || {}
+    }
+    lastUpdateTime.value = new Date().toLocaleString('zh-CN')
+    nextTick(() => {
+      initCharts()
+    })
   } catch (error) {
-    console.error('获取MySQL监控数据失败:', error)
-    ElMessage.error('获取MySQL监控数据失败')
+    console.error('获取数据服务监控数据失败:', error)
+    ElMessage.error('获取数据服务监控数据失败')
   } finally {
     loading.value = false
   }
 }
 
-const initConnectionChart = () => {
-  if (!connectionChartRef.value) return
+const initCharts = () => {
+  initPieChart(mysqlChartRef.value, mysqlChart, connectionUsagePercent.value, '#10B981', 'mysql')
+  initPieChart(redisChartRef.value, redisChart, redisMemoryPercent.value, '#3B82F6', 'redis')
+}
+
+const initPieChart = (chartRef, chart, usageRate, color, name) => {
+  if (!chartRef) return
   
-  if (connectionChart) {
-    connectionChart.dispose()
+  if (chart) {
+    chart.dispose()
   }
   
-  connectionChart = echarts.init(connectionChartRef.value)
-  
-  const used = mysqlData.value.threadsConnected || 0
-  const max = mysqlData.value.maxConnections || 1
-  const free = max - used
+  chart = echarts.init(chartRef)
   
   const option = {
     tooltip: {
       trigger: 'item',
-      formatter: '{b}: {c} ({d}%)'
-    },
-    legend: {
-      orient: 'horizontal',
-      bottom: '0%',
-      textStyle: {
-        color: document.documentElement.getAttribute('data-theme') === 'dark' ? '#9ca3af' : '#666'
-      }
+      formatter: '{b}: {c}%'
     },
     series: [{
       type: 'pie',
-      radius: ['40%', '70%'],
-      center: ['50%', '45%'],
+      radius: ['50%', '70%'],
+      center: ['50%', '50%'],
       avoidLabelOverlap: false,
       label: {
         show: true,
         position: 'center',
-        formatter: () => `${connectionUsagePercent.value}%`,
-        fontSize: 20,
+        formatter: () => `${usageRate}%`,
+        fontSize: 14,
         fontWeight: 'bold',
-        color: '#10B981'
+        color: color
       },
       data: [
-        { value: used, name: '已使用', itemStyle: { color: '#10B981' } },
-        { value: free, name: '空闲', itemStyle: { color: '#e5e7eb' } }
+        { value: usageRate, name: '已使用', itemStyle: { color: color } },
+        { value: 100 - usageRate, name: '空闲', itemStyle: { color: '#e5e7eb' } }
       ]
     }]
   }
   
-  connectionChart.setOption(option)
+  chart.setOption(option)
+  
+  if (name === 'mysql') mysqlChart = chart
+  else if (name === 'redis') redisChart = chart
 }
 
 const toggleAutoRefresh = (enabled) => {
@@ -215,6 +215,14 @@ const formatNumber = (num) => {
   return num.toString()
 }
 
+const formatBytes = (bytes) => {
+  if (!bytes || bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
 const formatUptime = (seconds) => {
   if (!seconds) return '-'
   const days = Math.floor(seconds / 86400)
@@ -226,25 +234,23 @@ const formatUptime = (seconds) => {
   return `${minutes}分钟`
 }
 
-const getProgressColor = (percentage) => {
-  if (percentage < 50) return '#10B981'
-  if (percentage < 80) return '#F59E0B'
-  return '#EF4444'
-}
-
 onMounted(() => {
   loadData()
-  window.addEventListener('resize', () => connectionChart?.resize())
+  window.addEventListener('resize', () => {
+    mysqlChart?.resize()
+    redisChart?.resize()
+  })
 })
 
 onUnmounted(() => {
   if (refreshTimer) clearInterval(refreshTimer)
-  if (connectionChart) connectionChart.dispose()
+  if (mysqlChart) mysqlChart.dispose()
+  if (redisChart) redisChart.dispose()
 })
 </script>
 
 <style scoped>
-.mysql-monitor {
+.data-service-monitor {
   padding: 0;
 }
 
@@ -252,12 +258,12 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 
 .monitor-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: #1f2937;
 }
@@ -269,7 +275,7 @@ onUnmounted(() => {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .last-update {
@@ -277,136 +283,124 @@ onUnmounted(() => {
   color: #6b7280;
 }
 
-.monitor-card {
-  margin-bottom: 20px;
-  border-radius: 12px;
+/* 信息卡片样式 */
+.info-card {
+  margin-bottom: 10px;
+  border-radius: 4px;
   border: 1px solid #e5e7eb;
 }
 
-[data-theme="dark"] .monitor-card {
+.info-card :deep(.el-card__header) {
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.info-card :deep(.el-card__body) {
+  padding: 0;
+}
+
+[data-theme="dark"] .info-card {
   background: #1e293b;
   border-color: #374151;
 }
 
-[data-theme="dark"] .monitor-card :deep(.el-card__header) {
+[data-theme="dark"] .info-card :deep(.el-card__header) {
+  background: #111827;
   border-bottom-color: #374151;
   color: #f3f4f6;
 }
 
-[data-theme="dark"] .monitor-card :deep(.el-card__body) {
+[data-theme="dark"] .info-card :deep(.el-card__body) {
   background: #1e293b;
 }
 
-.card-header {
+.card-header-with-status {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.status-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.status-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px dashed #e5e7eb;
-}
-
-.status-item:last-child {
-  border-bottom: none;
-}
-
-[data-theme="dark"] .status-item {
-  border-bottom-color: #374151;
-}
-
-.status-item .label {
+.card-title {
   font-size: 13px;
-  color: #6b7280;
-}
-
-[data-theme="dark"] .status-item .label {
-  color: #9ca3af;
-}
-
-.status-item .value {
-  font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: #1f2937;
 }
 
-[data-theme="dark"] .status-item .value {
+[data-theme="dark"] .card-title {
+  color: #f3f4f6;
+}
+
+/* 信息表格样式 */
+.info-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.info-table td {
+  padding: 6px 12px;
+  border: 1px solid #e5e7eb;
+  font-size: 12px;
+}
+
+.info-table td.label {
+  background: #f8fafc;
+  color: #6b7280;
+  width: 100px;
+  font-weight: 500;
+}
+
+.info-table td.value {
+  color: #1f2937;
+}
+
+[data-theme="dark"] .info-table td {
+  border-color: #374151;
+}
+
+[data-theme="dark"] .info-table td.label {
+  background: #111827;
+  color: #9ca3af;
+}
+
+[data-theme="dark"] .info-table td.value {
   color: #e5e7eb;
+}
+
+/* 图表卡片样式 */
+.chart-card {
+  margin-bottom: 0;
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+}
+
+.chart-card :deep(.el-card__header) {
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.chart-card :deep(.el-card__body) {
+  padding: 8px;
+}
+
+[data-theme="dark"] .chart-card {
+  background: #1e293b;
+  border-color: #374151;
+}
+
+[data-theme="dark"] .chart-card :deep(.el-card__header) {
+  background: #111827;
+  border-bottom-color: #374151;
+  color: #f3f4f6;
+}
+
+[data-theme="dark"] .chart-card :deep(.el-card__body) {
+  background: #1e293b;
 }
 
 .chart-container {
   width: 100%;
-  height: 200px;
-}
-
-.chart-legend {
-  display: flex;
-  justify-content: space-around;
-  font-size: 12px;
-  color: #6b7280;
-  margin-top: 10px;
-}
-
-[data-theme="dark"] .chart-legend {
-  color: #9ca3af;
-}
-
-.progress-container {
-  padding: 10px 0;
-}
-
-.progress-info {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  font-size: 14px;
-  color: #4b5563;
-}
-
-[data-theme="dark"] .progress-info {
-  color: #d1d5db;
-}
-
-.usage-percent {
-  font-weight: 600;
-  color: #10B981;
-}
-
-.progress-tips {
-  margin-top: 12px;
-  text-align: center;
-}
-
-.tip-success {
-  color: #10B981;
-}
-
-.tip-warning {
-  color: #F59E0B;
-}
-
-.tip-danger {
-  color: #EF4444;
-  font-weight: 500;
-}
-
-[data-theme="dark"] :deep(.el-table) {
-  --el-table-bg-color: transparent;
-  --el-table-tr-bg-color: transparent;
-  --el-table-header-bg-color: #111827;
-  --el-table-row-hover-bg-color: #1f2937;
-  --el-table-text-color: #e5e7eb;
-  --el-table-header-text-color: #9ca3af;
-  --el-table-border-color: #374151;
+  height: 130px;
 }
 </style>

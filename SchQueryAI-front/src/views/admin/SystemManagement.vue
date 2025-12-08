@@ -49,13 +49,9 @@
             <el-icon><Cpu /></el-icon>
             <span>服务器监控</span>
           </el-menu-item>
-          <el-menu-item index="mysql-monitor">
+          <el-menu-item index="data-service-monitor">
             <el-icon><Coin /></el-icon>
-            <span>数据库监控</span>
-          </el-menu-item>
-          <el-menu-item index="redis-monitor">
-            <el-icon><Key /></el-icon>
-            <span>Redis监控</span>
+            <span>数据服务监控</span>
           </el-menu-item>
         </el-sub-menu>
       </el-menu>
@@ -421,8 +417,7 @@ import {
   Sunny,
   Monitor,
   Cpu,
-  Coin,
-  Key
+  Coin
 } from '@element-plus/icons-vue'
 import { userApi } from '../../api/user'
 import { operationLogApi } from '../../api/operationLog'
@@ -432,8 +427,7 @@ import SensitiveWordsManagement from './sensitive-words.vue'
 import SegmentationWordsManagement from './segmentation-words.vue'
 import SystemLogsManagement from './system-logs.vue'
 import ServerMonitor from './ServerMonitor.vue'
-import MySQLMonitor from './MySQLMonitor.vue'
-import RedisMonitor from './RedisMonitor.vue'
+import DataServiceMonitor from './MySQLMonitor.vue'
 
 const router = useRouter()
 
@@ -462,8 +456,7 @@ const panelTitleMap = {
   segmentation: '分词管理',
   logs: '系统日志',
   'server-monitor': '服务器监控',
-  'mysql-monitor': '数据库监控',
-  'redis-monitor': 'Redis监控'
+  'data-service-monitor': '数据服务监控'
 }
 const panelComponents = {
   user: UserManagement,
@@ -471,8 +464,7 @@ const panelComponents = {
   segmentation: SegmentationWordsManagement,
   logs: SystemLogsManagement,
   'server-monitor': ServerMonitor,
-  'mysql-monitor': MySQLMonitor,
-  'redis-monitor': RedisMonitor
+  'data-service-monitor': DataServiceMonitor
 }
 const activePanelComponent = computed(() => panelComponents[contentView.value] || null)
 const panelTitle = computed(() => panelTitleMap[contentView.value] || '系统管理')
@@ -530,7 +522,7 @@ const scrollToSection = (sectionRef) => {
 const handleMenuSelect = (key) => {
   activeMenu.value = key
   // 监控子菜单项在右侧展示
-  if (['user', 'sensitive', 'segmentation', 'logs', 'server-monitor', 'mysql-monitor', 'redis-monitor'].includes(key)) {
+  if (['user', 'sensitive', 'segmentation', 'logs', 'server-monitor', 'data-service-monitor'].includes(key)) {
     contentView.value = key
     return
   }

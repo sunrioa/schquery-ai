@@ -1,12 +1,18 @@
 package cn.ling.controller;
 
 import cn.ling.Result;
+import cn.ling.dto.KnowledgeDocumentStatusDTO;
 import cn.ling.domain.dto.DocumentsDTO;
+import cn.ling.domain.pojo.DocumentChunks;
+import cn.ling.domain.pojo.Documents;
+import cn.ling.service.DocumentChunksService;
 import cn.ling.service.DocumentsService;
 import cn.ling.utils.JsonUtils;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -27,6 +33,9 @@ public class KnowledgeBaseController {
     @Resource
     private DocumentsService documentsService;
 
+    @Resource
+    private DocumentChunksService documentChunksService;
+
     /**
      * 上传文档到知识库
      * 支持PDF等文档格式，自动进行OCR处理和向量化存储
@@ -39,7 +48,7 @@ public class KnowledgeBaseController {
      * @return 上传结果
      */
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public Result<String> upload(
+    public Result<Long> upload(
             @RequestParam(value = "id", required = false) Long id,
             @RequestParam(value = "title", required = false) String title,
             @RequestParam(value = "content", required = false) String content,
@@ -64,11 +73,12 @@ public class KnowledgeBaseController {
 
             // 3. 解析元数据JSON
             try {
-                documentsDTO.setMetadata(JsonUtils.strToMap(metadataJson));
-                log.debug("元数据解析成功: {}", documentsDTO.getMetadata());
+                if (StringUtils.hasText(metadataJson)) {
+                    documentsDTO.setMetadata(JsonUtils.strToMap(metadataJson));
+                    log.debug("元数据解析成功: {}", documentsDTO.getMetadata());
+                }
             } catch (Exception e) {
                 log.warn("元数据解析失败，将使用空元数据: {}", e.getMessage());
-                documentsDTO.setMetadata(null);
             }
 
             // 4. 调用服务层方法
@@ -80,5 +90,36 @@ public class KnowledgeBaseController {
             log.error("文档上传过程中发生异常 - 文件名: {}, 错误信息: {}", file.getOriginalFilename(), e.getMessage(), e);
             return Result.error("文档上传失败：" + e.getMessage());
         }
+    }
+
+    /**
+     * 查询知识库文档处理状态（用于前端轮询）
+     *
+     * @param id 文档ID
+     * @return 文档处理状态
+     */
+    @GetMapping("/status")
+    public Result<KnowledgeDocumentStatusDTO> status(@RequestParam("id") Long id) {
+        if (id == null) {
+            return Result.error(400, "文档ID不能为空");
+        }
+
+        Documents documents = documentsService.getById(id);
+        if (documents == null) {
+            return Result.error(404, "未找到文档");
+        }
+
+        long chunkCount = documentChunksService.lambdaQuery()
+                .eq(DocumentChunks::getDocumentId, id)
+                .count();
+
+        KnowledgeDocumentStatusDTO dto = new KnowledgeDocumentStatusDTO(
+                documents.getId(),
+                documents.getTitle(),
+                documents.getProcessStatus(),
+                (int) chunkCount,
+                documents.getUpdateTime()
+        );
+        return Result.success(dto);
     }
 }

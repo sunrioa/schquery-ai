@@ -53,11 +53,6 @@ spring:
 
     vectorstore:
       qdrant:
-        # Qdrant向量数据库配置 - 用于存储和检索文档向量
-
-#        host: localhost        # 百度云Qdrant服务器地址
-#        port: 6334                  # 百度云Qdrant服务器端口
-#        api-key: ${SECRET_VALUE}             # 百度云Qdrant访问密钥
 
         host: localhost        # 腾讯云Qdrant服务器地址
         port: 6005                  # 腾讯云Qdrant服务器端口
@@ -91,9 +86,9 @@ spring:
 email:
   host: smtp.qq.com                    # SMTP服务器地址（QQ邮箱）
   port: 465                            # SMTP服务器端口（SSL加密）
-  username: user@example.com          # 邮箱用户名
+  username: user@example.com       # 邮箱用户名
   password: ${EMAIL_PASSWORD}           # 邮箱授权码（非邮箱密码）
-  from: user@example.com              # 发件人邮箱地址
+  from: user@example.com             # 发件人邮箱地址
 
 # 服务器配置
 server:

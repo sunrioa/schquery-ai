@@ -16,6 +16,7 @@ import SensitiveWordsManagement from '../views/admin/sensitive-words.vue'
 import SegmentationWordsManagement from '../views/admin/segmentation-words.vue'
 import UserManagement from '../views/admin/UserManagement.vue'
 import AdminDashboard from '../views/AdminDashboard.vue'
+import KnowledgeBaseUpload from '../views/admin/KnowledgeBaseUpload.vue'
 import NotFound from '../views/NotFound.vue'
 import { hasAnyRole } from '../utils/auth'
 
@@ -120,6 +121,12 @@ const routes = [
     path: '/admin/system-monitor',
     name: 'SystemMonitor',
     component: SystemMonitor,
+    meta: { requiresAuth: true, requiresRole: ['admin'] }
+  },
+  {
+    path: '/admin/knowledge-base',
+    name: 'KnowledgeBaseUpload',
+    component: KnowledgeBaseUpload,
     meta: { requiresAuth: true, requiresRole: ['admin'] }
   },
   {

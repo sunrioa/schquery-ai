@@ -1,7 +1,6 @@
 package cn.ling.service.impl;
 
 import cn.ling.utils.TextSplitterUtils;
-import cn.ling.vector.CustomQdrantVectorStore;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import cn.ling.domain.pojo.DocumentChunks;
 import cn.ling.service.DocumentChunksService;
@@ -10,11 +9,17 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
+import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -30,7 +35,8 @@ public class DocumentChunksServiceImpl extends ServiceImpl<DocumentChunksMapper,
     TokenTextSplitter tokenTextSplitter;
 
     @Resource
-    CustomQdrantVectorStore customQdrantVectorStore;
+    @Qualifier("qdrantVectorStore")
+    VectorStore qdrantVectorStore;
 
     @Resource
     TextSplitterUtils textSplitterUtils;
@@ -62,58 +68,66 @@ public class DocumentChunksServiceImpl extends ServiceImpl<DocumentChunksMapper,
             }
 
             // 2. 文档分块处理
-//            Document document = new Document(content, metadata);
-//            List<Document> documentList = tokenTextSplitter.split(document);
+            List<String> chunkTexts = textSplitterUtils.splitText(content);
+            log.info("文档分块完成 - 文档ID: {}, 总分块数: {}", id, chunkTexts.size());
 
-            List<Document> documentList = textSplitterUtils.splitText(content).stream().map(text -> new Document(text, metadata)).toList();
-
-            log.info("文档分块完成 - 文档ID: {}, 总分块数: {}", id, documentList.size());
-
-            if (documentList.isEmpty()) {
+            if (chunkTexts.isEmpty()) {
                 log.warn("文档分块结果为空 - 文档ID: {}", id);
                 return;
             }
 
-            // 3. 构建文档分块实体列表
-            AtomicInteger atomicInteger = new AtomicInteger(1);
-            List<DocumentChunks> documentChunks = documentList.stream()
-                    .map(doc -> {
-                        // 在元数据中添加分块索引
-                        doc.getMetadata().put("chunk_index", atomicInteger.get());
+            Map<String, Object> baseMetadata = metadata == null ? new HashMap<>() : new HashMap<>(metadata);
+            baseMetadata.putIfAbsent("document_id", id);
 
-                        return DocumentChunks.builder()
-                                .documentId(id)
-                                .chunkIndex(atomicInteger.getAndIncrement())
-                                .chunkContent(doc.getText())
-                                .chunkLength(doc.getText().length())
-                                .createdTime(LocalDateTime.now())
-                                .metadata(metadata)
-                                .build();
-                    }).toList();
+            // 3. 构建待写入Qdrant的Document与DB分块实体（元数据必须逐块拷贝，避免被覆盖）
+            AtomicInteger chunkIndex = new AtomicInteger(1);
+            List<Document> qdrantDocuments = new ArrayList<>(chunkTexts.size());
+            List<DocumentChunks> documentChunks = new ArrayList<>(chunkTexts.size());
 
-            // 4. 将分片向量化存储到Qdrant
-            log.info("开始将文档分块向量化存储到Qdrant - 文档ID: {}, 分块数: {}", id, documentList.size());
-            List<String> qdrantPointIds;
+            for (String chunkText : chunkTexts) {
+                if (!StringUtils.hasText(chunkText)) {
+                    continue;
+                }
+
+                int index = chunkIndex.getAndIncrement();
+                Map<String, Object> chunkMetadata = new HashMap<>(baseMetadata);
+                chunkMetadata.put("chunk_index", index);
+
+                String pointId = UUID.randomUUID().toString();
+                Document qdrantDocument = Document.builder()
+                        .id(pointId)
+                        .text(chunkText)
+                        .metadata(chunkMetadata)
+                        .build();
+                qdrantDocuments.add(qdrantDocument);
+
+                documentChunks.add(DocumentChunks.builder()
+                        .documentId(id)
+                        .chunkIndex(index)
+                        .chunkContent(chunkText)
+                        .chunkLength(chunkText.length())
+                        .createdTime(LocalDateTime.now())
+                        .qdrantPointId(pointId)
+                        .metadata(chunkMetadata)
+                        .build());
+            }
+
+            if (qdrantDocuments.isEmpty()) {
+                log.warn("过滤空白片段后无有效分块 - 文档ID: {}", id);
+                return;
+            }
+
+            // 4. 将分片向量化存储到Qdrant（使用Spring AI标准VectorStore，确保与检索端一致）
+            log.info("开始将文档分块向量化存储到Qdrant - 文档ID: {}, 分块数: {}", id, qdrantDocuments.size());
             try {
-                qdrantPointIds = customQdrantVectorStore.addDocuments(documentList);
-                log.info("文档分块向量化存储成功 - 文档ID: {}, Qdrant点ID数量: {}", id, qdrantPointIds.size());
+                qdrantVectorStore.add(qdrantDocuments);
+                log.info("文档分块向量化存储成功 - 文档ID: {}, 分块数: {}", id, qdrantDocuments.size());
             } catch (Exception e) {
                 log.error("文档分块向量化存储失败 - 文档ID: {}, 错误信息: {}", id, e.getMessage(), e);
                 throw new RuntimeException("向量化存储失败：" + e.getMessage(), e);
             }
 
-            // 5. 将Qdrant点ID关联到分块实体
-            if (qdrantPointIds.size() != documentChunks.size()) {
-                log.error("Qdrant返回的点ID数量与分块数量不匹配 - 文档ID: {}, Qdrant点数: {}, 分块数: {}",
-                        id, qdrantPointIds.size(), documentChunks.size());
-                throw new RuntimeException("Qdrant存储数量不匹配");
-            }
-
-            for (int i = 0; i < documentChunks.size(); i++) {
-                documentChunks.get(i).setQdrantPointId(qdrantPointIds.get(i));
-            }
-
-            // 6. 批量保存分块信息到数据库
+            // 5. 批量保存分块信息到数据库
             boolean saved = saveBatch(documentChunks);
             if (saved) {
                 log.info("文档分块保存成功 - 文档ID: {}, 保存的分块数: {}", id, documentChunks.size());
@@ -128,7 +142,6 @@ public class DocumentChunksServiceImpl extends ServiceImpl<DocumentChunksMapper,
         }
     }
 }
-
 
 
 

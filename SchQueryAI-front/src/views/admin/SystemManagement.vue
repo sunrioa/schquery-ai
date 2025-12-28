@@ -32,6 +32,10 @@
           <el-icon><Collection /></el-icon>
           <span>分词管理</span>
         </el-menu-item>
+        <el-menu-item index="knowledge-base">
+          <el-icon><UploadFilled /></el-icon>
+          <span>知识库上传</span>
+        </el-menu-item>
         <el-menu-item index="customer">
           <el-icon><Service /></el-icon>
           <span>客服管理</span>
@@ -417,7 +421,8 @@ import {
   Sunny,
   Monitor,
   Cpu,
-  Coin
+  Coin,
+  UploadFilled
 } from '@element-plus/icons-vue'
 import { userApi } from '../../api/user'
 import { operationLogApi } from '../../api/operationLog'
@@ -425,6 +430,7 @@ import request from '../../api/request'
 import UserManagement from './UserManagement.vue'
 import SensitiveWordsManagement from './sensitive-words.vue'
 import SegmentationWordsManagement from './segmentation-words.vue'
+import KnowledgeBaseUpload from './KnowledgeBaseUpload.vue'
 import SystemLogsManagement from './system-logs.vue'
 import ServerMonitor from './ServerMonitor.vue'
 import DataServiceMonitor from './MySQLMonitor.vue'
@@ -454,6 +460,7 @@ const panelTitleMap = {
   user: '用户管理',
   sensitive: '敏感词管理',
   segmentation: '分词管理',
+  'knowledge-base': '知识库上传',
   logs: '系统日志',
   'server-monitor': '服务器监控',
   'data-service-monitor': '数据服务监控'
@@ -462,6 +469,7 @@ const panelComponents = {
   user: UserManagement,
   sensitive: SensitiveWordsManagement,
   segmentation: SegmentationWordsManagement,
+  'knowledge-base': KnowledgeBaseUpload,
   logs: SystemLogsManagement,
   'server-monitor': ServerMonitor,
   'data-service-monitor': DataServiceMonitor
@@ -522,7 +530,7 @@ const scrollToSection = (sectionRef) => {
 const handleMenuSelect = (key) => {
   activeMenu.value = key
   // 监控子菜单项在右侧展示
-  if (['user', 'sensitive', 'segmentation', 'logs', 'server-monitor', 'data-service-monitor'].includes(key)) {
+  if (['user', 'sensitive', 'segmentation', 'knowledge-base', 'logs', 'server-monitor', 'data-service-monitor'].includes(key)) {
     contentView.value = key
     return
   }

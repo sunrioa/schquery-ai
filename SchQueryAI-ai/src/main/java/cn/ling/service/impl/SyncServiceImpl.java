@@ -13,7 +13,11 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.Locale;
 
 /**
  * 同步服务实现类
@@ -61,15 +65,32 @@ public class SyncServiceImpl implements SyncService {
                 return;
             }
 
-            // 2. 根据文件类型提取内容
-            String content;
+            // 2. 标记处理中
             try {
-                if ("application/pdf".equals(file.getContentType())) {
+                documents.setProcessStatus(1);
+                documents.setUpdateTime(LocalDateTime.now());
+                documentsService.updateById(documents);
+            } catch (Exception e) {
+                log.warn("更新文档处理中状态失败（继续处理） - 文档ID: {}, 错误信息: {}", documentsId, e.getMessage(), e);
+            }
+
+            // 3. 根据入参/文件类型提取内容（优先使用前端直接传入的content）
+            String content = "";
+            try {
+                if (documentsDTO != null && StringUtils.hasText(documentsDTO.getContent())) {
+                    content = documentsDTO.getContent().trim();
+                    log.info("使用请求参数content作为文档内容 - 文档ID: {}, 内容长度: {} 字符", documentsId, content.length());
+                } else if ("application/pdf".equalsIgnoreCase(file.getContentType())) {
                     log.info("开始对PDF文件进行OCR识别 - 文档ID: {}, 文件名: {}", documentsId, file.getOriginalFilename());
                     content = executeOcr(file);
                     log.info("PDF OCR识别完成 - 文档ID: {}, 提取内容长度: {} 字符", documentsId, content != null ? content.length() : 0);
+                } else if (isLikelyTextFile(file)) {
+                    log.info("检测为文本类文件，开始读取内容 - 文档ID: {}, 文件名: {}", documentsId, file.getOriginalFilename());
+                    content = readTextFile(file);
+                    log.info("文本内容读取完成 - 文档ID: {}, 内容长度: {} 字符", documentsId, content != null ? content.length() : 0);
                 } else {
-                    log.info("非PDF文件，跳过OCR处理 - 文档ID: {}, 文件类型: {}", documentsId, file.getContentType());
+                    log.warn("暂不支持的文件类型，跳过内容提取 - 文档ID: {}, 文件类型: {}, 文件名: {}",
+                            documentsId, file.getContentType(), file.getOriginalFilename());
                     content = "";
                 }
             } catch (Exception e) {
@@ -77,10 +98,11 @@ public class SyncServiceImpl implements SyncService {
                 content = "";
             }
 
-            // 3. 更新文档内容到数据库
+            // 4. 更新文档内容到数据库
             try {
                 documents.setContent(content);
-                documents.setProcessStatus(StringUtils.hasText(content) ? 1 : 0); // 有内容设置为已处理，无内容设置为待处理
+                // 有内容继续保持“处理中”，无内容回退为“未处理”（便于后续补传content）
+                documents.setProcessStatus(StringUtils.hasText(content) ? 1 : 0);
                 documents.setUpdateTime(LocalDateTime.now());
                 boolean updated = documentsService.updateById(documents);
                 if (updated) {
@@ -93,7 +115,7 @@ public class SyncServiceImpl implements SyncService {
                 log.error("文档内容更新异常 - 文档ID: {}, 错误信息: {}", documentsId, e.getMessage(), e);
                 // 标记文档处理失败
                 try {
-                    documents.setProcessStatus(-1); // 处理失败状态
+                    documents.setProcessStatus(3); // 处理失败状态
                     documentsService.updateById(documents);
                 } catch (Exception updateEx) {
                     log.error("更新文档失败状态时发生异常 - 文档ID: {}, 错误信息: {}", documentsId, updateEx.getMessage(), updateEx);
@@ -101,17 +123,30 @@ public class SyncServiceImpl implements SyncService {
                 return;
             }
 
-            // 4. 调用文档分块服务进行向量化处理
+            // 5. 调用文档分块服务进行向量化处理
             if (StringUtils.hasText(content)) {
                 try {
                     log.info("开始进行文档分块和向量化处理 - 文档ID: {}", documentsId);
-                    documentChunksService.saveDocument(documents.getId(), documentsDTO.getMetadata(), documents.getContent());
+                    documentChunksService.saveDocument(
+                            documents.getId(),
+                            documentsDTO == null ? null : documentsDTO.getMetadata(),
+                            documents.getContent()
+                    );
                     log.info("文档分块和向量化处理完成 - 文档ID: {}", documentsId);
+
+                    // 标记处理完成
+                    try {
+                        documents.setProcessStatus(2);
+                        documents.setUpdateTime(LocalDateTime.now());
+                        documentsService.updateById(documents);
+                    } catch (Exception e) {
+                        log.warn("更新文档处理完成状态失败 - 文档ID: {}, 错误信息: {}", documentsId, e.getMessage(), e);
+                    }
                 } catch (Exception e) {
                     log.error("文档分块和向量化处理失败 - 文档ID: {}, 错误信息: {}", documentsId, e.getMessage(), e);
                     // 标记文档处理失败
                     try {
-                        documents.setProcessStatus(-1); // 处理失败状态
+                        documents.setProcessStatus(3); // 处理失败状态
                         documentsService.updateById(documents);
                     } catch (Exception updateEx) {
                         log.error("更新文档失败状态时发生异常 - 文档ID: {}, 错误信息: {}", documentsId, updateEx.getMessage(), updateEx);
@@ -129,7 +164,7 @@ public class SyncServiceImpl implements SyncService {
             try {
                 Documents documents = documentsService.getById(documentsId);
                 if (documents != null) {
-                    documents.setProcessStatus(-1); // 处理失败状态
+                    documents.setProcessStatus(3); // 处理失败状态
                     documentsService.updateById(documents);
                 }
             } catch (Exception updateEx) {
@@ -175,6 +210,39 @@ public class SyncServiceImpl implements SyncService {
             log.error("OCR识别过程中发生异常 - 文件名: {}, 错误信息: {}",
                     pdfFile.getOriginalFilename(), e.getMessage(), e);
             throw new RuntimeException("OCR识别失败：" + e.getMessage(), e);
+        }
+    }
+
+    private boolean isLikelyTextFile(MultipartFile file) {
+        String contentType = file.getContentType();
+        if (StringUtils.hasText(contentType) && contentType.toLowerCase(Locale.ROOT).startsWith("text/")) {
+            return true;
+        }
+        String filename = file.getOriginalFilename();
+        if (!StringUtils.hasText(filename)) {
+            return false;
+        }
+        String lower = filename.toLowerCase(Locale.ROOT);
+        return lower.endsWith(".txt") || lower.endsWith(".md") || lower.endsWith(".csv") || lower.endsWith(".log");
+    }
+
+    private String readTextFile(MultipartFile file) {
+        try {
+            byte[] bytes = file.getBytes();
+            if (bytes.length == 0) {
+                return "";
+            }
+
+            String utf8 = new String(bytes, StandardCharsets.UTF_8);
+            if (StringUtils.hasText(utf8)) {
+                return utf8;
+            }
+
+            // 简单兜底：部分Windows文本可能为GBK/GB18030
+            String gbk = new String(bytes, Charset.forName("GB18030"));
+            return gbk == null ? "" : gbk;
+        } catch (Exception e) {
+            throw new RuntimeException("读取文本文件失败：" + e.getMessage(), e);
         }
     }
 }

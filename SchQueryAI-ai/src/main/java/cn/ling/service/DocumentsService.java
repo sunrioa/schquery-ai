@@ -13,5 +13,5 @@ import org.springframework.web.multipart.MultipartFile;
 */
 public interface DocumentsService extends IService<Documents> {
 
-    Result<String> upload(DocumentsDTO documentsDTO, MultipartFile file);
+    Result<Long> upload(DocumentsDTO documentsDTO, MultipartFile file);
 }

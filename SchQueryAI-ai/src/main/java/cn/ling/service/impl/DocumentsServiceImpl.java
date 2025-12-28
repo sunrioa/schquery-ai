@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.time.LocalDateTime;
 
 /**
@@ -41,7 +43,7 @@ public class DocumentsServiceImpl extends ServiceImpl<DocumentsMapper, Documents
      * @return 上传结果
      */
     @Override
-    public Result<String> upload(DocumentsDTO documentsDTO, MultipartFile file) {
+    public Result<Long> upload(DocumentsDTO documentsDTO, MultipartFile file) {
         log.info("开始处理文档上传 - 文件名: {}, 文件类型: {}, 文件大小: {} bytes",
                 file.getOriginalFilename(), file.getContentType(), file.getSize());
 
@@ -62,14 +64,24 @@ public class DocumentsServiceImpl extends ServiceImpl<DocumentsMapper, Documents
                     ? documentsDTO.getTitle()
                     : file.getOriginalFilename();
 
+            Map<String, Object> metadata = documentsDTO.getMetadata() == null ? new HashMap<>() : new HashMap<>(documentsDTO.getMetadata());
+            metadata.putIfAbsent("title", title);
+            if (StringUtils.hasText(file.getOriginalFilename())) {
+                metadata.putIfAbsent("file_name", file.getOriginalFilename());
+            }
+            if (StringUtils.hasText(file.getContentType())) {
+                metadata.putIfAbsent("content_type", file.getContentType());
+            }
+            documentsDTO.setMetadata(metadata);
+
             Documents documents = Documents.builder()
                     .fileType(file.getContentType())
                     .title(title)
                     .uploadTime(LocalDateTime.now())
                     .updateTime(LocalDateTime.now())
                     .status(1) // 正常状态
-                    .processStatus(0) // 待处理状态
-                    .metadata(documentsDTO.getMetadata())
+                    .processStatus(1) // 已提交处理（异步处理中）
+                    .metadata(metadata)
                     .build();
 
             // 3. 保存文档基本信息
@@ -88,13 +100,13 @@ public class DocumentsServiceImpl extends ServiceImpl<DocumentsMapper, Documents
             } catch (Exception e) {
                 log.error("启动异步文档处理任务失败 - 文档ID: {}, 错误信息: {}", documents.getId(), e.getMessage(), e);
                 // 更新文档状态为处理失败
-                documents.setProcessStatus(-1); // 处理失败状态
+                documents.setProcessStatus(3); // 处理失败状态
                 updateById(documents);
                 return Result.error("文档处理启动失败：" + e.getMessage());
             }
 
             log.info("文档上传成功 - 文档ID: {}, 文件名: {}", documents.getId(), file.getOriginalFilename());
-            return Result.success("上传成功");
+            return Result.success(documents.getId(), "上传成功");
 
         } catch (Exception e) {
             log.error("文档上传过程中发生异常 - 文件名: {}, 错误信息: {}", file.getOriginalFilename(), e.getMessage(), e);

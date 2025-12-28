@@ -1,6 +1,5 @@
 package cn.ling.config;
 
-import cn.ling.vector.CustomQdrantVectorStore;
 import io.qdrant.client.QdrantClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -48,31 +47,5 @@ public class VectorStoreConfig {
         
         log.info("Qdrant向量存储配置完成 - 集合名称: {}", collectionName);
         return vectorStore;
-    }
-
-    /**
-     * 配置自定义Qdrant向量存储实例
-     * 使用自定义实现，提供更灵活的向量操作能力
-     * 支持更细粒度的文档管理、检索和删除操作
-     * 
-     * @param qdrantClient Qdrant客户端实例
-     * @param embeddingModel 嵌入模型实例
-     * @param collectionName 集合名称（从配置文件读取）
-     * @param initializeSchema 是否初始化集合架构（从配置文件读取）
-     * @return CustomQdrantVectorStore自定义向量存储实例
-     */
-    @Bean
-    public CustomQdrantVectorStore customQdrantVectorStore(
-            QdrantClient qdrantClient,
-            EmbeddingModel embeddingModel,
-            @Value("${spring.ai.vectorstore.qdrant.collection-name}") String collectionName,
-            @Value("${spring.ai.vectorstore.qdrant.initialize-schema}") Boolean initializeSchema
-    ){
-        log.info("开始配置自定义Qdrant向量存储 - 集合名称: {}, 初始化架构: {}", collectionName, initializeSchema);
-        
-        CustomQdrantVectorStore customVectorStore = new CustomQdrantVectorStore(qdrantClient, embeddingModel, collectionName, initializeSchema);
-        
-        log.info("自定义Qdrant向量存储配置完成 - 集合名称: {}", collectionName);
-        return customVectorStore;
     }
 }

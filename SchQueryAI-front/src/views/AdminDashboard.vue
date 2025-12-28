@@ -29,6 +29,10 @@
               <el-icon><User /></el-icon>
               用户管理
             </el-button>
+            <el-button type="primary" @click="goToKnowledgeBase">
+              <el-icon><UploadFilled /></el-icon>
+              知识库上传
+            </el-button>
           </div>
           <p>管理系统敏感词库、分词词库和用户权限，维护系统安全和秩序。</p>
         </el-card>
@@ -192,7 +196,8 @@ import {
   User,
   DataAnalysis,
   View,
-  Clock
+  Clock,
+  UploadFilled
 } from '@element-plus/icons-vue'
 import {
   getUserRole,
@@ -277,6 +282,10 @@ const goToSegmentation = () => {
 const goToUserManagement = () => {
   // 跳转到用户管理页面
   router.push('/admin/users')
+}
+
+const goToKnowledgeBase = () => {
+  router.push('/admin/knowledge-base')
 }
 
 const goToChat = () => {

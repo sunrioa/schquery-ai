@@ -1331,7 +1331,7 @@ const handleUserCommand = async (command) => {
       break
     case 'system-management':
       // 管理员系统管理功能
-      router.push('/admin/system-management')
+      router.push('/dashboard')
       break
     case 'profile':
       router.push('/profile')

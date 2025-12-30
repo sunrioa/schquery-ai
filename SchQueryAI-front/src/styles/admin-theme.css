@@ -1,0 +1,88 @@
+.admin-layout {
+  --admin-bg: #f0f2f5;
+  --admin-card-bg: #ffffff;
+  --admin-border: #eef2f7;
+  --admin-text: #111827;
+  --admin-muted: #6b7280;
+  --admin-radius: 10px;
+}
+
+[data-theme="dark"] .admin-layout {
+  --admin-bg: #111827;
+  --admin-card-bg: #1f2937;
+  --admin-border: #374151;
+  --admin-text: #e5e7eb;
+  --admin-muted: #9ca3af;
+}
+
+/* 页面容器（对齐 rin-admin：统一留白） */
+.admin-layout .admin-page {
+  padding: 16px;
+}
+
+/* 统一页头 */
+.admin-layout .page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.admin-layout .page-header h1,
+.admin-layout .page-header h2,
+.admin-layout .page-header h3 {
+  margin: 0 0 6px 0;
+  color: var(--admin-text);
+}
+
+.admin-layout .page-header .sub {
+  margin: 0;
+  color: var(--admin-muted);
+  font-size: 13px;
+}
+
+.admin-layout .page-header .header-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* 卡片/表格风格（尽量接近 rin-admin 的“扁平+圆角”） */
+.admin-layout .el-card {
+  border-radius: var(--admin-radius);
+  border: 1px solid var(--admin-border);
+  box-shadow: none;
+  background: var(--admin-card-bg);
+}
+
+.admin-layout .el-card__header {
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-layout .el-table,
+.admin-layout .el-table__header-wrapper,
+.admin-layout .el-table__body-wrapper,
+.admin-layout .el-table__inner-wrapper {
+  background: var(--admin-card-bg);
+}
+
+[data-theme="dark"] .admin-layout .el-table__header th,
+[data-theme="dark"] .admin-layout .el-table__cell {
+  background: var(--admin-card-bg) !important;
+  border-color: var(--admin-border) !important;
+}
+
+/* 表格头部更“轻” */
+.admin-layout .el-table__header th {
+  font-weight: 600;
+}
+
+/* 分页对齐右侧 */
+.admin-layout .pagination {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+

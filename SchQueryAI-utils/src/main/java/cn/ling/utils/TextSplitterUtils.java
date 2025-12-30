@@ -25,6 +25,22 @@ public class TextSplitterUtils {
         this.lengthFunction = lengthFunction;
     }
 
+    public List<String> getSeparators() {
+        return new ArrayList<>(separators);
+    }
+
+    public int getChunkSize() {
+        return chunkSize;
+    }
+
+    public int getChunkOverlap() {
+        return chunkOverlap;
+    }
+
+    public LengthFunction getLengthFunction() {
+        return lengthFunction;
+    }
+
     public List<String> splitText(String text) {
         List<String> chunks = new ArrayList<>();
         if (text == null || text.isEmpty()) {

@@ -1,8 +1,11 @@
 <template>
-  <div :class="['segmentation-words-management', { 'is-embedded': embedded }]">
+  <div class="admin-page segmentation-words-management">
     <div class="page-header">
       <div class="header-left">
-        <h1>分词管理</h1>
+        <div>
+          <h2>分词管理</h2>
+          <p class="sub">维护分词词库（启用/禁用/删除）</p>
+        </div>
       </div>
       <div class="header-actions">
         <el-input
@@ -1238,5 +1241,26 @@ onMounted(() => {
   flex-direction: column;
   overflow: hidden;
   padding: 0;
+}
+
+/* 在 AdminLayout 内统一风格 */
+.segmentation-words-management {
+  padding: 16px;
+  background: transparent;
+  min-height: auto;
+}
+
+.segmentation-words-management .page-header {
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  margin-bottom: 16px;
+  align-items: flex-end;
+}
+
+.stat-card {
+  box-shadow: none;
+  border: 1px solid var(--admin-border, #eef2f7);
 }
 </style>

@@ -33,6 +33,11 @@ public class Documents {
     private Long id;
 
     /**
+     * 所属知识库ID，对应knowledge_info.id
+     */
+    private Long knowledgeId;
+
+    /**
      * 文档标题，默认为文件名
      */
     private String title;

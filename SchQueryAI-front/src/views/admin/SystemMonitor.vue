@@ -1,8 +1,10 @@
 <template>
-  <div class="system-monitor">
-    <!-- 头部 -->
-    <div class="monitor-header">
-      <h2>系统监控</h2>
+  <div class="admin-page system-monitor">
+    <div class="page-header">
+      <div class="header-left">
+        <h2>系统监控</h2>
+        <p class="sub">CPU / 内存 / 磁盘 / 网络 / MySQL / Redis</p>
+      </div>
       <div class="header-actions">
         <span class="last-update">最后更新: {{ lastUpdateTime }}</span>
         <el-button type="primary" size="small" @click="refreshData" :loading="loading">
@@ -352,71 +354,14 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.system-monitor {
-  padding: 20px;
-  background: #f5f7fa;
-  min-height: calc(100vh - 40px);
-}
-
-[data-theme="dark"] .system-monitor {
-  background: #0f172a;
-}
-
-.monitor-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.monitor-header h2 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-[data-theme="dark"] .monitor-header h2 {
-  color: #f3f4f6;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
 .last-update {
   font-size: 13px;
   color: #6b7280;
 }
 
-[data-theme="dark"] .last-update {
-  color: #9ca3af;
-}
-
 .info-card,
 .monitor-card {
-  margin-bottom: 20px;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-}
-
-[data-theme="dark"] .info-card,
-[data-theme="dark"] .monitor-card {
-  background: #1e293b;
-  border-color: #374151;
-}
-
-[data-theme="dark"] .info-card :deep(.el-card__header),
-[data-theme="dark"] .monitor-card :deep(.el-card__header) {
-  border-bottom-color: #374151;
-  color: #f3f4f6;
-}
-
-[data-theme="dark"] .info-card :deep(.el-card__body),
-[data-theme="dark"] .monitor-card :deep(.el-card__body) {
-  background: #1e293b;
+  margin-bottom: 16px;
 }
 
 .monitor-row {
@@ -572,16 +517,6 @@ onUnmounted(() => {
 
 [data-theme="dark"] .empty-data {
   color: #9ca3af;
-}
-
-[data-theme="dark"] :deep(.el-table) {
-  --el-table-bg-color: transparent;
-  --el-table-tr-bg-color: transparent;
-  --el-table-header-bg-color: #111827;
-  --el-table-row-hover-bg-color: #1f2937;
-  --el-table-text-color: #e5e7eb;
-  --el-table-header-text-color: #9ca3af;
-  --el-table-border-color: #374151;
 }
 
 @media (max-width: 768px) {

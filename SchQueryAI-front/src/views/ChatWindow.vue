@@ -116,7 +116,7 @@
                 :disabled="!messageInput.trim() || sending"
                 size="large"
             >
-              <el-icon><SendFilled /></el-icon>
+              <el-icon><Promotion /></el-icon>
               发送
             </el-button>
           </div>
@@ -130,7 +130,7 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Refresh, ChatLineRound, SendFilled } from '@element-plus/icons-vue'
+import { ArrowLeft, Refresh, ChatLineRound, Promotion } from '@element-plus/icons-vue'
 import { useUserStore } from '../stores/userStore'
 
 const router = useRouter()

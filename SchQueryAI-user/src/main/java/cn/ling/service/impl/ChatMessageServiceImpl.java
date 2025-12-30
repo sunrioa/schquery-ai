@@ -8,11 +8,14 @@ import cn.ling.exception.CustomException;
 import cn.ling.mapper.ChatMessageMapper;
 import cn.ling.service.ChatMessageService;
 import cn.ling.service.ChatSessionService;
+import cn.ling.service.SysConfigService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
 import java.util.Date;
 import java.util.List;
@@ -28,12 +31,23 @@ import java.util.stream.Collectors;
 public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatMessage>
     implements ChatMessageService{
 
+    private static final String KEY_MODEL = "chat.default.model";
+    private static final String KEY_MAX_TOKENS = "chat.default.max_tokens";
+    private static final String KEY_SYSTEM_MESSAGE = "chat.default.systemMessage";
+    private static final String KEY_TEMPERATURE = "chat.default.temperature";
+    private static final String KEY_TOP_P = "chat.default.top_p";
+    private static final String KEY_PRESENCE_PENALTY = "chat.default.presence_penalty";
+    private static final String KEY_FREQUENCY_PENALTY = "chat.default.frequency_penalty";
+
     /**
      * AI聊天客户端
      * 用于生成AI回复
      */
     @Resource(name="openAiChatClient")
     private ChatClient openAiChatClient;
+
+    @Resource
+    private SysConfigService sysConfigService;
 
     /**
      * 聊天会话服务
@@ -124,10 +138,16 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
 
             // 使用流式生成AI回复
             log.info("开始生成AI回复");
-            Flux<String> aiResponseStream = openAiChatClient.prompt()
-                    .user(chatMessageDTO.getContent())
-                    .stream()
-                    .content();
+            ChatClient.ChatClientRequestSpec promptSpec = openAiChatClient.prompt();
+            OpenAiChatOptions dynamicOptions = buildDynamicChatOptions();
+            if (dynamicOptions != null) {
+                promptSpec = promptSpec.options(dynamicOptions);
+            }
+            String dynamicSystemMessage = trimToNull(sysConfigService.getConfigValue(KEY_SYSTEM_MESSAGE));
+            if (StringUtils.hasText(dynamicSystemMessage)) {
+                promptSpec = promptSpec.system(dynamicSystemMessage);
+            }
+            Flux<String> aiResponseStream = promptSpec.user(chatMessageDTO.getContent()).stream().content();
 
             // 用于累积完整的AI回复
             StringBuilder fullResponse = new StringBuilder();
@@ -166,6 +186,84 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
             log.error("处理用户消息时发生异常，会话ID: {}, 异常信息: {}",
                 chatMessageDTO.getSessionId(), e.getMessage(), e);
             return Flux.error(new RuntimeException("消息发送失败：" + e.getMessage()));
+        }
+    }
+
+    private OpenAiChatOptions buildDynamicChatOptions() {
+        try {
+            boolean hasAny = false;
+            OpenAiChatOptions options = OpenAiChatOptions.builder().build();
+
+            String model = trimToNull(sysConfigService.getConfigValue(KEY_MODEL));
+            if (StringUtils.hasText(model)) {
+                options.setModel(model);
+                hasAny = true;
+            }
+
+            Integer maxTokens = parseInt(sysConfigService.getConfigValue(KEY_MAX_TOKENS), null);
+            if (maxTokens != null && maxTokens > 0) {
+                options.setMaxTokens(maxTokens);
+                hasAny = true;
+            }
+
+            Double temperature = parseDouble(sysConfigService.getConfigValue(KEY_TEMPERATURE), null);
+            if (temperature != null) {
+                options.setTemperature(temperature);
+                hasAny = true;
+            }
+
+            Double topP = parseDouble(sysConfigService.getConfigValue(KEY_TOP_P), null);
+            if (topP != null) {
+                options.setTopP(topP);
+                hasAny = true;
+            }
+
+            Double presencePenalty = parseDouble(sysConfigService.getConfigValue(KEY_PRESENCE_PENALTY), null);
+            if (presencePenalty != null) {
+                options.setPresencePenalty(presencePenalty);
+                hasAny = true;
+            }
+
+            Double frequencyPenalty = parseDouble(sysConfigService.getConfigValue(KEY_FREQUENCY_PENALTY), null);
+            if (frequencyPenalty != null) {
+                options.setFrequencyPenalty(frequencyPenalty);
+                hasAny = true;
+            }
+
+            return hasAny ? options : null;
+        } catch (Exception e) {
+            log.debug("读取默认对话参数失败，将使用模型默认配置: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private static String trimToNull(String s) {
+        if (!StringUtils.hasText(s)) {
+            return null;
+        }
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
+    }
+
+    private static Integer parseInt(String raw, Integer def) {
+        if (!StringUtils.hasText(raw)) {
+            return def;
+        }
+        try {
+            return Integer.parseInt(raw.trim());
+        } catch (Exception ignored) {
+            return def;
+        }
+    }
+
+    private static Double parseDouble(String raw, Double def) {
+        if (!StringUtils.hasText(raw)) {
+            return def;
+        }
+        try {
+            return Double.parseDouble(raw.trim());
+        } catch (Exception ignored) {
+            return def;
         }
     }
 

@@ -12,5 +12,5 @@ import java.util.Map;
 */
 public interface DocumentChunksService extends IService<DocumentChunks> {
 
-    void saveDocument(Long id, Map<String,Object> metadata, String content);
+    void saveDocument(Long documentId, Long knowledgeId, Map<String, Object> metadata, String content);
 }

@@ -50,6 +50,7 @@ public class KnowledgeBaseController {
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Result<Long> upload(
             @RequestParam(value = "id", required = false) Long id,
+            @RequestParam(value = "knowledgeId", required = false) Long knowledgeId,
             @RequestParam(value = "title", required = false) String title,
             @RequestParam(value = "content", required = false) String content,
             @RequestParam(value = "metadata", required = false) String metadataJson,
@@ -68,6 +69,7 @@ public class KnowledgeBaseController {
             // 2. 封装DocumentsDTO对象
             DocumentsDTO documentsDTO = new DocumentsDTO();
             documentsDTO.setId(id);
+            documentsDTO.setKnowledgeId(knowledgeId);
             documentsDTO.setTitle(title);
             documentsDTO.setContent(content);
 

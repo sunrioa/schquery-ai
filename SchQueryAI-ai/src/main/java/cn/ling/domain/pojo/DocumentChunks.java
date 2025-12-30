@@ -29,6 +29,11 @@ public class DocumentChunks {
     private Long id;
 
     /**
+     * 所属知识库ID，对应knowledge_info.id
+     */
+    private Long knowledgeId;
+
+    /**
      * 关联的文档ID，对应documents表的id
      */
     private Long documentId;

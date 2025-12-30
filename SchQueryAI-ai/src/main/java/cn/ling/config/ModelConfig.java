@@ -1,5 +1,6 @@
 package cn.ling.config;
 
+import cn.ling.embedding.ContextualEmbeddingModel;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -63,6 +64,6 @@ public class ModelConfig {
         );
         
         log.info("OpenAI嵌入模型配置完成");
-        return embeddingModel;
+        return new ContextualEmbeddingModel(embeddingModel);
     }
 }

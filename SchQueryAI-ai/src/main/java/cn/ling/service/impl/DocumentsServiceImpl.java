@@ -3,6 +3,7 @@ package cn.ling.service.impl;
 import cn.ling.Result;
 import cn.ling.domain.dto.DocumentsDTO;
 import cn.ling.service.DocumentChunksService;
+import cn.ling.service.KnowledgeInfoService;
 import cn.ling.service.SyncService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import cn.ling.domain.pojo.Documents;
@@ -32,6 +33,9 @@ public class DocumentsServiceImpl extends ServiceImpl<DocumentsMapper, Documents
 
     @Resource
     SyncService syncService;
+
+    @Resource
+    private KnowledgeInfoService knowledgeInfoService;
 
     /**
      * 处理文档上传
@@ -64,8 +68,16 @@ public class DocumentsServiceImpl extends ServiceImpl<DocumentsMapper, Documents
                     ? documentsDTO.getTitle()
                     : file.getOriginalFilename();
 
+            Long knowledgeId = documentsDTO.getKnowledgeId();
+            if (knowledgeId == null) {
+                knowledgeId = knowledgeInfoService.ensureDefaultKnowledgeId();
+            }
+
             Map<String, Object> metadata = documentsDTO.getMetadata() == null ? new HashMap<>() : new HashMap<>(documentsDTO.getMetadata());
             metadata.putIfAbsent("title", title);
+            if (knowledgeId != null) {
+                metadata.putIfAbsent("knowledge_id", knowledgeId);
+            }
             if (StringUtils.hasText(file.getOriginalFilename())) {
                 metadata.putIfAbsent("file_name", file.getOriginalFilename());
             }
@@ -75,6 +87,7 @@ public class DocumentsServiceImpl extends ServiceImpl<DocumentsMapper, Documents
             documentsDTO.setMetadata(metadata);
 
             Documents documents = Documents.builder()
+                    .knowledgeId(knowledgeId)
                     .fileType(file.getContentType())
                     .title(title)
                     .uploadTime(LocalDateTime.now())

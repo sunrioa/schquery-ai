@@ -1,8 +1,11 @@
 <template>
-  <div :class="['user-management', { 'is-embedded': embedded }]">
+  <div class="admin-page user-management">
     <div class="page-header">
       <div class="header-left">
-        <h1>用户管理</h1>
+        <div>
+          <h2>用户管理</h2>
+          <p class="sub">用户列表、账号状态与登录历史</p>
+        </div>
       </div>
       <div class="header-actions">
         <el-input
@@ -35,7 +38,6 @@
           :data="filteredUserList"
           stripe
           style="width: 100%"
-          height="100%"
           :default-sort="{ prop: 'createTime', order: 'descending' }"
           :row-class-name="tableRowClassName"
         >
@@ -226,26 +228,15 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, defineProps, defineEmits } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  ArrowLeft,
   Refresh,
   Location,
   Search
 } from '@element-plus/icons-vue'
 import { userApi } from '../../api/user'
 import { getFullDeviceInfo } from '../../utils/browserUtils'
-
-const router = useRouter()
-const props = defineProps({
-  embedded: {
-    type: Boolean,
-    default: false
-  }
-})
-const emit = defineEmits(['back'])
 
 // 响应式数据
 const loading = ref(false)
@@ -266,14 +257,6 @@ const loginHistoryLoading = ref(false)
 const loginHistoryPage = ref(1)
 const loginHistoryPageSize = ref(10)
 const loginHistoryTotal = ref(0)
-
-// 暗夜模式
-const isDarkMode = ref(false)
-
-// 计算属性 - 统计数据
-const adminCount = computed(() => userList.value.filter(u => u.role === 'admin').length)
-const userCount = computed(() => userList.value.filter(u => u.role === 'user').length)
-const disabledCount = computed(() => userList.value.filter(u => u.status === 0).length)
 
 // 计算属性 - 过滤后的用户列表
 const filteredUserList = computed(() => {
@@ -300,11 +283,6 @@ const filteredUserList = computed(() => {
   return result
 })
 
-// 设置角色筛选
-const setRoleFilter = (filter) => {
-  roleFilter.value = filter
-}
-
 // 搜索处理
 const handleSearch = () => {
   // 搜索时自动过滤，无需额外操作
@@ -314,29 +292,6 @@ const handleSearch = () => {
 const tableRowClassName = ({ row }) => {
   if (row.status === 0) return 'disabled-row'
   return ''
-}
-
-// 返回系统管理
-const goBack = () => {
-  if (props.embedded) {
-    emit('back')
-    return
-  }
-  router.push('/admin/system-management')
-}
-
-// 切换暗夜模式
-const toggleDarkMode = () => {
-  isDarkMode.value = !isDarkMode.value
-  const html = document.documentElement
-  if (isDarkMode.value) {
-    html.setAttribute('data-theme', 'dark')
-    localStorage.setItem('theme', 'dark')
-  } else {
-    html.removeAttribute('data-theme')
-    localStorage.setItem('theme', 'light')
-  }
-  window.dispatchEvent(new CustomEvent('theme-change', { detail: { isDark: isDarkMode.value } }))
 }
 
 // 获取用户列表
@@ -559,18 +514,6 @@ const formatTime = (timestamp) => {
 
 // 页面加载时获取数据
 onMounted(() => {
-  // 初始化主题
-  const savedTheme = localStorage.getItem('theme')
-  if (savedTheme === 'dark') {
-    isDarkMode.value = true
-    document.documentElement.setAttribute('data-theme', 'dark')
-  }
-  
-  // 监听全局主题改变事件
-  window.addEventListener('theme-change', (e) => {
-    isDarkMode.value = e.detail?.isDark ?? false
-  })
-  
   fetchUserList()
 })
 </script>
@@ -981,5 +924,36 @@ onMounted(() => {
     gap: 10px;
     align-items: flex-start;
   }
+}
+
+/* 在 AdminLayout 内统一风格 */
+.user-management {
+  padding: 16px;
+  background: transparent;
+  min-height: auto;
+}
+
+.user-management .page-header {
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  margin-bottom: 16px;
+  align-items: flex-end;
+}
+
+.user-table-card {
+  border: 1px solid var(--admin-border, #eef2f7);
+  box-shadow: none;
+}
+
+.user-table-card :deep(.el-card__body) {
+  padding: 16px;
+}
+
+.pagination {
+  justify-content: flex-end;
+  border-top: none;
+  padding: 16px 0 0;
 }
 </style>

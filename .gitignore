@@ -1,5 +1,6 @@
 # Maven构建目录
 target/
+.mvn/m2-repo/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/

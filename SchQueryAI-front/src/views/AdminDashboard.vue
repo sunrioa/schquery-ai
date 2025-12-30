@@ -1,6 +1,6 @@
 <template>
-  <div class="admin-dashboard">
-    <div class="dashboard-header">
+  <div :class="inAdminLayout ? 'admin-page admin-dashboard' : 'admin-dashboard'">
+    <div v-if="!inAdminLayout" class="dashboard-header">
       <h1>{{ getDashboardTitle() }}</h1>
       <div class="user-info">
         <span>欢迎，{{ currentUser.userName }}</span>
@@ -8,6 +8,12 @@
           {{ getRoleDisplayName(currentUser.role) }}
         </el-tag>
         <el-button @click="logout" type="danger" size="small">退出登录</el-button>
+      </div>
+    </div>
+    <div v-else class="page-header">
+      <div class="header-left">
+        <h2>{{ getDashboardTitle() }}</h2>
+        <p class="sub">系统与 AI 能力的统一入口</p>
       </div>
     </div>
 
@@ -29,12 +35,31 @@
               <el-icon><User /></el-icon>
               用户管理
             </el-button>
-            <el-button type="primary" @click="goToKnowledgeBase">
-              <el-icon><UploadFilled /></el-icon>
-              知识库上传
-            </el-button>
           </div>
           <p>管理系统敏感词库、分词词库和用户权限，维护系统安全和秩序。</p>
+        </el-card>
+
+        <h2>AI 管理</h2>
+        <el-card class="admin-card">
+          <div class="card-actions">
+            <el-button type="primary" @click="goToAiChatConfig">
+              <el-icon><Setting /></el-icon>
+              默认对话参数
+            </el-button>
+            <el-button type="success" @click="goToAiKnowledge">
+              <el-icon><UploadFilled /></el-icon>
+              知识库管理
+            </el-button>
+            <el-button type="warning" @click="goToAiChatModel">
+              <el-icon><Collection /></el-icon>
+              模型管理
+            </el-button>
+            <el-button type="info" @click="goToAiMcp">
+              <el-icon><View /></el-icon>
+              MCP 管理
+            </el-button>
+          </div>
+          <p>配置默认模型/默认知识库/MCP 策略，并维护知识库与模型。</p>
         </el-card>
       </div>
 
@@ -187,7 +212,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   Setting,
@@ -213,6 +238,7 @@ import {
 } from '../utils/auth'
 
 const router = useRouter()
+const route = useRoute()
 
 // 响应式数据
 const currentUser = ref({})
@@ -222,6 +248,7 @@ const isAdminUser = computed(() => isAdmin())
 const isWorkerUser = computed(() => isWorker())
 const isNormalUser = computed(() => isUser())
 const isStaffMember = computed(() => isStaff()) // admin或worker组合，表示工作人员
+const inAdminLayout = computed(() => route.meta?.layout === 'admin')
 
 // 获取角色标签类型
 const getRoleTagType = (role) => {
@@ -281,11 +308,23 @@ const goToSegmentation = () => {
 
 const goToUserManagement = () => {
   // 跳转到用户管理页面
-  router.push('/admin/users')
+  router.push('/admin/user-management')
 }
 
-const goToKnowledgeBase = () => {
-  router.push('/admin/knowledge-base')
+const goToAiKnowledge = () => {
+  router.push('/admin/ai/knowledge')
+}
+
+const goToAiChatConfig = () => {
+  router.push('/admin/ai/chat-config')
+}
+
+const goToAiChatModel = () => {
+  router.push('/admin/ai/chat-model')
+}
+
+const goToAiMcp = () => {
+  router.push('/admin/ai/mcp')
 }
 
 const goToChat = () => {
@@ -315,12 +354,6 @@ const goToContentReview = () => {
 </script>
 
 <style scoped>
-.admin-dashboard {
-  padding: 20px;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
 .dashboard-header {
   display: flex;
   justify-content: space-between;
@@ -363,12 +396,6 @@ const goToContentReview = () => {
 
 .admin-card, .worker-card, .user-card, .feature-card {
   margin-bottom: 20px;
-  transition: all 0.3s ease;
-}
-
-.admin-card:hover, .worker-card:hover, .user-card:hover, .feature-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
 }
 
 /* 管理员卡片样式 */

@@ -1,14 +1,13 @@
 package cn.ling.config;
 
 import cn.ling.advisor.IntentRecognizerAdvisor;
+import cn.ling.advisor.KnowledgeRagAdvisor;
+import cn.ling.advisor.McpRagAdvisor;
 import cn.ling.advisor.SensitiveFilterAdvisor;
 import cn.ling.prompt.Prompts;
-import cn.ling.tools.ChatTools;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.openai.OpenAiChatModel;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -35,21 +34,21 @@ public class ChatClientConfig {
     @Bean("openAiChatClient")
     public ChatClient openAiChatClient(
             OpenAiChatModel openAiChatModel,
-            @Qualifier("questionAnswerAdvisor") Advisor questionAnswerAdvisor,
+            KnowledgeRagAdvisor knowledgeRagAdvisor,
+            McpRagAdvisor mcpRagAdvisor,
             SensitiveFilterAdvisor sensitiveFilterAdvisor,
-            IntentRecognizerAdvisor intentRecognizerAdvisor,
-            ChatTools chatTools
+            IntentRecognizerAdvisor intentRecognizerAdvisor
     ) {
         log.info("开始配置OpenAI聊天客户端");
         
         ChatClient chatClient = ChatClient.builder(openAiChatModel)
                 .defaultSystem(Prompts.SYSTEM_PROMPT)  // 设置默认系统提示词，定义AI助手角色
                 .defaultAdvisors(
-                        questionAnswerAdvisor,      // RAG问答增强，顺序: 2
+                        knowledgeRagAdvisor,        // 知识库RAG增强，顺序: 2（支持knowledge_id过滤）
+                        mcpRagAdvisor,              // MCP网络检索增强，顺序: 3
                         intentRecognizerAdvisor,    // 意图识别，顺序: 1
                         sensitiveFilterAdvisor      // 敏感词过滤，顺序: 0
                 )
-                .defaultTools(chatTools)
                 .build();
         
         log.info("OpenAI聊天客户端配置完成，已启用顾问: RAG增强, 意图识别, 敏感词过滤");

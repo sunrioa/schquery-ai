@@ -1,8 +1,11 @@
 <template>
-  <div class="system-logs-container">
-    <!-- 搜索筛选区域 -->
-    <el-card class="filter-card" shadow="never">
-      <div class="filter-row">
+  <div class="admin-page system-logs-container">
+    <div class="page-header">
+      <div class="header-left">
+        <h2>系统日志</h2>
+        <p class="sub">操作日志查询</p>
+      </div>
+      <div class="header-actions">
         <el-input
           v-model="filters.operator"
           placeholder="操作人"
@@ -30,45 +33,37 @@
           重置
         </el-button>
       </div>
-    </el-card>
+    </div>
 
     <!-- 日志列表 -->
     <el-card class="logs-table-card" shadow="never" v-loading="loading">
-      <div class="table-wrapper">
-        <el-table
-          :data="logsList"
-          stripe
-          style="width: 100%"
-          height="100%"
-          :default-sort="{ prop: 'timestamp', order: 'descending' }"
-        >
-          <el-table-column prop="id" label="ID" width="80" align="center" />
-          <el-table-column prop="operator" label="操作人" width="120" align="center">
-            <template #default="{ row }">
-              <el-tag size="small" type="info">{{ row.operator }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="action" label="操作类型" width="140" align="center">
-            <template #default="{ row }">
-              <el-tag size="small" :type="getActionTagType(row.action)">{{ row.action }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="detail" label="操作详情" min-width="260" show-overflow-tooltip />
-          <el-table-column prop="status" label="状态" width="90" align="center">
-            <template #default="{ row }">
-              <el-tag :type="row.status === 1 ? 'success' : 'danger'" size="small">
-                {{ row.status === 1 ? '成功' : '失败' }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="ipAddress" label="IP地址" width="130" align="center" />
-          <el-table-column prop="timestamp" label="操作时间" width="180" align="center">
-            <template #default="{ row }">
-              {{ formatTime(row.timestamp) }}
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
+      <el-table :data="logsList" stripe style="width: 100%" :default-sort="{ prop: 'timestamp', order: 'descending' }">
+        <el-table-column prop="id" label="ID" width="80" align="center" />
+        <el-table-column prop="operator" label="操作人" width="120" align="center">
+          <template #default="{ row }">
+            <el-tag size="small" type="info">{{ row.operator }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="action" label="操作类型" width="140" align="center">
+          <template #default="{ row }">
+            <el-tag size="small" :type="getActionTagType(row.action)">{{ row.action }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="detail" label="操作详情" min-width="260" show-overflow-tooltip />
+        <el-table-column prop="status" label="状态" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 1 ? 'success' : 'danger'" size="small">
+              {{ row.status === 1 ? '成功' : '失败' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="ipAddress" label="IP地址" width="130" align="center" />
+        <el-table-column prop="timestamp" label="操作时间" width="180" align="center">
+          <template #default="{ row }">
+            {{ formatTime(row.timestamp) }}
+          </template>
+        </el-table-column>
+      </el-table>
 
       <!-- 分页 -->
       <div class="pagination">
@@ -182,72 +177,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.system-logs-container {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  gap: 12px;
-  overflow: hidden;
-}
-
-.filter-card {
-  flex-shrink: 0;
-  border-radius: 12px;
-}
-
-:deep(.filter-card .el-card__body) {
-  padding: 10px 16px;
-}
-
-.filter-row {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
 .logs-table-card {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  border-radius: 12px;
-  overflow: hidden;
-  min-height: 0;
-}
-
-:deep(.logs-table-card .el-card__body) {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding: 16px;
-  overflow: hidden;
-  min-height: 0;
-}
-
-.table-wrapper {
-  flex: 1;
-  overflow: hidden;
-  min-height: 0;
-}
-
-.pagination {
-  display: flex;
-  justify-content: center;
-  padding: 12px 0 0;
-  flex-shrink: 0;
-  border-top: 1px solid #f0f0f0;
-  margin-top: 12px;
-}
-
-/* 暗色模式 */
-[data-theme="dark"] .filter-card,
-[data-theme="dark"] .logs-table-card {
-  background-color: #1f2937;
-  border-color: #374151;
-}
-
-[data-theme="dark"] .pagination {
-  border-top-color: #374151;
+  margin-bottom: 16px;
 }
 </style>

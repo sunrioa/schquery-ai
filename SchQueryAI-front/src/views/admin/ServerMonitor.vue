@@ -1,7 +1,10 @@
 <template>
-  <div class="server-monitor">
-    <div class="monitor-header">
-      <h3>服务器监控</h3>
+  <div class="admin-page server-monitor">
+    <div class="page-header">
+      <div class="header-left">
+        <h2>服务器监控</h2>
+        <p class="sub">CPU / 内存 / 磁盘 / 网络概览</p>
+      </div>
       <div class="header-actions">
         <span class="last-update">最后更新: {{ lastUpdateTime }}</span>
         <el-button type="primary" size="small" @click="loadData" :loading="loading">
@@ -293,79 +296,28 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.server-monitor {
-  padding: 0;
-}
-
-.monitor-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.monitor-header h3 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-[data-theme="dark"] .monitor-header h3 {
-  color: #f3f4f6;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
 .last-update {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--admin-muted, #6b7280);
 }
 
 /* 信息卡片样式 */
 .info-card {
-  margin-bottom: 10px;
-  border-radius: 4px;
-  border: 1px solid #e5e7eb;
+  margin-bottom: 16px;
 }
 
 .info-card :deep(.el-card__header) {
-  padding: 8px 12px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e5e7eb;
+  padding: 12px 16px;
 }
 
 .info-card :deep(.el-card__body) {
   padding: 0;
 }
 
-[data-theme="dark"] .info-card {
-  background: #1e293b;
-  border-color: #374151;
-}
-
-[data-theme="dark"] .info-card :deep(.el-card__header) {
-  background: #111827;
-  border-bottom-color: #374151;
-  color: #f3f4f6;
-}
-
-[data-theme="dark"] .info-card :deep(.el-card__body) {
-  background: #1e293b;
-}
-
 .card-title {
   font-size: 13px;
   font-weight: 600;
   color: #1f2937;
-}
-
-[data-theme="dark"] .card-title {
-  color: #f3f4f6;
 }
 
 /* 信息表格样式 */
@@ -376,64 +328,36 @@ onUnmounted(() => {
 
 .info-table td {
   padding: 6px 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--admin-border, #e5e7eb);
   font-size: 12px;
 }
 
 .info-table td.label {
-  background: #f8fafc;
-  color: #6b7280;
+  background: rgba(107, 114, 128, 0.08);
+  color: var(--admin-muted, #6b7280);
   width: 100px;
   font-weight: 500;
 }
 
 .info-table td.value {
-  color: #1f2937;
-}
-
-[data-theme="dark"] .info-table td {
-  border-color: #374151;
+  color: var(--admin-text, #1f2937);
 }
 
 [data-theme="dark"] .info-table td.label {
-  background: #111827;
-  color: #9ca3af;
-}
-
-[data-theme="dark"] .info-table td.value {
-  color: #e5e7eb;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 /* 图表卡片样式 */
 .chart-card {
   margin-bottom: 0;
-  border-radius: 4px;
-  border: 1px solid #e5e7eb;
 }
 
 .chart-card :deep(.el-card__header) {
-  padding: 8px 12px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e5e7eb;
+  padding: 12px 16px;
 }
 
 .chart-card :deep(.el-card__body) {
   padding: 8px;
-}
-
-[data-theme="dark"] .chart-card {
-  background: #1e293b;
-  border-color: #374151;
-}
-
-[data-theme="dark"] .chart-card :deep(.el-card__header) {
-  background: #111827;
-  border-bottom-color: #374151;
-  color: #f3f4f6;
-}
-
-[data-theme="dark"] .chart-card :deep(.el-card__body) {
-  background: #1e293b;
 }
 
 .chart-container {

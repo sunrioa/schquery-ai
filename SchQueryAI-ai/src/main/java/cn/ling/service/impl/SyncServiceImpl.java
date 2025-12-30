@@ -129,6 +129,7 @@ public class SyncServiceImpl implements SyncService {
                     log.info("开始进行文档分块和向量化处理 - 文档ID: {}", documentsId);
                     documentChunksService.saveDocument(
                             documents.getId(),
+                            documents.getKnowledgeId(),
                             documentsDTO == null ? null : documentsDTO.getMetadata(),
                             documents.getContent()
                     );

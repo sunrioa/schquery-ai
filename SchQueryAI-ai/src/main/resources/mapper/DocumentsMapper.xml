@@ -6,6 +6,7 @@
 
     <resultMap id="BaseResultMap" type="cn.ling.domain.pojo.Documents">
             <id property="id" column="id" jdbcType="BIGINT"/>
+            <result property="knowledgeId" column="knowledge_id" jdbcType="BIGINT"/>
             <result property="title" column="title" jdbcType="VARCHAR"/>
             <result property="content" column="content" jdbcType="VARCHAR"/>
             <result property="filePath" column="file_path" jdbcType="VARCHAR"/>
@@ -22,7 +23,7 @@
     </resultMap>
 
     <sql id="Base_Column_List">
-        id,title,content,
+        id,knowledge_id,title,content,
         file_path,file_type,upload_time,
         update_time,status,process_status,
         metadata

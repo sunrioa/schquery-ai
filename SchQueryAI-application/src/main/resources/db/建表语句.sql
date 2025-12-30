@@ -109,9 +109,78 @@ CREATE TABLE `login_history` (
                                  INDEX `idx_city` (`city`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户登录历史记录表';
 
+-- ============================================
+-- 系统参数配置表（KV）
+-- 用途：保存默认模型、默认知识库、MCP 配置等（对齐 rin-ai 的 chat.default.* 口径）
+-- ============================================
+CREATE TABLE IF NOT EXISTS `sys_config` (
+                                           `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+                                           `config_key` VARCHAR(100) NOT NULL COMMENT '配置键',
+                                           `config_name` VARCHAR(200) NULL COMMENT '配置名称',
+                                           `config_value` TEXT NULL COMMENT '配置值',
+                                           `remark` VARCHAR(500) NULL COMMENT '备注',
+                                           `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用 0-禁用',
+                                           `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                                           `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                                           PRIMARY KEY (`id`),
+                                           UNIQUE KEY `uk_config_key` (`config_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统参数配置（KV）';
+
+-- ============================================
+-- AI 模型配置表（模型管理）
+-- ============================================
+CREATE TABLE IF NOT EXISTS `chat_model` (
+                                         `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+                                         `category` VARCHAR(20) NOT NULL COMMENT '模型分类(chat/vector/rerank/image/...)',
+                                         `model_name` VARCHAR(100) NOT NULL COMMENT '模型名称',
+                                         `provider_name` VARCHAR(50) NULL COMMENT '供应商标识',
+                                         `model_describe` VARCHAR(255) NULL COMMENT '模型描述',
+                                         `model_price` DOUBLE NULL COMMENT '模型价格',
+                                         `model_type` CHAR(1) NULL COMMENT '计费类型',
+                                         `model_show` TINYINT NOT NULL DEFAULT 1 COMMENT '是否启用/显示(1-是,0-否)',
+                                         `system_prompt` TEXT NULL COMMENT '系统提示词（仅 chat 类模型常用）',
+                                         `api_host` VARCHAR(255) NULL COMMENT '请求地址',
+                                         `api_key` VARCHAR(255) NULL COMMENT '密钥',
+                                         `api_url` VARCHAR(50) NULL COMMENT '请求后缀',
+                                         `priority` INT NOT NULL DEFAULT 1 COMMENT '优先级(越大越优先)',
+                                         `remark` VARCHAR(500) NULL COMMENT '备注',
+                                         `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                                         `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                                         PRIMARY KEY (`id`),
+                                         UNIQUE KEY `uk_category_model_name` (`category`, `model_name`),
+                                         KEY `idx_category_show` (`category`, `model_show`),
+                                         KEY `idx_model_name` (`model_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI模型配置';
+
+-- ============================================
+-- 知识库表（知识库管理）
+-- ============================================
+CREATE TABLE IF NOT EXISTS `knowledge_info` (
+                                             `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '知识库主键ID',
+                                             `kname` VARCHAR(100) NOT NULL COMMENT '知识库名称',
+                                             `description` VARCHAR(1000) NULL COMMENT '描述',
+                                             `system_prompt` TEXT NULL COMMENT '知识库系统提示词',
+                                             `text_block_size` INT NULL DEFAULT 600 COMMENT '文本块大小',
+                                             `overlap_char` INT NULL DEFAULT 100 COMMENT '重叠字符数',
+                                             `retrieve_limit` INT NULL DEFAULT 6 COMMENT '检索返回条数(topK)',
+                                             `use_rerank` TINYINT NOT NULL DEFAULT 0 COMMENT '是否启用重排序(0-否 1-是)',
+                                             `rerank_model_name` VARCHAR(100) NULL COMMENT '重排序模型名称(chat_model.model_name)',
+                                             `candidate_count` INT NOT NULL DEFAULT 20 COMMENT '向量检索候选数量',
+                                             `min_score` DOUBLE NULL COMMENT '重排序最低分数阈值',
+                                             `vector_model_name` VARCHAR(50) NOT NULL DEFAULT 'qdrant' COMMENT '向量库类型(qdrant/...)',
+                                             `embedding_model_name` VARCHAR(100) NULL COMMENT '向量模型名称(chat_model.model_name)',
+                                             `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用 0-禁用',
+                                             `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                                             `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                                             PRIMARY KEY (`id`),
+                                             KEY `idx_status` (`status`),
+                                             KEY `idx_kname` (`kname`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='知识库';
+
 -- 文档主表：存储完整文档的基本信息和状态
 CREATE TABLE documents (
                            id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '文档唯一标识ID',
+                           knowledge_id BIGINT COMMENT '所属知识库ID，对应knowledge_info.id',
                            title VARCHAR(500) COMMENT '文档标题，默认为文件名',
                            content TEXT COMMENT '文档完整内容（小文件直接存储文本，大文件建议仅存关键摘要）',
                            file_path VARCHAR(500) COMMENT '文件存储路径（可选，如本地路径或云存储URL）',
@@ -121,6 +190,7 @@ CREATE TABLE documents (
                            status TINYINT DEFAULT 1 COMMENT '文档状态：1-有效，0-删除（逻辑删除，避免物理删除数据）',
                            process_status TINYINT DEFAULT 0 COMMENT '处理状态：0-未处理，1-处理中，2-处理完成，3-处理失败（用于跟踪文档拆分、向量化流程）',
                            metadata JSON COMMENT '文档级扩展元数据（如作者、来源、权限标签等，按需动态存储）',
+                           INDEX idx_knowledge_id (knowledge_id) COMMENT '按知识库筛选文档的索引',
                            INDEX idx_upload_time (upload_time) COMMENT '按上传时间查询的索引，加速时间范围筛选',
                            INDEX idx_status_process (status, process_status) COMMENT '按状态和处理状态联合查询的索引，优化筛选效率'
 );
@@ -128,13 +198,15 @@ CREATE TABLE documents (
 -- 文档片段表：存储文档拆分后的子片段，与向量数据库关联
 CREATE TABLE document_chunks (
                                  id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '片段唯一标识ID',
+                                 knowledge_id BIGINT COMMENT '所属知识库ID，对应knowledge_info.id',
                                  document_id BIGINT COMMENT '关联的文档ID，对应documents表的id',
                                  chunk_index INT COMMENT '片段在文档中的顺序编号（从0开始），用于重组完整文档',
                                  chunk_content TEXT COMMENT '片段具体内容（生成向量的原始文本）',
-                                 token_count INT COMMENT '片段的token数量（控制embedding模型输入长度，避免超限）',
+                                 chunk_length INT COMMENT '片段长度（用于粗略控制embedding输入大小）',
                                  created_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '片段创建时间（拆分完成时自动记录）',
                                  qdrant_point_id VARCHAR(64) COMMENT '关联Qdrant向量数据库中该片段的point ID，用于向量检索后溯源',
                                  metadata JSON COMMENT '片段级扩展元数据（如页码、段落位置、关键词等）',
+                                 INDEX idx_knowledge_id (knowledge_id) COMMENT '按知识库筛选片段的索引',
                                  INDEX idx_document_id (document_id) COMMENT '按文档ID查询其所有片段的索引，加速批量操作',
                                  UNIQUE KEY uk_qdrant_point_id (qdrant_point_id) COMMENT '确保Qdrant的point ID唯一，避免向量与片段多对一关联'
 );

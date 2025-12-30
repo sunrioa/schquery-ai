@@ -1,11 +1,18 @@
 <template>
-  <router-view />
+  <component :is="layoutComponent">
+    <router-view />
+  </component>
 </template>
 
-<script>
-export default {
-  name: 'App'
-}
+<script setup>
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+import AdminLayout from './layouts/AdminLayout.vue'
+
+const route = useRoute()
+const layoutComponent = computed(() => {
+  return route.meta?.layout === 'admin' ? AdminLayout : 'div'
+})
 </script>
 
 <style>

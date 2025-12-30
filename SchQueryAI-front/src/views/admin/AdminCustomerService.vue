@@ -1,15 +1,16 @@
 <template>
-  <div class="admin-customer-service">
-    <div class="top-bar">
-      <div class="top-left">
-        <el-button type="text" @click="goBack" class="back-btn">
-          <el-icon><ArrowLeft /></el-icon>
-          返回
-        </el-button>
-        <h2>客服消息管理</h2>
+  <div class="admin-page admin-customer-service">
+    <div class="page-header">
+      <div class="header-left">
+        <el-button @click="goBack">返回</el-button>
+        <div class="title">
+          <h2>客服消息管理</h2>
+          <p class="sub">处理会话、回复、标记完成</p>
+        </div>
         <el-tag v-if="pendingCount > 0" type="danger" effect="dark" size="small">待处理 {{ pendingCount }}</el-tag>
       </div>
-      <div class="top-right">
+
+      <div class="header-actions">
         <el-button class="theme-toggle" circle plain @click="toggleDarkMode">
           <el-icon><Moon /></el-icon>
         </el-button>
@@ -832,52 +833,25 @@ const formatTopic = (topic) => {
 <style scoped>
 .admin-customer-service {
   width: 100%;
-  height: 100vh;
-  padding: 10px 12px;
-  background: #f5f7fa;
+  height: 100%;
+  padding: 0;
+  background: transparent;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
 }
 
-[data-theme="dark"] .admin-customer-service {
-  background-color: #0f172a;
-}
-
-.top-bar {
+.page-header .header-left {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  box-shadow: 0 8px 20px rgba(31, 45, 61, 0.06);
-  margin-bottom: 12px;
-  flex-shrink: 0;
+  align-items: flex-end;
+  gap: 12px;
 }
 
-[data-theme="dark"] .top-bar {
-  background: #111827;
-  border-color: #1f2937;
-}
-
-.top-left {
+.page-header .title {
   display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.top-left h2 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.top-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  line-height: 1.1;
 }
 
 .theme-toggle {

@@ -1,8 +1,11 @@
 <template>
-  <div :class="['sensitive-words-management', { 'is-embedded': embedded }]">
+  <div class="admin-page sensitive-words-management">
     <div class="page-header">
       <div class="header-left">
-        <h1>敏感词管理</h1>
+        <div>
+          <h2>敏感词管理</h2>
+          <p class="sub">维护敏感词库（启用/禁用/删除）</p>
+        </div>
       </div>
       <div class="header-actions">
         <el-input
@@ -1255,5 +1258,26 @@ onUnmounted(() => {
   flex-direction: column;
   overflow: hidden;
   padding: 0;
+}
+
+/* 在 AdminLayout 内统一风格 */
+.sensitive-words-management {
+  padding: 16px;
+  background: transparent;
+  min-height: auto;
+}
+
+.sensitive-words-management .page-header {
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  margin-bottom: 16px;
+  align-items: flex-end;
+}
+
+.stat-card {
+  box-shadow: none;
+  border: 1px solid var(--admin-border, #eef2f7);
 }
 </style>

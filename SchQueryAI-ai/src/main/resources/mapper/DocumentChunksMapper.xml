@@ -6,6 +6,7 @@
 
     <resultMap id="BaseResultMap" type="cn.ling.domain.pojo.DocumentChunks">
             <id property="id" column="id" jdbcType="BIGINT"/>
+            <result property="knowledgeId" column="knowledge_id" jdbcType="BIGINT"/>
             <result property="documentId" column="document_id" jdbcType="BIGINT"/>
             <result property="chunkIndex" column="chunk_index" jdbcType="INTEGER"/>
             <result property="chunkContent" column="chunk_content" jdbcType="VARCHAR"/>
@@ -20,7 +21,7 @@
     </resultMap>
 
     <sql id="Base_Column_List">
-        id,document_id,chunk_index,
+        id,knowledge_id,document_id,chunk_index,
         chunk_content,chunk_length,created_time,
         qdrant_point_id,metadata
     </sql>

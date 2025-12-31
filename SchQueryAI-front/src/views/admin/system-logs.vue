@@ -12,15 +12,25 @@
           clearable
           style="width: 160px"
           @keyup.enter="handleSearch"
-        />
+          @clear="handleSearch"
+        >
+          <template #prefix>
+            <el-icon><User /></el-icon>
+          </template>
+        </el-input>
         <el-input
           v-model="filters.action"
           placeholder="操作类型"
           clearable
           style="width: 160px"
           @keyup.enter="handleSearch"
-        />
-        <el-select v-model="filters.status" placeholder="状态" clearable style="width: 120px">
+          @clear="handleSearch"
+        >
+          <template #prefix>
+            <el-icon><Edit /></el-icon>
+          </template>
+        </el-input>
+        <el-select v-model="filters.status" placeholder="状态" clearable style="width: 120px" @change="handleSearch">
           <el-option label="成功" :value="1" />
           <el-option label="失败" :value="0" />
         </el-select>
@@ -175,9 +185,3 @@ onMounted(() => {
   loadLogs()
 })
 </script>
-
-<style scoped>
-.logs-table-card {
-  margin-bottom: 16px;
-}
-</style>

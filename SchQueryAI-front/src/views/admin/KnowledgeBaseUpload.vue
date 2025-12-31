@@ -10,7 +10,7 @@
       </div>
     </div>
 
-    <el-card>
+    <el-card shadow="never">
       <el-alert
         type="info"
         show-icon

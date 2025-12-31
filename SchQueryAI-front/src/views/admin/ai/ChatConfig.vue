@@ -12,7 +12,7 @@
       </div>
     </div>
 
-    <el-card class="card">
+    <el-card class="card" shadow="never">
       <el-form :model="form" label-width="120px">
         <el-form-item label="默认模型">
           <el-select
@@ -48,25 +48,71 @@
           <el-input v-model="form.systemMessage" type="textarea" :rows="4" placeholder="可选：覆盖默认系统提示词" />
         </el-form-item>
 
-        <el-form-item label="max_tokens">
-          <el-input-number v-model="form.max_tokens" :min="1" :max="32000" controls-position="right" style="width: 100%" />
-        </el-form-item>
+        <el-divider content-position="left">生成参数</el-divider>
 
-        <el-form-item label="temperature">
-          <el-input-number v-model="form.temperature" :min="0" :max="2" :step="0.1" controls-position="right" style="width: 100%" />
-        </el-form-item>
+        <el-row :gutter="12">
+          <el-col :xs="24" :md="12">
+            <el-form-item label="max_tokens">
+              <el-input-number
+                v-model="form.max_tokens"
+                :min="1"
+                :max="32000"
+                controls-position="right"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :md="12">
+            <el-form-item label="temperature">
+              <el-input-number
+                v-model="form.temperature"
+                :min="0"
+                :max="2"
+                :step="0.1"
+                controls-position="right"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
 
-        <el-form-item label="top_p">
-          <el-input-number v-model="form.top_p" :min="0" :max="1" :step="0.05" controls-position="right" style="width: 100%" />
-        </el-form-item>
+          <el-col :xs="24" :md="12">
+            <el-form-item label="top_p">
+              <el-input-number
+                v-model="form.top_p"
+                :min="0"
+                :max="1"
+                :step="0.05"
+                controls-position="right"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :md="12">
+            <el-form-item label="presence_penalty">
+              <el-input-number
+                v-model="form.presence_penalty"
+                :min="-2"
+                :max="2"
+                :step="0.1"
+                controls-position="right"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
 
-        <el-form-item label="presence_penalty">
-          <el-input-number v-model="form.presence_penalty" :min="-2" :max="2" :step="0.1" controls-position="right" style="width: 100%" />
-        </el-form-item>
-
-        <el-form-item label="frequency_penalty">
-          <el-input-number v-model="form.frequency_penalty" :min="-2" :max="2" :step="0.1" controls-position="right" style="width: 100%" />
-        </el-form-item>
+          <el-col :xs="24" :md="12">
+            <el-form-item label="frequency_penalty">
+              <el-input-number
+                v-model="form.frequency_penalty"
+                :min="-2"
+                :max="2"
+                :step="0.1"
+                controls-position="right"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
 
         <el-divider content-position="left">MCP 配置</el-divider>
 
@@ -174,9 +220,3 @@ const refreshMcp = async () => {
 
 onMounted(() => load())
 </script>
-
-<style scoped>
-.card {
-  margin-bottom: 16px;
-}
-</style>

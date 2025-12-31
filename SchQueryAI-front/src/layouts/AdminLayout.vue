@@ -1,6 +1,6 @@
 <template>
   <div class="admin-layout">
-    <el-container class="layout-container">
+      <el-container class="layout-container">
       <el-aside :width="collapsed ? '64px' : '220px'" class="sidebar">
         <div class="sidebar-brand" @click="goHome">
           <div class="brand-icon">AI</div>
@@ -10,100 +10,102 @@
           </div>
         </div>
 
-        <el-menu
-          class="sidebar-menu"
-          :default-active="activeMenu"
-          :collapse="collapsed"
-          router
-          background-color="transparent"
-          text-color="#6b7280"
-          active-text-color="#111827"
-        >
-          <el-menu-item index="/dashboard">
-            <el-icon><House /></el-icon>
-            <span>控制台</span>
-          </el-menu-item>
+        <el-scrollbar class="sidebar-scroll">
+          <el-menu
+            class="sidebar-menu"
+            :default-active="activeMenu"
+            :collapse="collapsed"
+            router
+            background-color="transparent"
+            :text-color="menuTextColor"
+            :active-text-color="menuActiveTextColor"
+          >
+            <el-menu-item index="/dashboard">
+              <el-icon><House /></el-icon>
+              <span>控制台</span>
+            </el-menu-item>
 
-          <el-sub-menu index="ai">
-            <template #title>
-              <el-icon><Setting /></el-icon>
-              <span>AI 管理</span>
-            </template>
-            <el-menu-item index="/admin/ai/chat-config">
-              <el-icon><Setting /></el-icon>
-              <span>默认对话参数</span>
-            </el-menu-item>
-            <el-menu-item index="/admin/ai/knowledge">
-              <el-icon><UploadFilled /></el-icon>
-              <span>知识库管理</span>
-            </el-menu-item>
-            <el-menu-item index="/admin/ai/chat-model">
-              <el-icon><Collection /></el-icon>
-              <span>模型管理</span>
-            </el-menu-item>
-            <el-menu-item index="/admin/ai/mcp">
-              <el-icon><Monitor /></el-icon>
-              <span>MCP 管理</span>
-            </el-menu-item>
-          </el-sub-menu>
+            <el-sub-menu index="ai">
+              <template #title>
+                <el-icon><Setting /></el-icon>
+                <span>AI 管理</span>
+              </template>
+              <el-menu-item index="/admin/ai/chat-config">
+                <el-icon><Setting /></el-icon>
+                <span>默认对话参数</span>
+              </el-menu-item>
+              <el-menu-item index="/admin/ai/knowledge">
+                <el-icon><UploadFilled /></el-icon>
+                <span>知识库管理</span>
+              </el-menu-item>
+              <el-menu-item index="/admin/ai/chat-model">
+                <el-icon><Collection /></el-icon>
+                <span>模型管理</span>
+              </el-menu-item>
+              <el-menu-item index="/admin/ai/mcp">
+                <el-icon><Monitor /></el-icon>
+                <span>MCP 管理</span>
+              </el-menu-item>
+            </el-sub-menu>
 
-          <el-sub-menu index="system">
-            <template #title>
-              <el-icon><User /></el-icon>
-              <span>系统管理</span>
-            </template>
-            <el-menu-item index="/admin/user-management">
-              <el-icon><User /></el-icon>
-              <span>用户管理</span>
-            </el-menu-item>
-            <el-menu-item index="/admin/sensitive-words">
-              <el-icon><Warning /></el-icon>
-              <span>敏感词管理</span>
-            </el-menu-item>
-            <el-menu-item index="/admin/segmentation-words">
-              <el-icon><Collection /></el-icon>
-              <span>分词管理</span>
-            </el-menu-item>
-          </el-sub-menu>
+            <el-sub-menu index="system">
+              <template #title>
+                <el-icon><User /></el-icon>
+                <span>系统管理</span>
+              </template>
+              <el-menu-item index="/admin/user-management">
+                <el-icon><User /></el-icon>
+                <span>用户管理</span>
+              </el-menu-item>
+              <el-menu-item index="/admin/sensitive-words">
+                <el-icon><Warning /></el-icon>
+                <span>敏感词管理</span>
+              </el-menu-item>
+              <el-menu-item index="/admin/segmentation-words">
+                <el-icon><Collection /></el-icon>
+                <span>分词管理</span>
+              </el-menu-item>
+            </el-sub-menu>
 
-          <el-sub-menu index="ops">
-            <template #title>
-              <el-icon><Service /></el-icon>
-              <span>运营客服</span>
-            </template>
-            <el-menu-item index="/admin/customer-service">
-              <el-icon><Service /></el-icon>
-              <span>客服消息</span>
-            </el-menu-item>
-            <el-menu-item index="/admin/system-logs">
-              <el-icon><Document /></el-icon>
-              <span>系统日志</span>
-            </el-menu-item>
-          </el-sub-menu>
+            <el-sub-menu index="ops">
+              <template #title>
+                <el-icon><Service /></el-icon>
+                <span>运营客服</span>
+              </template>
+              <el-menu-item index="/admin/customer-service">
+                <el-icon><Service /></el-icon>
+                <span>客服消息</span>
+              </el-menu-item>
+              <el-menu-item index="/admin/system-logs">
+                <el-icon><Document /></el-icon>
+                <span>系统日志</span>
+              </el-menu-item>
+            </el-sub-menu>
 
-          <el-sub-menu index="monitor">
-            <template #title>
-              <el-icon><Monitor /></el-icon>
-              <span>系统监控</span>
-            </template>
-            <el-menu-item index="/admin/system-monitor">
-              <el-icon><Monitor /></el-icon>
-              <span>监控总览</span>
-            </el-menu-item>
-            <el-menu-item index="/admin/server-monitor">
-              <el-icon><Cpu /></el-icon>
-              <span>服务器监控</span>
-            </el-menu-item>
-            <el-menu-item index="/admin/mysql-monitor">
-              <el-icon><Coin /></el-icon>
-              <span>MySQL 监控</span>
-            </el-menu-item>
-            <el-menu-item index="/admin/redis-monitor">
-              <el-icon><Coin /></el-icon>
-              <span>Redis 监控</span>
-            </el-menu-item>
-          </el-sub-menu>
-        </el-menu>
+            <el-sub-menu index="monitor">
+              <template #title>
+                <el-icon><Monitor /></el-icon>
+                <span>系统监控</span>
+              </template>
+              <el-menu-item index="/admin/system-monitor">
+                <el-icon><Monitor /></el-icon>
+                <span>监控总览</span>
+              </el-menu-item>
+              <el-menu-item index="/admin/server-monitor">
+                <el-icon><Cpu /></el-icon>
+                <span>服务器监控</span>
+              </el-menu-item>
+              <el-menu-item index="/admin/mysql-monitor">
+                <el-icon><Coin /></el-icon>
+                <span>MySQL 监控</span>
+              </el-menu-item>
+              <el-menu-item index="/admin/redis-monitor">
+                <el-icon><Coin /></el-icon>
+                <span>Redis 监控</span>
+              </el-menu-item>
+            </el-sub-menu>
+          </el-menu>
+        </el-scrollbar>
       </el-aside>
 
       <el-container class="main">
@@ -158,9 +160,13 @@ const collapsed = ref(false)
 const isDarkMode = ref(false)
 const currentUser = ref(getCurrentUser())
 
+const menuTextColor = computed(() => (isDarkMode.value ? '#9ca3af' : '#6b7280'))
+const menuActiveTextColor = computed(() => (isDarkMode.value ? '#e5e7eb' : '#111827'))
+
 const activeMenu = computed(() => {
   const p = route.path || ''
   if (p.startsWith('/admin/ai/knowledge/')) return '/admin/ai/knowledge'
+  if (p.startsWith('/admin/customer-service/chat')) return '/admin/customer-service'
   return p
 })
 
@@ -220,6 +226,9 @@ onMounted(() => {
   background: #ffffff;
   border-right: 1px solid #eef2f7;
   overflow: hidden;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 [data-theme="dark"] .sidebar {
@@ -282,6 +291,40 @@ onMounted(() => {
   border-right: none;
 }
 
+.sidebar-scroll {
+  flex: 1;
+}
+
+.sidebar-scroll :deep(.el-scrollbar__wrap) {
+  overflow-x: hidden;
+}
+
+.sidebar-menu :deep(.el-menu-item),
+.sidebar-menu :deep(.el-sub-menu__title) {
+  height: 44px;
+  line-height: 44px;
+  margin: 4px 10px;
+  border-radius: 10px;
+}
+
+.sidebar-menu :deep(.el-menu-item.is-active) {
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.sidebar-menu :deep(.el-menu-item:hover),
+.sidebar-menu :deep(.el-sub-menu__title:hover) {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+[data-theme="dark"] .sidebar-menu :deep(.el-menu-item.is-active) {
+  background: rgba(96, 165, 250, 0.18);
+}
+
+[data-theme="dark"] .sidebar-menu :deep(.el-menu-item:hover),
+[data-theme="dark"] .sidebar-menu :deep(.el-sub-menu__title:hover) {
+  background: rgba(96, 165, 250, 0.12);
+}
+
 .main {
   background: #f0f2f5;
 }
@@ -298,11 +341,13 @@ onMounted(() => {
   padding: 0 12px;
   background: #ffffff;
   border-bottom: 1px solid #eef2f7;
+  color: #111827;
 }
 
 [data-theme="dark"] .topbar {
   background: #1f2937;
   border-bottom-color: #374151;
+  color: #e5e7eb;
 }
 
 .topbar-left,

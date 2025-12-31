@@ -32,19 +32,18 @@
       </div>
     </div>
 
-    <el-card class="user-table-card" v-loading="loading">
-      <div class="table-wrapper">
-        <el-table
-          :data="filteredUserList"
-          stripe
-          style="width: 100%"
-          :default-sort="{ prop: 'createTime', order: 'descending' }"
-          :row-class-name="tableRowClassName"
-        >
+    <el-card class="table-card" shadow="never" v-loading="loading">
+      <el-table
+        :data="filteredUserList"
+        stripe
+        style="width: 100%"
+        :default-sort="{ prop: 'createTime', order: 'descending' }"
+        :row-class-name="tableRowClassName"
+      >
         <el-table-column type="index" label="序号" width="60" align="center" />
-        
+
         <el-table-column prop="id" label="用户ID" width="80" align="center" />
-        
+
         <el-table-column prop="userName" label="用户名" width="150" align="center">
           <template #default="{ row }">
             <div class="user-info">
@@ -53,9 +52,9 @@
             </div>
           </template>
         </el-table-column>
-        
+
         <el-table-column prop="email" label="邮箱" width="200" align="center" />
-        
+
         <el-table-column prop="role" label="角色" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="getRoleType(row.role)">
@@ -63,14 +62,14 @@
             </el-tag>
           </template>
         </el-table-column>
-        
+
         <el-table-column prop="lastLoginIp" label="最后登录IP" width="150" align="center">
           <template #default="{ row }">
             <span v-if="row.lastLoginIp">{{ row.lastLoginIp }}</span>
             <span v-else class="no-data">未登录</span>
           </template>
         </el-table-column>
-        
+
         <el-table-column prop="lastLoginLocation" label="登录地点" width="200" align="center">
           <template #default="{ row }">
             <div v-if="row.lastLoginLocation && row.lastLoginLocation !== '未知'" class="location-info">
@@ -80,20 +79,20 @@
             <span v-else class="no-data">未知</span>
           </template>
         </el-table-column>
-        
+
         <el-table-column prop="lastLoginTime" label="最后登录时间" width="180" align="center">
           <template #default="{ row }">
             <span v-if="row.lastLoginTime">{{ formatTime(row.lastLoginTime) }}</span>
             <span v-else class="no-data">从未登录</span>
           </template>
         </el-table-column>
-        
+
         <el-table-column prop="createTime" label="注册时间" width="180" align="center">
           <template #default="{ row }">
             {{ formatTime(row.createTime) }}
           </template>
         </el-table-column>
-        
+
         <el-table-column prop="status" label="状态" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="row.status === 1 ? 'success' : 'danger'">
@@ -101,18 +100,14 @@
             </el-tag>
           </template>
         </el-table-column>
-        
+
         <el-table-column label="操作" width="250" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" size="small" @click="viewLoginHistory(row)">
-              登录历史
-            </el-button>
-            <el-button type="info" size="small" @click="viewUserDetail(row)">
-              详情
-            </el-button>
-            <el-button 
-              :type="row.status === 0 ? 'success' : 'danger'" 
-              size="small" 
+            <el-button type="primary" size="small" @click="viewLoginHistory(row)">登录历史</el-button>
+            <el-button type="info" size="small" @click="viewUserDetail(row)">详情</el-button>
+            <el-button
+              :type="row.status === 0 ? 'success' : 'danger'"
+              size="small"
               @click="handleToggleBlacklist(row)"
             >
               {{ row.status === 0 ? '解除拉黑' : '拉黑' }}
@@ -120,7 +115,6 @@
           </template>
         </el-table-column>
       </el-table>
-      </div>
 
       <div class="pagination">
         <el-pagination
@@ -519,164 +513,11 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.user-management {
-  padding: 12px 16px;
-  width: 100%;
-  background: #f5f7fa;
-  min-height: 100vh;
-}
-
-[data-theme="dark"] .user-management {
-  background-color: #0f172a;
-}
-
-.user-management.is-embedded {
-  padding: 8px;
-  background: transparent;
-  max-width: 100%;
-  min-height: auto;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-[data-theme="dark"] .user-management.is-embedded {
-  background: transparent;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-  padding: 8px 12px;
-  background: #ffffff;
-  border-radius: 10px;
-  box-shadow: 0 4px 12px rgba(31, 45, 61, 0.05);
-  border: 1px solid #edf2f7;
-}
-
-.user-management.is-embedded .page-header {
-  margin-bottom: 8px;
-  box-shadow: none;
-  border-color: #e5e7eb;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.back-button {
-  padding: 6px 12px;
-  border-radius: 6px;
-}
-
-.page-header h1 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #333;
-}
-
-[data-theme="dark"] .page-header h1 {
-  color: #e0e0e0;
-}
-
-[data-theme="dark"] .page-header {
-  background: #111827;
-  border-color: #1f2937;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-[data-theme="dark"] .user-management.is-embedded .page-header {
-  border-color: #1f2937;
-  box-shadow: none;
-}
-
-.header-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.user-table-card {
-  margin-bottom: 10px;
-  border: none;
-  border-radius: 10px;
-  box-shadow: 0 4px 12px rgba(31, 45, 61, 0.06);
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.user-table-card :deep(.el-card__body) {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 12px;
-}
-
-.table-wrapper {
-  flex: 1;
-  overflow: hidden;
-  min-height: 0;
-}
-
-.user-management.is-embedded .user-table-card {
-  margin-bottom: 10px;
-  box-shadow: none;
-  border: 1px solid #e5e7eb;
-}
-
-.user-table-card :deep(.el-card__header) {
-  padding: 12px 14px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-[data-theme="dark"] .user-table-card {
-  background-color: #111827 !important;
-  border: 1px solid #1f2937 !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-[data-theme="dark"] .user-management.is-embedded .user-table-card {
-  box-shadow: none;
-}
-
-[data-theme="dark"] .user-table-card :deep(.el-card__body) {
-  background-color: #111827 !important;
-  border-radius: 0 0 16px 16px;
-}
-
-[data-theme="dark"] .user-table-card :deep(.el-card__header) {
-  background-color: #111827 !important;
-  border-bottom-color: #1f2937 !important;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  color: #333;
-}
-
-[data-theme="dark"] .card-header {
-  color: #e0e0e0;
-}
-
-.header-actions {
-  display: flex;
-  gap: 10px;
-}
-
 .user-info {
   display: flex;
   align-items: center;
   gap: 10px;
+  justify-content: center;
 }
 
 .user-name {
@@ -691,20 +532,8 @@ onMounted(() => {
 }
 
 .no-data {
-  color: #999;
+  color: var(--admin-muted, #6b7280);
   font-style: italic;
-}
-
-[data-theme="dark"] .no-data {
-  color: #666;
-}
-
-.pagination {
-  display: flex;
-  justify-content: center;
-  padding: 12px;
-  flex-shrink: 0;
-  border-top: 1px solid #f0f0f0;
 }
 
 .user-detail {
@@ -717,192 +546,25 @@ onMounted(() => {
 
 .history-tip {
   margin-bottom: 15px;
-  color: #666;
-}
-
-[data-theme="dark"] .history-tip {
-  color: #999;
+  color: var(--admin-muted, #6b7280);
 }
 
 .history-tip strong {
-  color: #409EFF;
+  color: #409eff;
 }
 
 .device-info {
   display: inline-block;
   padding: 4px 8px;
-  background-color: #f0f9ff;
-  border-left: 3px solid #409EFF;
-  color: #333;
+  background-color: rgba(64, 158, 255, 0.08);
+  border-left: 3px solid #409eff;
+  color: var(--admin-text, #111827);
   font-size: 12px;
   border-radius: 2px;
   max-width: 250px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-[data-theme="dark"] .device-info {
-  background-color: rgba(64, 158, 255, 0.1);
-  color: #b3d8ff;
-  border-left-color: #409EFF;
-}
-
-/* Element Plus 组件暗夜模式适配 */
-:deep(.el-card) {
-  --el-card-bg-color: white;
-  --el-card-border-color: #ebeef5;
-}
-
-[data-theme="dark"] :deep(.el-card) {
-  --el-card-bg-color: #2a2a2a !important;
-  --el-card-border-color: #444 !important;
-  background-color: #2a2a2a !important;
-  border-color: #444 !important;
-  color: #e0e0e0;
-}
-
-[data-theme="dark"] :deep(.el-card__header) {
-  border-bottom-color: #444 !important;
-  background-color: #2a2a2a !important;
-}
-
-[data-theme="dark"] :deep(.el-card__body) {
-  background-color: #2a2a2a !important;
-  color: #e0e0e0 !important;
-}
-
-[data-theme="dark"] .user-table-card :deep(.el-table),
-[data-theme="dark"] .user-table-card :deep(.el-table__header-wrapper),
-[data-theme="dark"] .user-table-card :deep(.el-table__body-wrapper) {
-  background-color: #2a2a2a !important;
-}
-
-[data-theme="dark"] :deep(.el-table) {
-  background-color: #2a2a2a !important;
-  color: #e0e0e0 !important;
-}
-
-[data-theme="dark"] :deep(.el-table__header) {
-  background-color: #333 !important;
-}
-
-[data-theme="dark"] :deep(.el-table__header th) {
-  background-color: #333 !important;
-  color: #e0e0e0 !important;
-  border-color: #444 !important;
-}
-
-[data-theme="dark"] :deep(.el-table__body) {
-  background-color: #2a2a2a !important;
-}
-
-[data-theme="dark"] :deep(.el-table__body tr) {
-  background-color: #2a2a2a !important;
-}
-
-[data-theme="dark"] :deep(.el-table__body tr:hover > td) {
-  background-color: #333 !important;
-}
-
-[data-theme="dark"] :deep(.el-table__body td) {
-  border-color: #444 !important;
-  color: #e0e0e0 !important;
-  background-color: #2a2a2a !important;
-}
-
-[data-theme="dark"] :deep(.el-table--striped .el-table__body tr.el-table__row--striped) {
-  background-color: #242424 !important;
-}
-
-[data-theme="dark"] :deep(.el-table__cell) {
-  background-color: #2a2a2a !important;
-  color: #e0e0e0 !important;
-}
-
-[data-theme="dark"] :deep(.el-scrollbar__view) {
-  background-color: #2a2a2a !important;
-}
-
-[data-theme="dark"] :deep(table) {
-  background-color: #2a2a2a !important;
-}
-
-[data-theme="dark"] :deep(.el-pagination) {
-  color: #e0e0e0;
-}
-
-[data-theme="dark"] :deep(.el-pagination__item) {
-  background-color: #2a2a2a !important;
-  color: #e0e0e0 !important;
-}
-
-[data-theme="dark"] :deep(.el-pagination__item.active) {
-  background-color: #2196F3 !important;
-  color: white !important;
-}
-
-[data-theme="dark"] :deep(.el-pagination button) {
-  color: #e0e0e0 !important;
-}
-
-[data-theme="dark"] :deep(.el-pagination button:hover) {
-  color: #fff !important;
-}
-
-[data-theme="dark"] :deep(.el-dialog) {
-  --el-dialog-bg-color: #2a2a2a !important;
-  background-color: #2a2a2a !important;
-  color: #e0e0e0;
-}
-
-[data-theme="dark"] :deep(.el-dialog__header) {
-  border-bottom-color: #444 !important;
-}
-
-[data-theme="dark"] :deep(.el-dialog__title) {
-  color: #e0e0e0 !important;
-}
-
-[data-theme="dark"] :deep(.el-dialog__close) {
-  color: #999 !important;
-}
-
-[data-theme="dark"] :deep(.el-dialog__close:hover) {
-  color: #e0e0e0 !important;
-}
-
-[data-theme="dark"] :deep(.el-dialog__body) {
-  color: #e0e0e0;
-}
-
-[data-theme="dark"] :deep(.el-descriptions) {
-  color: #e0e0e0;
-}
-
-[data-theme="dark"] :deep(.el-descriptions__header) {
-  border-bottom-color: #444 !important;
-}
-
-[data-theme="dark"] :deep(.el-descriptions__body) {
-  border-color: #444 !important;
-}
-
-[data-theme="dark"] :deep(.el-descriptions__item) {
-  border-bottom-color: #444 !important;
-}
-
-[data-theme="dark"] :deep(.el-descriptions__label) {
-  color: #999 !important;
-  border-right-color: #444 !important;
-}
-
-[data-theme="dark"] :deep(.el-descriptions__content) {
-  color: #e0e0e0 !important;
-}
-
-[data-theme="dark"] :deep(.el-tag) {
-  border-color: auto !important;
 }
 
 /* 禁用行样式 */
@@ -912,48 +574,5 @@ onMounted(() => {
 
 [data-theme="dark"] :deep(.el-table .disabled-row) {
   background-color: rgba(245, 108, 108, 0.1) !important;
-}
-
-@media (max-width: 768px) {
-  .user-management {
-    padding: 10px;
-  }
-
-  .page-header {
-    flex-direction: column;
-    gap: 10px;
-    align-items: flex-start;
-  }
-}
-
-/* 在 AdminLayout 内统一风格 */
-.user-management {
-  padding: 16px;
-  background: transparent;
-  min-height: auto;
-}
-
-.user-management .page-header {
-  padding: 0;
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  margin-bottom: 16px;
-  align-items: flex-end;
-}
-
-.user-table-card {
-  border: 1px solid var(--admin-border, #eef2f7);
-  box-shadow: none;
-}
-
-.user-table-card :deep(.el-card__body) {
-  padding: 16px;
-}
-
-.pagination {
-  justify-content: flex-end;
-  border-top: none;
-  padding: 16px 0 0;
 }
 </style>

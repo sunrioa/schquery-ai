@@ -23,13 +23,18 @@
           clearable
           style="width: 220px"
           @keyup.enter="loadList"
-        />
+          @clear="loadList"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
         <el-button type="primary" @click="openCreate">新建</el-button>
         <el-button @click="loadList">刷新</el-button>
       </div>
     </div>
 
-    <el-card class="table-card" v-loading="loading">
+    <el-card class="table-card" shadow="never" v-loading="loading">
       <el-table :data="list" stripe style="width: 100%">
         <el-table-column type="index" label="序号" width="60" align="center" />
         <el-table-column prop="id" label="ID" width="90" align="center" />
@@ -274,9 +279,3 @@ const formatTime = (timestamp) => {
 
 onMounted(() => loadList())
 </script>
-
-<style scoped>
-.table-card {
-  margin-bottom: 16px;
-}
-</style>

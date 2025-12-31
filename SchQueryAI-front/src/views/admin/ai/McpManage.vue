@@ -14,7 +14,7 @@
       </div>
     </div>
 
-    <el-card class="card" v-loading="loading">
+    <el-card class="table-card" shadow="never" v-loading="loading">
       <el-table :data="servers" stripe style="width: 100%">
         <el-table-column type="index" label="序号" width="70" align="center" />
         <el-table-column label="Server URL" min-width="360">
@@ -90,17 +90,13 @@ onMounted(() => loadServers())
 </script>
 
 <style scoped>
-.card {
-  margin-bottom: 16px;
-}
-
 .server-url {
   word-break: break-all;
 }
 
 .empty-tip {
-  padding: 12px 0 0 0;
-  color: #888;
+  padding: 12px 16px 16px;
+  color: var(--admin-muted, #6b7280);
   font-size: 13px;
 }
 </style>

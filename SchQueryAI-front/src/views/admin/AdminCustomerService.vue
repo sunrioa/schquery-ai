@@ -191,13 +191,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Upload, Moon, Position, ChatDotRound, CircleCheck } from '@element-plus/icons-vue'
 import { useUserStore } from '../../stores/userStore'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 
 // 状态变量
@@ -304,7 +305,17 @@ const loadSessions = async () => {
         sessions.value = result.data || []
         // 计算待处理数
         updatePendingCount()
-        
+
+        // 支持通过路由参数指定会话（/admin/customer-service/chat/:userId）
+        const preferredUserId = route.params?.userId
+        if (preferredUserId != null && sessions.value.length > 0) {
+          const targetSession = sessions.value.find((s) => s.userId == preferredUserId)
+          if (targetSession) {
+            await selectSession(targetSession)
+            return
+          }
+        }
+
         // 如果当前没有选中的会话，自动选中第一个
         if (!currentSession.value && sessions.value.length > 0) {
           selectSession(sessions.value[0])
@@ -579,6 +590,15 @@ onMounted(async () => {
   
   console.log('[AdminCustomerService] ========== 初始化完成 ==========')
 })
+
+watch(
+  () => route.params?.userId,
+  (userId) => {
+    if (userId == null) return
+    const target = sessions.value.find((s) => s.userId == userId)
+    if (target) selectSession(target)
+  }
+)
 
 // 清理
 onUnmounted(() => {

@@ -13,7 +13,12 @@
           clearable
           style="width: 220px"
           @keyup.enter="loadList"
-        />
+          @clear="loadList"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
         <el-select v-model="query.status" placeholder="状态" clearable style="width: 120px" @change="loadList">
           <el-option label="启用" :value="1" />
           <el-option label="停用" :value="0" />
@@ -23,7 +28,7 @@
       </div>
     </div>
 
-    <el-card class="table-card" v-loading="loading">
+    <el-card class="table-card" shadow="never" v-loading="loading">
       <el-table :data="list" stripe style="width: 100%">
         <el-table-column type="index" label="序号" width="60" align="center" />
         <el-table-column prop="id" label="ID" width="90" align="center" />
@@ -356,9 +361,3 @@ onMounted(() => {
   loadList()
 })
 </script>
-
-<style scoped>
-.table-card {
-  margin-bottom: 16px;
-}
-</style>

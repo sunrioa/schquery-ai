@@ -55,98 +55,79 @@
       <!-- 聊天主区域 -->
       <el-container class="chat-main">
         <el-header class="chat-header">
-          <div class="chat-header-left">
-            <!-- 返回按钮已屏蔽 -->
-            <!--
-            <button
-              @click="goBack"
-              title="返回上一页"
-              style="
-                display: flex !important;
-                align-items: center;
-                justify-content: center;
-                width: 36px;
-                height: 36px;
-                background: #f9fafb;
-                border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                cursor: pointer;
-                margin-right: 8px;
-                font-size: 18px;
-                color: #6b7280;
-                z-index: 1000;
-                outline: none;
-              "
-            >
-              ←
-            </button>
-            -->
-
-            <div class="chat-title" v-if="currentSession">
-              <h3>{{ currentSession.sessionName || '未命名会话' }}</h3>
-              <el-button type="text" size="small" @click="showRenameDialog = true">
+          <div class="page-header chat-page-header">
+            <div class="header-left">
+              <div class="title">
+                <h2>{{ currentSession ? (currentSession.sessionName || '未命名会话') : 'SchQueryAI 智能聊天' }}</h2>
+                <p class="sub">{{ currentSession ? '左侧切换/管理会话，底部输入框发送消息' : '选择左侧会话开始聊天' }}</p>
+              </div>
+              <el-button
+                v-if="currentSession"
+                text
+                size="small"
+                class="rename-btn"
+                title="重命名会话"
+                @click="showRenameDialog = true"
+              >
                 <el-icon><Edit /></el-icon>
               </el-button>
             </div>
-            <div class="chat-title" v-else>
-              <h3>SchQueryAI 智能聊天</h3>
+
+            <div class="header-actions">
+              <!-- 黑夜模式切换按钮 -->
+              <el-button
+                @click="toggleDarkMode"
+                circle
+                size="small"
+                :title="isDarkMode ? '切换到日间模式' : '切换到夜间模式'"
+                class="dark-mode-toggle"
+              >
+                <el-icon>
+                  <Sunny v-if="isDarkMode" />
+                  <Moon v-else />
+                </el-icon>
+              </el-button>
+
+              <el-dropdown @command="handleUserCommand" trigger="click">
+                <span class="user-dropdown">
+                  <el-avatar :size="32" :src="userStore.getDisplayAvatar()" />
+                  <span class="username">{{ userStore.userInfo.userName || '用户' }}</span>
+                  <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                </span>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <!-- 员工对话管理功能 -->
+                    <el-dropdown-item v-if="isWorker()" command="conversation-management">
+                      <el-icon><ChatDotRound /></el-icon>
+                      对话管理
+                    </el-dropdown-item>
+
+                    <!-- 管理员系统管理功能 -->
+                    <el-dropdown-item v-if="isAdmin()" command="system-management">
+                      <el-icon><Tools /></el-icon>
+                      系统管理
+                    </el-dropdown-item>
+
+                    <el-dropdown-item command="profile">
+                      <el-icon><User /></el-icon>
+                      个人信息
+                    </el-dropdown-item>
+                    <el-dropdown-item command="password">
+                      <el-icon><Lock /></el-icon>
+                      修改密码
+                    </el-dropdown-item>
+                    <el-dropdown-item v-if="userStore.userInfo.role !== 'admin'" command="contact-service" divided>
+                      <el-icon><ChatDotRound /></el-icon>
+                      联系客服
+                    </el-dropdown-item>
+                    <el-dropdown-item divided command="logout">
+                      <el-icon><SwitchButton /></el-icon>
+                      退出登录
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </div>
-          </div>
-
-          <div class="chat-header-right">
-            <!-- 黑夜模式切换按钮 -->
-            <el-button
-              @click="toggleDarkMode"
-              circle
-              size="small"
-              :title="isDarkMode ? '切换到日间模式' : '切换到夜间模式'"
-              class="dark-mode-toggle"
-            >
-              <el-icon>
-                <Sunny v-if="isDarkMode" />
-                <Moon v-else />
-              </el-icon>
-            </el-button>
-
-            <el-dropdown @command="handleUserCommand" trigger="click">
-              <span class="user-dropdown">
-                <el-avatar :size="32" :src="userStore.getDisplayAvatar()" />
-                <span class="username">{{ userStore.userInfo.userName || '用户' }}</span>
-                <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-              </span>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <!-- 员工对话管理功能 -->
-                  <el-dropdown-item v-if="isWorker()" command="conversation-management">
-                    <el-icon><ChatDotRound /></el-icon>
-                    对话管理
-                  </el-dropdown-item>
-
-                  <!-- 管理员系统管理功能 -->
-                  <el-dropdown-item v-if="isAdmin()" command="system-management">
-                    <el-icon><Tools /></el-icon>
-                    系统管理
-                  </el-dropdown-item>
-
-                  <el-dropdown-item command="profile">
-                    <el-icon><User /></el-icon>
-                    个人信息
-                  </el-dropdown-item>
-                  <el-dropdown-item command="password">
-                    <el-icon><Lock /></el-icon>
-                    修改密码
-                  </el-dropdown-item>
-                  <el-dropdown-item v-if="userStore.userInfo.role !== 'admin'" command="contact-service" divided>
-                    <el-icon><ChatDotRound /></el-icon>
-                    联系客服
-                  </el-dropdown-item>
-                  <el-dropdown-item divided command="logout">
-                    <el-icon><SwitchButton /></el-icon>
-                    退出登录
-                  </el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
           </div>
         </el-header>
 
@@ -1331,7 +1312,7 @@ const handleUserCommand = async (command) => {
       break
     case 'system-management':
       // 管理员系统管理功能
-      router.push('/dashboard')
+      router.push({ name: 'AdminDashboard' })
       break
     case 'profile':
       router.push('/profile')
@@ -2221,19 +2202,55 @@ onUnmounted(() => {
   background-color: #ffffff;
   border-bottom: 1px solid #e5e7eb;
   padding: 0 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   height: 64px; /* 固定高度 */
   flex-shrink: 0; /* 禁止收缩 */
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-}
-
-.chat-header-left {
-  flex: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
+}
+
+.chat-page-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.chat-page-header .header-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.chat-page-header .title {
+  min-width: 0;
+}
+
+.chat-page-header .title h2 {
+  margin: 0 0 6px 0;
+  color: #111827;
+  font-size: 16px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-page-header .sub {
+  margin: 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.rename-btn {
+  color: #6b7280;
+}
+
+.rename-btn:hover {
+  color: #3b82f6;
 }
 
 /* 返回按钮样式 - 使用深度选择器确保样式穿透 */
@@ -2265,35 +2282,15 @@ onUnmounted(() => {
   transform: translateX(0);
 }
 
+.chat-page-header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+
 :deep(.back-icon) {
   transition: transform 0.2s ease;
-}
-
-.chat-header-right {
-  display: flex;
-  align-items: center;
-}
-
-.chat-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.chat-title h3 {
-  margin: 0;
-  color: #111827;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.chat-title .el-button {
-  color: #6b7280;
-  transition: color 0.2s ease;
-}
-
-.chat-title .el-button:hover {
-  color: #3b82f6;
 }
 
 /* 用户下拉菜单 */
@@ -3805,7 +3802,7 @@ onUnmounted(() => {
     padding: 6px !important;
   }
 
-  .chat-header-left {
+  .chat-page-header .header-left {
     gap: 6px;
   }
 
@@ -3887,7 +3884,7 @@ onUnmounted(() => {
     padding: 4px !important;
   }
 
-  .chat-header-left {
+  .chat-page-header .header-left {
     gap: 4px;
   }
 
@@ -3963,15 +3960,19 @@ onUnmounted(() => {
   border-bottom-color: #374151;
 }
 
-[data-theme="dark"] .chat-title h3 {
+[data-theme="dark"] .chat-page-header .title h2 {
   color: #f9fafb;
 }
 
-[data-theme="dark"] .chat-title .el-button {
+[data-theme="dark"] .chat-page-header .sub {
   color: #9ca3af;
 }
 
-[data-theme="dark"] .chat-title .el-button:hover {
+[data-theme="dark"] .rename-btn {
+  color: #9ca3af;
+}
+
+[data-theme="dark"] .rename-btn:hover {
   color: #60a5fa;
 }
 

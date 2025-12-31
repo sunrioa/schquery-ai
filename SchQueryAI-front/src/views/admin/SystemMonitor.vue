@@ -41,7 +41,7 @@
     </el-card>
 
     <!-- CPU和内存 -->
-    <el-row :gutter="20" class="monitor-row">
+    <el-row :gutter="12" class="monitor-row">
       <el-col :xs="24" :lg="12">
         <el-card class="monitor-card" shadow="never">
           <template #header>
@@ -108,7 +108,7 @@
     </el-row>
 
     <!-- MySQL和Redis -->
-    <el-row :gutter="20" class="monitor-row">
+    <el-row :gutter="12" class="monitor-row">
       <el-col :xs="24" :lg="12">
         <el-card class="monitor-card" shadow="never">
           <template #header>
@@ -354,16 +354,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.last-update {
-  font-size: 13px;
-  color: #6b7280;
-}
-
-.info-card,
-.monitor-card {
-  margin-bottom: 16px;
-}
-
 .monitor-row {
   margin-bottom: 0;
 }
@@ -371,7 +361,7 @@ onUnmounted(() => {
 .system-basic-info {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  gap: 16px;
 }
 
 .info-item {
@@ -383,24 +373,14 @@ onUnmounted(() => {
 .info-item .label,
 .detail-item .label {
   font-size: 12px;
-  color: #6b7280;
-}
-
-[data-theme="dark"] .info-item .label,
-[data-theme="dark"] .detail-item .label {
-  color: #9ca3af;
+  color: var(--admin-muted, #6b7280);
 }
 
 .info-item .value,
 .detail-item .value {
   font-size: 14px;
   font-weight: 500;
-  color: #1f2937;
-}
-
-[data-theme="dark"] .info-item .value,
-[data-theme="dark"] .detail-item .value {
-  color: #e5e7eb;
+  color: var(--admin-text, #111827);
 }
 
 .card-header {
@@ -454,11 +434,7 @@ onUnmounted(() => {
 
 .status-label {
   font-size: 12px;
-  color: #6b7280;
-}
-
-[data-theme="dark"] .status-label {
-  color: #9ca3af;
+  color: var(--admin-muted, #6b7280);
 }
 
 .disk-list {
@@ -485,11 +461,7 @@ onUnmounted(() => {
 
 .disk-name {
   font-weight: 500;
-  color: #1f2937;
-}
-
-[data-theme="dark"] .disk-name {
-  color: #e5e7eb;
+  color: var(--admin-text, #111827);
 }
 
 .disk-usage {
@@ -502,21 +474,13 @@ onUnmounted(() => {
   justify-content: space-between;
   margin-top: 8px;
   font-size: 12px;
-  color: #6b7280;
-}
-
-[data-theme="dark"] .disk-details {
-  color: #9ca3af;
+  color: var(--admin-muted, #6b7280);
 }
 
 .empty-data {
   text-align: center;
-  color: #6b7280;
+  color: var(--admin-muted, #6b7280);
   padding: 20px;
-}
-
-[data-theme="dark"] .empty-data {
-  color: #9ca3af;
 }
 
 @media (max-width: 768px) {

@@ -15,7 +15,7 @@
       </div>
     </div>
 
-    <el-card class="card" v-loading="loading">
+    <el-card class="table-card" shadow="never" v-loading="loading">
       <el-table :data="docs" stripe style="width: 100%">
         <el-table-column type="index" label="序号" width="60" align="center" />
         <el-table-column prop="id" label="文档ID" width="100" align="center" />
@@ -426,20 +426,6 @@ const formatTime = (timestamp) => {
 </script>
 
 <style scoped>
-.header-left {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.title h2 {
-  margin: 0 0 6px 0;
-}
-
-.card {
-  margin-bottom: 16px;
-}
-
 .frag-body {
   padding: 4px 0;
 }

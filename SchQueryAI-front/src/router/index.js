@@ -9,6 +9,7 @@ import Chat from '../views/Chat.vue'
 import CustomerService from '../views/CustomerService.vue'
 import ChatWindow from '../views/ChatWindow.vue'
 import AdminCustomerService from '../views/admin/AdminCustomerService.vue'
+import AdminCustomerServiceInbox from '../views/admin/AdminCustomerServiceInbox.vue'
 import SystemManagement from '../views/admin/SystemManagement.vue'
 import SystemMonitor from '../views/admin/SystemMonitor.vue'
 import ConversationManagement from '../views/worker/ConversationManagement.vue'
@@ -115,7 +116,13 @@ const routes = [
   },
   {
     path: '/admin/customer-service',
-    name: 'AdminCustomerService',
+    name: 'AdminCustomerServiceInbox',
+    component: AdminCustomerServiceInbox,
+    meta: { requiresAuth: true, requiresRole: ['admin'], layout: 'admin' }
+  },
+  {
+    path: '/admin/customer-service/chat/:userId?',
+    name: 'AdminCustomerServiceChat',
     component: AdminCustomerService,
     meta: { requiresAuth: true, requiresRole: ['admin'], layout: 'admin' }
   },
@@ -158,7 +165,7 @@ const routes = [
   {
     path: '/admin/knowledge-base',
     redirect: '/admin/ai/knowledge',
-    meta: { requiresAuth: true, requiresRole: ['admin'] }
+    meta: { requiresAuth: true, requiresRole: ['admin'], layout: 'admin' }
   },
   {
     path: '/admin/ai/chat-config',
@@ -202,7 +209,7 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(process.env.BASE_URL),
   routes
 })
 

@@ -16,7 +16,7 @@
     </div>
 
     <!-- MySQL信息表格 -->
-    <el-card class="info-card" shadow="never">
+    <el-card class="info-card table-card" shadow="never">
       <template #header>
         <div class="card-header-with-status">
           <span class="card-title">MySQL信息</span>
@@ -25,30 +25,32 @@
           </el-tag>
         </div>
       </template>
-      <table class="info-table">
-        <tbody>
-          <tr>
-            <td class="label">版本</td>
-            <td class="value">{{ mysqlData.version || '-' }}</td>
-            <td class="label">运行时间</td>
-            <td class="value">{{ formatUptime(mysqlData.uptime) }}</td>
-            <td class="label">查询次数</td>
-            <td class="value">{{ formatNumber(mysqlData.questions) }}</td>
-          </tr>
-          <tr>
-            <td class="label">当前连接</td>
-            <td class="value">{{ mysqlData.threadsConnected || 0 }}</td>
-            <td class="label">最大连接</td>
-            <td class="value">{{ mysqlData.maxConnections || 0 }}</td>
-            <td class="label">连接使用率</td>
-            <td class="value">{{ connectionUsagePercent }}%</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="info-table-wrap">
+        <table class="info-table">
+          <tbody>
+            <tr>
+              <td class="label">版本</td>
+              <td class="value">{{ mysqlData.version || '-' }}</td>
+              <td class="label">运行时间</td>
+              <td class="value">{{ formatUptime(mysqlData.uptime) }}</td>
+              <td class="label">查询次数</td>
+              <td class="value">{{ formatNumber(mysqlData.questions) }}</td>
+            </tr>
+            <tr>
+              <td class="label">当前连接</td>
+              <td class="value">{{ mysqlData.threadsConnected || 0 }}</td>
+              <td class="label">最大连接</td>
+              <td class="value">{{ mysqlData.maxConnections || 0 }}</td>
+              <td class="label">连接使用率</td>
+              <td class="value">{{ connectionUsagePercent }}%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </el-card>
 
     <!-- 统计图表 -->
-    <el-row :gutter="16">
+    <el-row :gutter="12">
       <el-col :span="24">
         <el-card class="chart-card" shadow="never">
           <template #header>
@@ -75,6 +77,8 @@ const mysqlData = ref({})
 let refreshTimer = null
 let mysqlChart = null
 const mysqlChartRef = ref(null)
+let removeResizeListener = null
+let removeThemeListener = null
 
 const connectionUsagePercent = computed(() => {
   if (!mysqlData.value.maxConnections) return 0
@@ -112,6 +116,7 @@ const initPieChart = (chartRef, chart, usageRate, color, name) => {
   }
   
   chart = echarts.init(chartRef)
+  const emptyColor = document.documentElement.getAttribute('data-theme') === 'dark' ? '#374151' : '#e5e7eb'
   
   const option = {
     tooltip: {
@@ -133,7 +138,7 @@ const initPieChart = (chartRef, chart, usageRate, color, name) => {
       },
       data: [
         { value: usageRate, name: '已使用', itemStyle: { color: color } },
-        { value: 100 - usageRate, name: '空闲', itemStyle: { color: '#e5e7eb' } }
+        { value: 100 - usageRate, name: '空闲', itemStyle: { color: emptyColor } }
       ]
     }]
   }
@@ -176,90 +181,28 @@ const formatUptime = (seconds) => {
 
 onMounted(() => {
   loadData()
-  window.addEventListener('resize', () => {
-    mysqlChart?.resize()
-  })
+  const handleResize = () => mysqlChart?.resize()
+  const handleThemeChange = () => {
+    nextTick(() => initCharts())
+  }
+  window.addEventListener('resize', handleResize)
+  window.addEventListener('theme-change', handleThemeChange)
+  removeResizeListener = () => window.removeEventListener('resize', handleResize)
+  removeThemeListener = () => window.removeEventListener('theme-change', handleThemeChange)
 })
 
 onUnmounted(() => {
+  removeResizeListener?.()
+  removeThemeListener?.()
   if (refreshTimer) clearInterval(refreshTimer)
   if (mysqlChart) mysqlChart.dispose()
 })
 </script>
 
 <style scoped>
-.last-update {
-  font-size: 12px;
-  color: var(--admin-muted, #6b7280);
-}
-
-/* 信息卡片样式 */
-.info-card {
-  margin-bottom: 16px;
-}
-
-.info-card :deep(.el-card__header) {
-  padding: 12px 16px;
-}
-
-.info-card :deep(.el-card__body) {
-  padding: 0;
-}
-
 .card-header-with-status {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.card-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-/* 信息表格样式 */
-.info-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.info-table td {
-  padding: 6px 12px;
-  border: 1px solid var(--admin-border, #e5e7eb);
-  font-size: 12px;
-}
-
-.info-table td.label {
-  background: rgba(107, 114, 128, 0.08);
-  color: var(--admin-muted, #6b7280);
-  width: 100px;
-  font-weight: 500;
-}
-
-.info-table td.value {
-  color: var(--admin-text, #1f2937);
-}
-
-[data-theme="dark"] .info-table td.label {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-/* 图表卡片样式 */
-.chart-card {
-  margin-bottom: 0;
-}
-
-.chart-card :deep(.el-card__header) {
-  padding: 12px 16px;
-}
-
-.chart-card :deep(.el-card__body) {
-  padding: 8px;
-}
-
-.chart-container {
-  width: 100%;
-  height: 130px;
 }
 </style>

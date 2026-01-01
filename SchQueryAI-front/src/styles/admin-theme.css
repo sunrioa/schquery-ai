@@ -5,6 +5,7 @@
   --admin-text: #111827;
   --admin-muted: #6b7280;
   --admin-radius: 10px;
+  --admin-pane-height: 640px;
   color: var(--admin-text);
 }
 
@@ -136,7 +137,7 @@
 }
 
 /* 表格卡片：表格铺满，分页统一内边距 */
-.admin-layout .table-card :deep(.el-card__body) {
+.admin-layout .table-card .el-card__body {
   padding: 0;
 }
 
@@ -145,13 +146,13 @@
   padding: 12px 16px 16px;
 }
 
-.admin-layout .table-card :deep(.el-table__header-wrapper) {
+.admin-layout .table-card .el-table__header-wrapper {
   border-top-left-radius: var(--admin-radius);
   border-top-right-radius: var(--admin-radius);
 }
 
 /* 日志卡片同表格卡片 */
-.admin-layout .logs-table-card :deep(.el-card__body) {
+.admin-layout .logs-table-card .el-card__body {
   padding: 0;
 }
 
@@ -161,7 +162,7 @@
 }
 
 /* 表单卡片：限制过宽带来的阅读压力 */
-.admin-layout .card :deep(.el-form) {
+.admin-layout .card .el-form {
   max-width: 980px;
   width: 100%;
   margin: 0 auto;
@@ -185,6 +186,24 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+/* 双栏等高：左右卡片固定高度，内容超出内部滚动 */
+.admin-layout .split-panels {
+  align-items: stretch;
+}
+
+.admin-layout .split-panels .split-panel {
+  height: var(--admin-pane-height);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-layout .split-panels .split-panel .el-card__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 /* 监控页信息表格 */

@@ -3,10 +3,13 @@ package cn.ling.service.impl;
 import cn.ling.Result;
 import cn.ling.domain.dto.ChatMessageDTO;
 import cn.ling.domain.pojo.ChatMessage;
+import cn.ling.domain.pojo.ChatPreset;
+import cn.ling.domain.pojo.ChatSession;
 import cn.ling.domain.vo.ChatMessageVO;
 import cn.ling.exception.CustomException;
 import cn.ling.mapper.ChatMessageMapper;
 import cn.ling.service.ChatMessageService;
+import cn.ling.service.ChatPresetService;
 import cn.ling.service.ChatSessionService;
 import cn.ling.service.SysConfigService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -38,6 +41,7 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
     private static final String KEY_TOP_P = "chat.default.top_p";
     private static final String KEY_PRESENCE_PENALTY = "chat.default.presence_penalty";
     private static final String KEY_FREQUENCY_PENALTY = "chat.default.frequency_penalty";
+    private static final String KEY_DEFAULT_PRESET_ID = "chat.preset.defaultId";
 
     /**
      * AI聊天客户端
@@ -48,6 +52,9 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
 
     @Resource
     private SysConfigService sysConfigService;
+
+    @Resource
+    private ChatPresetService chatPresetService;
 
     /**
      * 聊天会话服务
@@ -139,11 +146,12 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
             // 使用流式生成AI回复
             log.info("开始生成AI回复");
             ChatClient.ChatClientRequestSpec promptSpec = openAiChatClient.prompt();
-            OpenAiChatOptions dynamicOptions = buildDynamicChatOptions();
+            ChatPreset preset = resolveChatPreset(chatMessageDTO.getSessionId());
+            OpenAiChatOptions dynamicOptions = buildChatOptions(preset);
             if (dynamicOptions != null) {
                 promptSpec = promptSpec.options(dynamicOptions);
             }
-            String dynamicSystemMessage = trimToNull(sysConfigService.getConfigValue(KEY_SYSTEM_MESSAGE));
+            String dynamicSystemMessage = resolveSystemMessage(preset);
             if (StringUtils.hasText(dynamicSystemMessage)) {
                 promptSpec = promptSpec.system(dynamicSystemMessage);
             }
@@ -189,42 +197,42 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
         }
     }
 
-    private OpenAiChatOptions buildDynamicChatOptions() {
+    private OpenAiChatOptions buildChatOptions(ChatPreset preset) {
         try {
             boolean hasAny = false;
             OpenAiChatOptions options = OpenAiChatOptions.builder().build();
 
-            String model = trimToNull(sysConfigService.getConfigValue(KEY_MODEL));
+            String model = preset != null ? trimToNull(preset.getModel()) : trimToNull(sysConfigService.getConfigValue(KEY_MODEL));
             if (StringUtils.hasText(model)) {
                 options.setModel(model);
                 hasAny = true;
             }
 
-            Integer maxTokens = parseInt(sysConfigService.getConfigValue(KEY_MAX_TOKENS), null);
+            Integer maxTokens = preset != null ? preset.getMaxTokens() : parseInt(sysConfigService.getConfigValue(KEY_MAX_TOKENS), null);
             if (maxTokens != null && maxTokens > 0) {
                 options.setMaxTokens(maxTokens);
                 hasAny = true;
             }
 
-            Double temperature = parseDouble(sysConfigService.getConfigValue(KEY_TEMPERATURE), null);
+            Double temperature = preset != null ? preset.getTemperature() : parseDouble(sysConfigService.getConfigValue(KEY_TEMPERATURE), null);
             if (temperature != null) {
                 options.setTemperature(temperature);
                 hasAny = true;
             }
 
-            Double topP = parseDouble(sysConfigService.getConfigValue(KEY_TOP_P), null);
+            Double topP = preset != null ? preset.getTopP() : parseDouble(sysConfigService.getConfigValue(KEY_TOP_P), null);
             if (topP != null) {
                 options.setTopP(topP);
                 hasAny = true;
             }
 
-            Double presencePenalty = parseDouble(sysConfigService.getConfigValue(KEY_PRESENCE_PENALTY), null);
+            Double presencePenalty = preset != null ? preset.getPresencePenalty() : parseDouble(sysConfigService.getConfigValue(KEY_PRESENCE_PENALTY), null);
             if (presencePenalty != null) {
                 options.setPresencePenalty(presencePenalty);
                 hasAny = true;
             }
 
-            Double frequencyPenalty = parseDouble(sysConfigService.getConfigValue(KEY_FREQUENCY_PENALTY), null);
+            Double frequencyPenalty = preset != null ? preset.getFrequencyPenalty() : parseDouble(sysConfigService.getConfigValue(KEY_FREQUENCY_PENALTY), null);
             if (frequencyPenalty != null) {
                 options.setFrequencyPenalty(frequencyPenalty);
                 hasAny = true;
@@ -235,6 +243,42 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
             log.debug("读取默认对话参数失败，将使用模型默认配置: {}", e.getMessage());
             return null;
         }
+    }
+
+    private ChatPreset resolveChatPreset(Long sessionId) {
+        if (sessionId == null) {
+            return null;
+        }
+        try {
+            ChatSession session = chatSessionService.getById(sessionId);
+            Long presetId = session == null ? null : session.getPresetId();
+            if (presetId == null) {
+                presetId = parseLong(sysConfigService.getConfigValue(KEY_DEFAULT_PRESET_ID));
+            }
+            if (presetId == null) {
+                return null;
+            }
+
+            ChatPreset preset = chatPresetService.getById(presetId);
+            if (preset == null) {
+                return null;
+            }
+            if (preset.getStatus() != null && preset.getStatus() == 0) {
+                return null;
+            }
+            return preset;
+        } catch (Exception e) {
+            log.debug("读取对话预设失败，将使用默认配置: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private String resolveSystemMessage(ChatPreset preset) {
+        String fromPreset = preset == null ? null : trimToNull(preset.getSystemMessage());
+        if (StringUtils.hasText(fromPreset)) {
+            return fromPreset;
+        }
+        return trimToNull(sysConfigService.getConfigValue(KEY_SYSTEM_MESSAGE));
     }
 
     private static String trimToNull(String s) {
@@ -264,6 +308,17 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
             return Double.parseDouble(raw.trim());
         } catch (Exception ignored) {
             return def;
+        }
+    }
+
+    private static Long parseLong(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        try {
+            return Long.parseLong(raw.trim());
+        } catch (Exception ignored) {
+            return null;
         }
     }
 

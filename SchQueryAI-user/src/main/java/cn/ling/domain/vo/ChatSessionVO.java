@@ -18,6 +18,11 @@ public class ChatSessionVO {
     private String sessionName;
 
     /**
+     * 对话预设ID（chat_preset.id）
+     */
+    private Long presetId;
+
+    /**
      * 最后一条消息的发送时间（用于会话排序）
      */
     private Date lastMessageAt;

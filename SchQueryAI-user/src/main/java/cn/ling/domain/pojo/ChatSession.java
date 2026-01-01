@@ -26,6 +26,11 @@ public class ChatSession {
     private Long userId;
 
     /**
+     * 对话预设ID（chat_preset.id）
+     */
+    private Long presetId;
+
+    /**
      * 会话名称（用户可自定义，默认"新会话"）
      */
     private String sessionName;

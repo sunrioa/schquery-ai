@@ -8,9 +8,12 @@ import cn.ling.domain.pojo.ChatSession;
 import cn.ling.domain.vo.ChatSessionVO;
 import cn.ling.mapper.ChatSessionMapper;
 import cn.ling.service.ChatSessionService;
+import cn.ling.service.SysConfigService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -24,6 +27,11 @@ import java.util.stream.Collectors;
 @Service
 public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatSession>
     implements ChatSessionService{
+
+    private static final String KEY_DEFAULT_PRESET_ID = "chat.preset.defaultId";
+
+    @Resource
+    private SysConfigService sysConfigService;
 
     /**
      * 创建新的聊天会话
@@ -44,6 +52,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
             Date currentTime = new Date();
             ChatSession chatSession = new ChatSession();
             chatSession.setUserId(userId);
+            chatSession.setPresetId(parseLong(sysConfigService.getConfigValue(KEY_DEFAULT_PRESET_ID)));
             chatSession.setSessionName("新会话");
             chatSession.setStatus(1); // 活跃状态
             chatSession.setCreatedAt(currentTime);
@@ -145,9 +154,23 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
                 throw CustomException.error("无权限修改此会话");
             }
 
-            // 更新会话名称
-            log.debug("更新会话名称从 '{}' 到 '{}'", existingSession.getSessionName(), chatSessionDTO.getSessionName());
-            existingSession.setSessionName(chatSessionDTO.getSessionName());
+            boolean changed = false;
+
+            if (StringUtils.hasText(chatSessionDTO.getSessionName())) {
+                String newName = chatSessionDTO.getSessionName().trim();
+                log.debug("更新会话名称从 '{}' 到 '{}'", existingSession.getSessionName(), newName);
+                existingSession.setSessionName(newName);
+                changed = true;
+            }
+
+            if (chatSessionDTO.getPresetId() != null) {
+                existingSession.setPresetId(chatSessionDTO.getPresetId());
+                changed = true;
+            }
+
+            if (!changed) {
+                return Result.success();
+            }
             existingSession.setUpdatedAt(new Date());
 
             boolean success = updateById(existingSession);
@@ -198,6 +221,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
                         ChatSessionVO vo = new ChatSessionVO();
                         vo.setId(session.getId());
                         vo.setSessionName(session.getSessionName());
+                        vo.setPresetId(session.getPresetId());
                         vo.setLastMessageAt(session.getLastMessageAt());
                         return vo;
                     })
@@ -245,6 +269,17 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
             }
         } catch (Exception e) {
             log.error("更新会话 {} 最后消息时间时发生异常: {}", sessionId, e.getMessage(), e);
+        }
+    }
+
+    private static Long parseLong(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        try {
+            return Long.parseLong(raw.trim());
+        } catch (Exception ignored) {
+            return null;
         }
     }
 }

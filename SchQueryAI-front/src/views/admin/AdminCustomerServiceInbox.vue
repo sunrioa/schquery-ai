@@ -59,9 +59,9 @@
       </el-col>
     </el-row>
 
-    <el-row :gutter="12" class="workspace-row">
+    <el-row :gutter="12" class="workspace-row split-panels">
       <el-col :xs="24" :lg="10">
-        <el-card class="table-card" shadow="never" v-loading="loading">
+        <el-card class="table-card split-panel" shadow="never" v-loading="loading">
           <el-table
             :data="filteredSessions"
             stripe
@@ -99,7 +99,7 @@
       </el-col>
 
       <el-col :xs="24" :lg="14">
-        <el-card class="preview-card" shadow="never">
+        <el-card class="preview-card split-panel" shadow="never">
           <template #header>
             <div class="preview-header">
               <div class="preview-title">
@@ -412,8 +412,16 @@ onUnmounted(() => {
   padding: 12px 0;
 }
 
+.preview-card.split-panel :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .preview-body {
-  height: clamp(360px, calc(100vh - 340px), 640px);
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 

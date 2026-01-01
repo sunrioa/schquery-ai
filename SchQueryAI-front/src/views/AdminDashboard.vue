@@ -110,9 +110,9 @@
         </el-col>
       </el-row>
 
-      <el-row :gutter="12" class="tables-row">
+      <el-row :gutter="12" class="tables-row split-panels" style="--admin-pane-height: 420px">
         <el-col :xs="24" :lg="12">
-          <el-card shadow="never" class="table-card">
+          <el-card shadow="never" class="table-card split-panel">
             <template #header>
               <div class="card-header">
                 <span>最近登录</span>
@@ -131,7 +131,7 @@
         </el-col>
 
         <el-col :xs="24" :lg="12">
-          <el-card shadow="never" class="table-card">
+          <el-card shadow="never" class="table-card split-panel">
             <template #header>
               <div class="card-header">
                 <span>最近操作日志</span>
@@ -157,9 +157,9 @@
         </el-col>
       </el-row>
 
-      <el-row :gutter="12" class="bottom-row">
+      <el-row :gutter="12" class="bottom-row split-panels" style="--admin-pane-height: 360px">
         <el-col :xs="24" :lg="12">
-          <el-card shadow="never" class="card">
+          <el-card shadow="never" class="card split-panel">
             <template #header>
               <div class="card-header">
                 <span>AI 默认配置</span>
@@ -186,7 +186,7 @@
         </el-col>
 
         <el-col :xs="24" :lg="12">
-          <el-card shadow="never" class="card">
+          <el-card shadow="never" class="card split-panel">
             <template #header>
               <div class="card-header">
                 <span>系统快捷入口</span>

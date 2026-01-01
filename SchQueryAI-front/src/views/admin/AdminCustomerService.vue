@@ -971,7 +971,7 @@ const formatTopic = (topic) => {
   grid-template-columns: 340px 1fr;
   gap: 12px;
   align-items: stretch;
-  flex: 1;
+  height: var(--admin-pane-height);
   min-height: 0;
   overflow: hidden;
 }

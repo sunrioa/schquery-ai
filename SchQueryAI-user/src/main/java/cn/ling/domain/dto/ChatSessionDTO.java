@@ -19,5 +19,9 @@ public class ChatSessionDTO {
      */
     private Integer status;
 
+    /**
+     * 对话预设ID（chat_preset.id）
+     */
+    private Long presetId;
 
 }

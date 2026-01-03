@@ -1,5 +1,7 @@
 package cn.ling.advisor;
 
+import cn.ling.context.ChatContext;
+import cn.ling.domain.pojo.ChatPreset;
 import cn.ling.domain.pojo.KnowledgeInfo;
 import cn.ling.embedding.EmbeddingModelContext;
 import cn.ling.service.KnowledgeInfoService;
@@ -25,7 +27,7 @@ import java.util.stream.Collectors;
 
 /**
  * 知识库 RAG 顾问（单 collection + knowledge_id 过滤）
- * - 读取默认知识库（chat.default.kid），并按 knowledge_id 过滤检索
+ * - 从预设中读取知识库ID（ChatPreset.kid），并按 knowledge_id 过滤检索
  * - 将检索片段注入到 system message，供模型回答时引用
  */
 @Slf4j
@@ -56,19 +58,39 @@ public class KnowledgeRagAdvisor implements BaseAdvisor {
             return chatClientRequest;
         }
 
+        // 从 ChatContext 获取预设配置
+        ChatPreset preset = ChatContext.getPreset();
         Long knowledgeId = null;
-        KnowledgeInfo knowledgeInfo = null;
-        try {
-            knowledgeId = knowledgeInfoService.ensureDefaultKnowledgeId();
-            if (knowledgeId != null) {
-                knowledgeInfo = knowledgeInfoService.getById(knowledgeId);
+
+        // 优先使用预设中的 kid
+        if (preset != null && StringUtils.hasText(preset.getKid())) {
+            try {
+                knowledgeId = Long.parseLong(preset.getKid().trim());
+                log.debug("使用预设的知识库ID: {}", knowledgeId);
+            } catch (NumberFormatException e) {
+                log.debug("预设的 kid 格式无效: {}", preset.getKid());
             }
-        } catch (Exception e) {
-            log.debug("读取默认知识库失败，将跳过RAG: {}", e.getMessage());
+        }
+
+        // 如果预设中没有配置，则使用默认知识库
+        if (knowledgeId == null) {
+            try {
+                knowledgeId = knowledgeInfoService.ensureDefaultKnowledgeId();
+                log.debug("使用默认知识库ID: {}", knowledgeId);
+            } catch (Exception e) {
+                log.debug("读取默认知识库失败，将跳过RAG: {}", e.getMessage());
+            }
         }
 
         if (knowledgeId == null) {
             return chatClientRequest;
+        }
+
+        KnowledgeInfo knowledgeInfo = null;
+        try {
+            knowledgeInfo = knowledgeInfoService.getById(knowledgeId);
+        } catch (Exception e) {
+            log.debug("获取知识库信息失败: {}", e.getMessage());
         }
 
         try {

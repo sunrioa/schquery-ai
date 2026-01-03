@@ -1,5 +1,7 @@
 package cn.ling.advisor;
 
+import cn.ling.context.ChatContext;
+import cn.ling.domain.pojo.ChatPreset;
 import cn.ling.service.SysConfigService;
 import cn.ling.service.mcp.McpSearchService;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +17,7 @@ import reactor.core.publisher.Flux;
 
 /**
  * MCP 网络检索增强
+ * - 从预设中读取 MCP 配置（ChatPreset.mcpMode, ChatPreset.mcpServers）
  * - mcpMode=off：关闭
  * - mcpMode=fallback：知识库无命中再走MCP
  * - mcpMode=merge：知识库 + MCP 合并
@@ -35,7 +38,10 @@ public class McpRagAdvisor implements BaseAdvisor {
 
     @Override
     public ChatClientRequest before(ChatClientRequest chatClientRequest, AdvisorChain advisorChain) {
-        McpMode mode = resolveMcpMode();
+        // 从 ChatContext 获取预设配置
+        ChatPreset preset = ChatContext.getPreset();
+        McpMode mode = resolveMcpMode(preset);
+
         if (mode == McpMode.OFF) {
             return chatClientRequest;
         }
@@ -64,8 +70,19 @@ public class McpRagAdvisor implements BaseAdvisor {
                 .build();
     }
 
-    private McpMode resolveMcpMode() {
-        String raw = sysConfigService.getConfigValue(KEY_MCP_MODE);
+    private McpMode resolveMcpMode(ChatPreset preset) {
+        String raw = null;
+
+        // 优先使用预设中的 mcpMode
+        if (preset != null && StringUtils.hasText(preset.getMcpMode())) {
+            raw = preset.getMcpMode();
+            log.debug("使用预设的 MCP 模式: {}", raw);
+        } else {
+            // 如果预设中没有配置，则使用全局默认值
+            raw = sysConfigService.getConfigValue(KEY_MCP_MODE);
+            log.debug("使用全局默认 MCP 模式: {}", raw);
+        }
+
         if (!StringUtils.hasText(raw)) {
             return McpMode.FALLBACK;
         }

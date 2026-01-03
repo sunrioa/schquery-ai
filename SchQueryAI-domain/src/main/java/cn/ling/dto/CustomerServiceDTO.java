@@ -49,6 +49,16 @@ public class CustomerServiceDTO {
     private String senderName;
 
     /**
+     * 发送者头像URL
+     */
+    private String senderAvatar;
+
+    /**
+     * 用户头像URL（兼容字段，用于用户发送消息时）
+     */
+    private String userAvatar;
+
+    /**
      * 消息状态 (1-已读, 0-未读)
      */
     private Integer readStatus;

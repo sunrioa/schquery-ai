@@ -51,6 +51,11 @@ public class CustomerServiceVO {
     private String senderName;
 
     /**
+     * 发送者头像URL
+     */
+    private String senderAvatar;
+
+    /**
      * 消息状态 (1-已读, 0-未读)
      */
     private Integer readStatus;

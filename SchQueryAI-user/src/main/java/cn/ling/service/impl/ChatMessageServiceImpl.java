@@ -1,6 +1,7 @@
 package cn.ling.service.impl;
 
 import cn.ling.Result;
+import cn.ling.context.ChatContext;
 import cn.ling.domain.dto.ChatMessageDTO;
 import cn.ling.domain.pojo.ChatMessage;
 import cn.ling.domain.pojo.ChatPreset;
@@ -143,53 +144,67 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
             log.debug("更新会话 {} 的最后消息时间", chatMessageDTO.getSessionId());
             chatSessionService.updateLastMessageTime(chatMessageDTO.getSessionId());
 
-            // 使用流式生成AI回复
-            log.info("开始生成AI回复");
-            ChatClient.ChatClientRequestSpec promptSpec = openAiChatClient.prompt();
+            // 解析预设并设置到 ThreadLocal
             ChatPreset preset = resolveChatPreset(chatMessageDTO.getSessionId());
-            OpenAiChatOptions dynamicOptions = buildChatOptions(preset);
-            if (dynamicOptions != null) {
-                promptSpec = promptSpec.options(dynamicOptions);
-            }
-            String dynamicSystemMessage = resolveSystemMessage(preset);
-            if (StringUtils.hasText(dynamicSystemMessage)) {
-                promptSpec = promptSpec.system(dynamicSystemMessage);
-            }
-            Flux<String> aiResponseStream = promptSpec.user(chatMessageDTO.getContent()).stream().content();
+            ChatContext.setPreset(preset);
 
-            // 用于累积完整的AI回复
-            StringBuilder fullResponse = new StringBuilder();
+            try {
+                // 使用流式生成AI回复
+                log.info("开始生成AI回复");
+                ChatClient.ChatClientRequestSpec promptSpec = openAiChatClient.prompt();
+                OpenAiChatOptions dynamicOptions = buildChatOptions(preset);
+                if (dynamicOptions != null) {
+                    promptSpec = promptSpec.options(dynamicOptions);
+                }
+                String dynamicSystemMessage = resolveSystemMessage(preset);
+                if (StringUtils.hasText(dynamicSystemMessage)) {
+                    promptSpec = promptSpec.system(dynamicSystemMessage);
+                }
+                Flux<String> aiResponseStream = promptSpec.user(chatMessageDTO.getContent()).stream().content();
 
-            // 处理流式响应
-            return aiResponseStream
-                    .doOnNext(chunk -> {
-                        log.debug("收到AI回复片段，长度: {}", chunk.length());
-                        fullResponse.append(chunk);
-                    })
-                    .doOnComplete(() -> {
-                        // 流式传输完成时，保存完整的AI回复到数据库
-                        log.info("AI流式回复完成，开始保存完整回复");
-                        if (!fullResponse.isEmpty()) {
-                            ChatMessage aiMessage = new ChatMessage();
-                            aiMessage.setSessionId(chatMessageDTO.getSessionId());
-                            aiMessage.setMessageType(1); // AI消息
-                            aiMessage.setContent(fullResponse.toString());
-                            aiMessage.setCreatedAt(new Date());
-                            boolean aiSaveSuccess = this.save(aiMessage);
+                // 用于累积完整的AI回复
+                StringBuilder fullResponse = new StringBuilder();
 
-                            if (aiSaveSuccess) {
-                                log.info("AI消息保存成功，消息ID: {}, 回复长度: {}",
-                                    aiMessage.getId(), fullResponse.length());
+                // 处理流式响应
+                return aiResponseStream
+                        .doOnNext(chunk -> {
+                            log.debug("收到AI回复片段，长度: {}", chunk.length());
+                            fullResponse.append(chunk);
+                        })
+                        .doOnComplete(() -> {
+                            // 流式传输完成时，保存完整的AI回复到数据库
+                            log.info("AI流式回复完成，开始保存完整回复");
+                            if (!fullResponse.isEmpty()) {
+                                ChatMessage aiMessage = new ChatMessage();
+                                aiMessage.setSessionId(chatMessageDTO.getSessionId());
+                                aiMessage.setMessageType(1); // AI消息
+                                aiMessage.setContent(fullResponse.toString());
+                                aiMessage.setCreatedAt(new Date());
+                                boolean aiSaveSuccess = this.save(aiMessage);
+
+                                if (aiSaveSuccess) {
+                                    log.info("AI消息保存成功，消息ID: {}, 回复长度: {}",
+                                        aiMessage.getId(), fullResponse.length());
+                                } else {
+                                    log.error("AI消息保存失败，会话ID: {}", chatMessageDTO.getSessionId());
+                                }
                             } else {
-                                log.error("AI消息保存失败，会话ID: {}", chatMessageDTO.getSessionId());
+                                log.warn("AI回复内容为空，会话ID: {}", chatMessageDTO.getSessionId());
                             }
-                        } else {
-                            log.warn("AI回复内容为空，会话ID: {}", chatMessageDTO.getSessionId());
-                        }
-                    })
-                    .doOnError(error -> {
-                        log.error("AI流式回复过程中发生错误: {}", error.getMessage(), error);
-                    });
+                        })
+                        .doOnError(error -> {
+                            log.error("AI流式回复过程中发生错误: {}", error.getMessage(), error);
+                        })
+                        .doFinally(signalType -> {
+                            // 无论成功还是失败，都要清理 ThreadLocal
+                            ChatContext.clear();
+                            log.debug("已清理 ChatContext");
+                        });
+            } catch (Exception e) {
+                // 发生异常时也要清理 ThreadLocal
+                ChatContext.clear();
+                throw e;
+            }
         } catch (Exception e) {
             log.error("处理用户消息时发生异常，会话ID: {}, 异常信息: {}",
                 chatMessageDTO.getSessionId(), e.getMessage(), e);

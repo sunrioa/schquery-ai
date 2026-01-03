@@ -1,76 +1,97 @@
 <template>
-  <div class="admin-page ai-chat-model">
+  <div class="admin-page ai-model-container">
     <div class="page-header">
-      <div class="header-left">
-        <h2>模型管理</h2>
-        <p class="sub">管理 chat_model（chat/vector/rerank 等）</p>
+      <div class="header-info">
+        <h2 class="title">AI 模型库管理</h2>
+        <p class="subtitle">配置大语言模型、向量模型以及重排序模型的 API 参数</p>
       </div>
-
-      <div class="header-actions">
-        <el-select v-model="query.category" placeholder="分类" clearable style="width: 140px" @change="loadList">
-          <el-option label="chat" value="chat" />
-          <el-option label="vector" value="vector" />
-          <el-option label="rerank" value="rerank" />
-          <el-option label="image" value="image" />
-        </el-select>
-        <el-select v-model="query.modelShow" placeholder="启用" clearable style="width: 120px" @change="loadList">
-          <el-option label="启用" :value="1" />
-          <el-option label="停用" :value="0" />
-        </el-select>
-        <el-input
-          v-model="query.modelName"
-          placeholder="搜索模型名"
-          clearable
-          style="width: 220px"
-          @keyup.enter="loadList"
-          @clear="loadList"
-        >
-          <template #prefix>
-            <el-icon><Search /></el-icon>
-          </template>
-        </el-input>
-        <el-button type="primary" @click="openCreate">新建</el-button>
-        <el-button @click="loadList">刷新</el-button>
+      <div class="header-ops">
+        <el-button type="primary" @click="openCreate">
+          <el-icon><Plus /></el-icon>添加新模型
+        </el-button>
+        <el-button @click="loadList">
+          <el-icon><Refresh /></el-icon>重载
+        </el-button>
       </div>
     </div>
 
+    <el-card class="search-card" shadow="never">
+      <div class="search-wrapper">
+        <div class="search-items">
+          <el-input
+            v-model="query.modelName"
+            placeholder="根据模型名称搜索..."
+            clearable
+            style="width: 240px"
+            @keyup.enter="loadList"
+            @clear="loadList"
+          >
+            <template #prefix><el-icon><Search /></el-icon></template>
+          </el-input>
+          <el-select v-model="query.category" placeholder="模型分类" clearable style="width: 140px" @change="loadList">
+            <el-option label="Chat (对话)" value="chat" />
+            <el-option label="Vector (向量)" value="vector" />
+            <el-option label="Rerank (重排)" value="rerank" />
+            <el-option label="Image (绘图)" value="image" />
+          </el-select>
+          <el-select v-model="query.modelShow" placeholder="显示状态" clearable style="width: 120px" @change="loadList">
+            <el-option label="已启用" :value="1" />
+            <el-option label="已隐藏" :value="0" />
+          </el-select>
+        </div>
+      </div>
+    </el-card>
+
     <el-card class="table-card" shadow="never" v-loading="loading">
-      <el-table :data="list" stripe style="width: 100%">
-        <el-table-column type="index" label="序号" width="60" align="center" />
-        <el-table-column prop="id" label="ID" width="90" align="center" />
-        <el-table-column prop="category" label="分类" width="110" align="center">
+      <el-table :data="list" stripe style="width: 100%" class="custom-table">
+        <el-table-column prop="id" label="ID" width="80" align="center" />
+        <el-table-column prop="category" label="分类" width="100" align="center">
           <template #default="{ row }">
-            <el-tag>{{ row.category }}</el-tag>
+            <el-tag :type="getCategoryType(row.category)" effect="plain" size="small">{{ row.category }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="modelName" label="模型名" min-width="200" />
-        <el-table-column prop="providerName" label="供应商" width="140" />
-        <el-table-column prop="priority" label="优先级" width="90" align="center" />
-        <el-table-column prop="modelShow" label="启用" width="90" align="center">
+        <el-table-column prop="modelName" label="模型标识" min-width="180">
           <template #default="{ row }">
-            <el-tag :type="row.modelShow === 1 ? 'success' : 'info'">
-              {{ row.modelShow === 1 ? '是' : '否' }}
+            <div class="model-name-cell">
+              <span class="name-text">{{ row.modelName }}</span>
+              <div class="provider-text" v-if="row.providerName">{{ row.providerName }}</div>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="priority" label="优先级" width="80" align="center" />
+        <el-table-column prop="modelShow" label="状态" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.modelShow === 1 ? 'success' : 'info'" effect="light">
+              {{ row.modelShow === 1 ? '使用中' : '未开启' }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="apiHost" label="apiHost" min-width="180" />
-        <el-table-column prop="updateTime" label="更新时间" width="180" align="center">
-          <template #default="{ row }">{{ formatTime(row.updateTime) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="220" align="center" fixed="right">
+        <el-table-column prop="apiHost" label="API Endpoint" min-width="200" show-overflow-tooltip>
           <template #default="{ row }">
-            <el-button size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="removeRow(row)">删除</el-button>
+            <code class="api-code">{{ row.apiHost || '-' }}</code>
+          </template>
+        </el-table-column>
+        <el-table-column prop="updateTime" label="更新于" width="160" align="center">
+          <template #default="{ row }">
+            <span class="time-text">{{ formatTime(row.updateTime) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="160" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" link @click="openEdit(row)">配置</el-button>
+            <el-divider direction="vertical" />
+            <el-button type="danger" link @click="removeRow(row)">移除</el-button>
           </template>
         </el-table-column>
       </el-table>
 
-      <div class="pagination">
+      <div class="pagination-container">
         <el-pagination
           v-model:current-page="pageNum"
           v-model:page-size="pageSize"
           :page-sizes="[10, 20, 50, 100]"
           :total="total"
+          background
           layout="total, sizes, prev, pager, next, jumper"
           @size-change="handleSizeChange"
           @current-change="handlePageChange"
@@ -135,6 +156,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Search, Plus, Refresh } from '@element-plus/icons-vue'
 import { getChatModelList, removeChatModel, saveChatModel } from '../../../api/ai/chatModel'
 
 const loading = ref(false)
@@ -267,6 +289,16 @@ const removeRow = async (row) => {
   loadList()
 }
 
+const getCategoryType = (cat) => {
+  const map = {
+    chat: 'success',
+    vector: 'warning',
+    rerank: 'danger',
+    image: 'info'
+  }
+  return map[cat] || ''
+}
+
 const formatTime = (timestamp) => {
   if (!timestamp) return '-'
   const date = new Date(timestamp)
@@ -279,3 +311,97 @@ const formatTime = (timestamp) => {
 
 onMounted(() => loadList())
 </script>
+
+<style scoped>
+.ai-model-container {
+  padding: 24px;
+  background: #f5f7fa;
+  min-height: calc(100vh - 84px);
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.page-header .title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.page-header .subtitle {
+  margin: 4px 0 0;
+  color: #606266;
+  font-size: 14px;
+}
+
+.search-card {
+  margin-bottom: 16px;
+  border-radius: 8px;
+}
+
+.search-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.search-items {
+  display: flex;
+  gap: 12px;
+}
+
+.table-card {
+  border-radius: 8px;
+}
+
+.model-name-cell {
+  display: flex;
+  flex-direction: column;
+}
+
+.name-text {
+  font-weight: 600;
+  color: #303133;
+}
+
+.provider-text {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+}
+
+.api-code {
+  font-family: monospace;
+  background: #f4f4f5;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.time-text {
+  font-size: 13px;
+  color: #606266;
+}
+
+.pagination-container {
+  margin-top: 24px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+:deep(.custom-table) {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+:deep(.el-table__header-wrapper th) {
+  background-color: #f8f9fb !important;
+  color: #303133;
+  font-weight: 600;
+}
+</style>

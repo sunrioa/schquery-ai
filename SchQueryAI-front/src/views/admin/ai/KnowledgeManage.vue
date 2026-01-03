@@ -1,74 +1,98 @@
 <template>
-  <div class="admin-page ai-knowledge-manage">
+  <div class="admin-page ai-knowledge-container">
     <div class="page-header">
-      <div class="header-left">
-        <h2>知识库管理</h2>
-        <p class="sub">创建/配置知识库，并进入文档与片段管理</p>
+      <div class="header-info">
+        <h2 class="title">RAG 知识库管理</h2>
+        <p class="subtitle">管理知识库配置、分块策略以及检索参数</p>
       </div>
-
-      <div class="header-actions">
-        <el-input
-          v-model="query.kname"
-          placeholder="搜索知识库名称"
-          clearable
-          style="width: 220px"
-          @keyup.enter="loadList"
-          @clear="loadList"
-        >
-          <template #prefix>
-            <el-icon><Search /></el-icon>
-          </template>
-        </el-input>
-        <el-select v-model="query.status" placeholder="状态" clearable style="width: 120px" @change="loadList">
-          <el-option label="启用" :value="1" />
-          <el-option label="停用" :value="0" />
-        </el-select>
-        <el-button type="primary" @click="openCreate">新建</el-button>
-        <el-button @click="loadList">刷新</el-button>
+      <div class="header-ops">
+        <el-button type="primary" @click="openCreate">
+          <el-icon><Plus /></el-icon>新建知识库
+        </el-button>
+        <el-button @click="loadList">
+          <el-icon><Refresh /></el-icon>刷新
+        </el-button>
       </div>
     </div>
 
+    <el-card class="search-card" shadow="never">
+      <div class="search-wrapper">
+        <div class="search-items">
+          <el-input
+            v-model="query.kname"
+            placeholder="搜索知识库名称..."
+            clearable
+            style="width: 240px"
+            @keyup.enter="loadList"
+            @clear="loadList"
+          >
+            <template #prefix><el-icon><Search /></el-icon></template>
+          </el-input>
+          <el-select v-model="query.status" placeholder="状态筛选" clearable style="width: 140px" @change="loadList">
+            <el-option label="全部状态" :value="undefined" />
+            <el-option label="已启用" :value="1" />
+            <el-option label="已停用" :value="0" />
+          </el-select>
+        </div>
+      </div>
+    </el-card>
+
     <el-card class="table-card" shadow="never" v-loading="loading">
-      <el-table :data="list" stripe style="width: 100%">
-        <el-table-column type="index" label="序号" width="60" align="center" />
-        <el-table-column prop="id" label="ID" width="90" align="center" />
-        <el-table-column prop="kname" label="名称" min-width="160" />
-        <el-table-column prop="status" label="状态" width="90" align="center">
+      <el-table :data="list" stripe style="width: 100%" class="custom-table">
+        <el-table-column prop="id" label="ID" width="80" align="center" />
+        <el-table-column prop="kname" label="知识库名称" min-width="180">
           <template #default="{ row }">
-            <el-tag :type="row.status === 1 ? 'success' : 'info'">
-              {{ row.status === 1 ? '启用' : '停用' }}
+            <div class="knowledge-name-cell">
+              <span class="name-text">{{ row.kname }}</span>
+              <div class="desc-text" v-if="row.description">{{ row.description }}</div>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 1 ? 'success' : 'info'" effect="light" round>
+              {{ row.status === 1 ? '使用中' : '已禁用' }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="retrieveLimit" label="topK" width="80" align="center" />
-        <el-table-column prop="candidateCount" label="候选" width="80" align="center" />
-        <el-table-column prop="textBlockSize" label="块大小" width="90" align="center" />
-        <el-table-column prop="overlapChar" label="重叠" width="80" align="center" />
-        <el-table-column prop="useRerank" label="Rerank" width="90" align="center">
+        <el-table-column label="分块策略" align="center">
+          <el-table-column prop="textBlockSize" label="Size" width="80" align="center" />
+          <el-table-column prop="overlapChar" label="Overlap" width="80" align="center" />
+        </el-table-column>
+        <el-table-column label="检索配置" align="center">
+          <el-table-column prop="retrieveLimit" label="topK" width="70" align="center" />
+          <el-table-column prop="useRerank" label="Rerank" width="90" align="center">
+            <template #default="{ row }">
+              <el-tag :type="row.useRerank === 1 ? 'warning' : 'info'" size="small">
+                {{ row.useRerank === 1 ? '开启' : '关闭' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+        </el-table-column>
+        <el-table-column prop="updateTime" label="最后更新" width="160" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.useRerank === 1 ? 'warning' : 'info'">
-              {{ row.useRerank === 1 ? '启用' : '关闭' }}
-            </el-tag>
+            <span class="time-text">{{ formatTime(row.updateTime) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="updateTime" label="更新时间" width="180" align="center">
-          <template #default="{ row }">{{ formatTime(row.updateTime) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="250" align="center" fixed="right">
+        <el-table-column label="操作" width="220" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" size="small" @click="goDetail(row)">文档</el-button>
-            <el-button size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button type="danger" size="small" @click="removeRow(row)">删除</el-button>
+            <el-button type="primary" link @click="goDetail(row)">
+              <el-icon><Document /></el-icon>管理文档
+            </el-button>
+            <el-divider direction="vertical" />
+            <el-button type="primary" link @click="openEdit(row)">编辑</el-button>
+            <el-button type="danger" link @click="removeRow(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
 
-      <div class="pagination">
+      <div class="pagination-container">
         <el-pagination
           v-model:current-page="pageNum"
           v-model:page-size="pageSize"
           :page-sizes="[10, 20, 50, 100]"
           :total="total"
+          background
           layout="total, sizes, prev, pager, next, jumper"
           @size-change="handleSizeChange"
           @current-change="handlePageChange"
@@ -189,6 +213,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
+import { Search, Plus, Refresh, Document } from '@element-plus/icons-vue'
 import { getKnowledgeList, removeKnowledge, saveKnowledge } from '../../../api/ai/knowledge'
 import { getChatModelList } from '../../../api/ai/chatModel'
 
@@ -361,3 +386,92 @@ onMounted(() => {
   loadList()
 })
 </script>
+
+<style scoped>
+.ai-knowledge-container {
+  padding: 24px;
+  background: #f5f7fa;
+  min-height: calc(100vh - 84px);
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.page-header .title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.page-header .subtitle {
+  margin: 4px 0 0;
+  color: #606266;
+  font-size: 14px;
+}
+
+.search-card {
+  margin-bottom: 16px;
+  border-radius: 8px;
+}
+
+.search-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.search-items {
+  display: flex;
+  gap: 12px;
+}
+
+.table-card {
+  border-radius: 8px;
+}
+
+.knowledge-name-cell {
+  display: flex;
+  flex-direction: column;
+}
+
+.name-text {
+  font-weight: 600;
+  color: #303133;
+}
+
+.desc-text {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.time-text {
+  font-size: 13px;
+  color: #606266;
+}
+
+.pagination-container {
+  margin-top: 24px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+:deep(.custom-table) {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+:deep(.el-table__header-wrapper th) {
+  background-color: #f8f9fb !important;
+  color: #303133;
+  font-weight: 600;
+}
+</style>

@@ -58,6 +58,21 @@ public class ChatPreset {
      */
     private Double repetitionPenalty;
 
+    /**
+     * 绑定知识库ID（knowledge_info.id）
+     */
+    private String kid;
+
+    /**
+     * MCP运行模式: off/fallback/merge
+     */
+    private String mcpMode;
+
+    /**
+     * MCP服务器地址（逗号分隔）
+     */
+    private String mcpServers;
+
     private String remark;
 
     /**

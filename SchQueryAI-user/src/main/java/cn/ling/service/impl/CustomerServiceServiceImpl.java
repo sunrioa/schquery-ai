@@ -44,6 +44,7 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
                     .senderType(1) // 1-用户
                     .senderId(dto.getUserId())
                     .senderName(dto.getUserName())
+                    .senderAvatar(dto.getUserAvatar()) // 用户头像
                     .readStatus(0) // 未读
                     .topic(dto.getTopic())
                     .createTime(LocalDateTime.now(ZoneId.systemDefault()))
@@ -86,7 +87,7 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
     @Override
     public Result<Long> replyMessage(CustomerServiceDTO dto) {
         try {
-            // 创建管理员回复消恫
+            // 创建管理员回复消息
             CustomerServiceMessage message = CustomerServiceMessage.builder()
                     .userId(dto.getUserId())
                     .userName(dto.getUserName())
@@ -94,6 +95,7 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
                     .senderType(2) // 2-管理员
                     .senderId(dto.getSenderId())
                     .senderName(dto.getSenderName())
+                    .senderAvatar(dto.getSenderAvatar()) // 管理员头像
                     .readStatus(1) // 管理员发送，自动为已读
                     .topic(dto.getTopic())
                     .createTime(LocalDateTime.now(ZoneId.systemDefault()))
@@ -150,6 +152,7 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
                             .senderType(msg.getSenderType())
                             .senderId(msg.getSenderId())
                             .senderName(msg.getSenderName())
+                            .senderAvatar(msg.getSenderAvatar()) // 添加头像
                             .readStatus(msg.getReadStatus())
                             .topic(msg.getTopic())
                             .createTime(msg.getCreateTime().toString())
@@ -201,6 +204,7 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
                                         .senderType(msg.getSenderType())
                                         .senderId(msg.getSenderId())
                                         .senderName(msg.getSenderName())
+                                        .senderAvatar(msg.getSenderAvatar()) // 添加头像
                                         .readStatus(msg.getReadStatus())
                                         .topic(msg.getTopic())
                                         .createTime(msg.getCreateTime().toString())

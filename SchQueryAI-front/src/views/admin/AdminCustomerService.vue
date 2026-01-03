@@ -135,10 +135,10 @@
           <div class="messages-area" ref="messagesContainer">
             <div v-for="msg in sortedMessages" :key="msg.id" class="message-item" :class="{ 'admin-msg': msg.senderType === 2, 'user-msg': msg.senderType === 1 }">
               <div class="message-avatar">
-                <el-avatar :size="36" :src="msg.senderType === 1 ? getUserAvatar() : getAdminAvatar()" />
+                <el-avatar :size="36" :src="msg.senderAvatar || (msg.senderType === 1 ? getDefaultUserAvatar() : userStore.getDisplayAvatar())" />
               </div>
               <div class="message-content">
-                <div class="sender-name">{{ msg.senderType === 1 ? currentSession.userName : '我' }}</div>
+                <div class="sender-name">{{ msg.senderName || (msg.senderType === 1 ? currentSession.userName : '我') }}</div>
                 <div class="message-text">{{ msg.messageContent }}</div>
                 <div class="message-meta">
                   <span class="message-time">{{ formatTime(msg.createTime) }}</span>
@@ -637,7 +637,9 @@ const sendReply = async () => {
       body: JSON.stringify({
         userId: currentSession.value.id,
         messageContent: replyMessage.value,
-        senderType: 2  // 2-管理员
+        senderType: 2,  // 2-管理员
+        senderAvatar: userStore.getDisplayAvatar(), // 添加管理员头像
+        senderName: userStore.userInfo.userName // 添加管理员名称
       })
     })
 
@@ -812,14 +814,9 @@ const toggleDarkMode = () => {
   window.dispatchEvent(new CustomEvent('theme-change', { detail: { isDark: isDarkMode.value } }))
 }
 
-// 获取用户头像
-const getUserAvatar = () => {
+// 获取默认用户头像
+const getDefaultUserAvatar = () => {
   return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect fill="%23e6f7ff" width="200" height="200"/><circle cx="100" cy="70" r="30" fill="%231890ff"/><path d="M60 140 Q100 120 140 140 L140 180 L60 180 Z" fill="%231890ff"/></svg>'
-}
-
-// 获取管理员头像
-const getAdminAvatar = () => {
-  return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect fill="%23f0f5ff" width="200" height="200"/><circle cx="100" cy="70" r="30" fill="%23666"/><path d="M60 140 Q100 120 140 140 L140 180 L60 180 Z" fill="%23666"/></svg>'
 }
 
 // 格式化时间

@@ -33,13 +33,13 @@
                 <div class="message-avatar">
                   <el-avatar
                       :size="36"
-                      :src="msg.senderType === 1 ? userStore.getDisplayAvatar() : getAdminAvatar()"
+                      :src="msg.senderAvatar || (msg.senderType === 1 ? userStore.getDisplayAvatar() : getDefaultAdminAvatar())"
                       :icon="null"
                   />
                 </div>
                 <div class="message-content">
                   <div class="sender-name">
-                    {{ msg.senderType === 1 ? userStore.userInfo.userName : '客服' }}
+                    {{ msg.senderName || (msg.senderType === 1 ? userStore.userInfo.userName : '客服') }}
                   </div>
                   <div class="message-text">{{ msg.messageContent }}</div>
                   <div class="message-time">{{ formatTime(msg.createTime) }}</div>
@@ -49,7 +49,7 @@
               <!-- 输入中指示器 -->
               <div v-if="isTyping" class="message-item admin-msg">
                 <div class="message-avatar">
-                  <el-avatar :size="36" :src="getAdminAvatar()" :icon="null" />
+                  <el-avatar :size="36" :src="getDefaultAdminAvatar()" :icon="null" />
                 </div>
                 <div class="message-content">
                   <div class="typing-indicator">
@@ -253,7 +253,8 @@ const sendMessage = async () => {
       body: JSON.stringify({
         messageContent: messageInput.value,
         topic: topic.value,
-        senderType: 1
+        senderType: 1,
+        userAvatar: userStore.getDisplayAvatar() // 添加用户头像
       })
     })
 
@@ -314,8 +315,8 @@ const scrollToBottom = () => {
   }
 }
 
-// 获取管理员头像
-const getAdminAvatar = () => {
+// 获取默认管理员头像
+const getDefaultAdminAvatar = () => {
   return 'https://cube.elemecdn.com/0/88/ff0b88ba1220c6fb3b85e36ae2d47png'
 }
 

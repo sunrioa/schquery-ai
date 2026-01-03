@@ -1,239 +1,216 @@
 <template>
-  <div class="admin-page ai-chat-config">
+  <div class="admin-page ai-chat-config-container">
     <div class="page-header">
-      <div class="header-left">
-        <h2>对话预设（角色）</h2>
-        <p class="sub">为不同模型/同模型维护多套参数预设，聊天中直接切换即可生效</p>
+      <div class="header-info">
+        <h2 class="title">AI 对话配置中心</h2>
+        <p class="subtitle">统一管理模型参数预设与全局检索策略</p>
       </div>
-
-      <div class="header-actions">
-        <el-button type="primary" @click="createPreset">新建预设</el-button>
-        <el-button :loading="presetsLoading" @click="loadPresets">刷新预设</el-button>
-        <el-button :loading="globalLoading" @click="loadGlobal">刷新全局</el-button>
-        <el-button type="success" :loading="refreshingMcp" @click="refreshMcp">刷新 MCP 客户端</el-button>
+      <div class="header-ops">
+        <el-button type="primary" @click="createPreset">
+          <el-icon><Plus /></el-icon>新建角色预设
+        </el-button>
+        <el-button type="success" plain :loading="refreshingMcp" @click="refreshMcp">
+          <el-icon><Connection /></el-icon>刷新 MCP
+        </el-button>
       </div>
     </div>
 
-    <el-row :gutter="12" class="split-panels">
-      <el-col :xs="24" :lg="9">
-        <el-card class="table-card split-panel" shadow="never" v-loading="presetsLoading">
-          <template #header>
-            <div class="card-header">
-              <div class="header-left">
-                <span>预设列表</span>
-                <el-tag v-if="defaultPresetId" type="success" size="small">默认ID：{{ defaultPresetId }}</el-tag>
-              </div>
-              <div class="header-actions">
-                <el-input
-                  v-model="presetQuery.presetName"
-                  placeholder="搜索预设名"
-                  clearable
-                  style="width: 180px"
-                  @keyup.enter="loadPresets"
-                  @clear="loadPresets"
-                />
-              </div>
-            </div>
-          </template>
-
-          <el-table
-            :data="presets"
-            stripe
-            highlight-current-row
-            style="width: 100%"
-            :row-class-name="rowClassName"
-            @row-click="selectPreset"
-          >
-            <el-table-column prop="presetName" label="预设" min-width="140" show-overflow-tooltip />
-            <el-table-column prop="model" label="模型" min-width="140" show-overflow-tooltip />
-            <el-table-column prop="status" label="启用" width="90" align="center">
-              <template #default="{ row }">
-                <el-tag :type="Number(row.status) === 1 ? 'success' : 'info'" size="small">
-                  {{ Number(row.status) === 1 ? '是' : '否' }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="默认" width="90" align="center">
-              <template #default="{ row }">
-                <el-tag v-if="Number(row.id) === Number(defaultPresetId)" type="success" size="small">默认</el-tag>
-                <span v-else>-</span>
-              </template>
-            </el-table-column>
-          </el-table>
-
-          <div v-if="presets.length === 0" class="empty-tip">
-            还没有预设。点击右上角“新建预设”创建一套角色参数。
-          </div>
-        </el-card>
-      </el-col>
-
-      <el-col :xs="24" :lg="15">
-        <el-card class="card split-panel" shadow="never" v-loading="presetSaving">
-          <template #header>
-            <div class="card-header">
-              <div class="header-left">
-                <span>预设参数</span>
-                <el-tag v-if="currentPreset?.id" type="info" size="small">ID：{{ currentPreset.id }}</el-tag>
-                <el-tag v-if="Number(currentPreset?.id) === Number(defaultPresetId)" type="success" size="small">
-                  默认预设
-                </el-tag>
-              </div>
-              <div class="header-actions">
-                <el-button
-                  v-if="currentPreset?.id && Number(currentPreset.id) !== Number(defaultPresetId)"
-                  type="success"
-                  plain
-                  @click="setAsDefault"
-                >
-                  设为默认
-                </el-button>
-                <el-button type="primary" :disabled="!currentPreset" @click="savePreset">保存</el-button>
-                <el-button v-if="currentPreset?.id" type="danger" plain @click="deletePreset">删除</el-button>
-              </div>
-            </div>
-          </template>
-
-          <div v-if="!currentPreset" class="empty-state">
-            <el-empty description="请选择左侧预设，或新建一套预设" :image-size="120" />
-          </div>
-
-          <el-form v-else :model="currentPreset" label-width="120px">
-            <el-form-item label="预设名称" required>
-              <el-input v-model="currentPreset.presetName" placeholder="例如：客服助手 / 研发助手 / 翻译专家" />
-              <div class="help-text">预设名称会显示在聊天页，用于一键切换“角色”。</div>
-            </el-form-item>
-
-            <el-form-item label="模型" required>
-              <el-select
-                v-model="currentPreset.model"
-                filterable
-                allow-create
-                default-first-option
-                placeholder="例如：qwen-plus"
-                style="width: 100%"
-              >
-                <el-option v-for="m in chatModelOptions" :key="m" :label="m" :value="m" />
-              </el-select>
-              <div class="help-text">同一个模型也可以配置多套不同参数（例如不同 system prompt）。</div>
-            </el-form-item>
-
-            <el-form-item label="启用">
-              <el-switch v-model="presetEnabledSwitch" />
-            </el-form-item>
-
-            <el-form-item label="系统提示词">
+    <el-tabs v-model="activeTab" class="config-tabs">
+      <el-tab-pane name="presets">
+        <template #label>
+          <span class="tab-label"><el-icon><User /></el-icon>角色预设</span>
+        </template>
+        <div class="tab-content preset-manager">
+          <div class="sidebar">
+            <div class="sidebar-header">
               <el-input
-                v-model="currentPreset.systemMessage"
-                type="textarea"
-                :rows="4"
-                placeholder="可选：角色设定/行为约束（例如：你是一名客服…）"
-              />
-            </el-form-item>
-
-            <el-divider content-position="left">生成参数</el-divider>
-
-            <el-row :gutter="12">
-              <el-col :xs="24" :md="12">
-                <el-form-item label="maxTokens">
-                  <el-input-number v-model="currentPreset.maxTokens" :min="1" :max="32000" controls-position="right" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :md="12">
-                <el-form-item label="temperature">
-                  <el-input-number v-model="currentPreset.temperature" :min="0" :max="2" :step="0.1" controls-position="right" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :md="12">
-                <el-form-item label="topP">
-                  <el-input-number v-model="currentPreset.topP" :min="0" :max="1" :step="0.05" controls-position="right" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :md="12">
-                <el-form-item label="presencePenalty">
-                  <el-input-number v-model="currentPreset.presencePenalty" :min="-2" :max="2" :step="0.1" controls-position="right" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :md="12">
-                <el-form-item label="frequencyPenalty">
-                  <el-input-number v-model="currentPreset.frequencyPenalty" :min="-2" :max="2" :step="0.1" controls-position="right" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-
-            <el-form-item label="备注">
-              <el-input v-model="currentPreset.remark" type="textarea" :rows="2" placeholder="可选" />
-            </el-form-item>
-          </el-form>
-        </el-card>
-      </el-col>
-    </el-row>
-
-    <el-card class="card" shadow="never" v-loading="globalSaving || globalLoading">
-      <template #header>
-        <div class="card-header">
-          <div class="header-left">
-            <span>全局检索 / MCP 配置</span>
-            <el-tag type="info" size="small">对齐 rin-admin</el-tag>
+                v-model="presetQuery.presetName"
+                placeholder="搜索预设..."
+                clearable
+                @input="loadPresets"
+              >
+                <template #prefix><el-icon><Search /></el-icon></template>
+              </el-input>
+              <el-button :icon="Refresh" circle @click="loadPresets" :loading="presetsLoading" />
+            </div>
+            <div class="preset-list" v-loading="presetsLoading">
+              <div
+                v-for="item in presets"
+                :key="item.id"
+                class="preset-item"
+                :class="{ active: currentPreset?.id === item.id }"
+                @click="selectPreset(item)"
+              >
+                <div class="item-main">
+                  <span class="name">{{ item.presetName }}</span>
+                  <el-tag v-if="Number(item.id) === Number(defaultPresetId)" size="small" type="success" effect="dark">默认</el-tag>
+                </div>
+                <div class="item-sub">{{ item.model }}</div>
+                <div class="item-status">
+                  <el-tag :type="Number(item.status) === 1 ? 'success' : 'info'" size="small" hit>
+                    {{ Number(item.status) === 1 ? '已启用' : '未启用' }}
+                  </el-tag>
+                </div>
+              </div>
+              <el-empty v-if="!presets.length" description="暂无预设" :image-size="60" />
+            </div>
           </div>
-          <div class="header-actions">
-            <el-button type="primary" :loading="globalSaving" @click="saveGlobal">保存全局</el-button>
+
+          <div class="main-form" v-loading="presetSaving">
+            <div v-if="!currentPreset" class="empty-placeholder">
+              <el-empty description="请选择或新建一个角色预设进行配置" />
+            </div>
+            <div v-else class="config-form-wrapper">
+              <div class="form-header">
+                <div class="form-title">
+                  <span>{{ currentPreset.id ? '编辑角色' : '新建角色' }}</span>
+                  <el-tag v-if="currentPreset.id" type="info" size="small">ID: {{ currentPreset.id }}</el-tag>
+                </div>
+                <div class="form-actions">
+                  <el-button
+                    v-if="currentPreset.id && Number(currentPreset.id) !== Number(defaultPresetId)"
+                    type="warning"
+                    link
+                    @click="setAsDefault"
+                  >
+                    <el-icon><Star /></el-icon>设为默认
+                  </el-button>
+                  <el-divider direction="vertical" v-if="currentPreset.id" />
+                  <el-button type="primary" @click="savePreset">保存配置</el-button>
+                  <el-button v-if="currentPreset.id" type="danger" plain @click="deletePreset">删除</el-button>
+                </div>
+              </div>
+
+              <el-form :model="currentPreset" label-position="top" class="custom-form">
+                <el-row :gutter="24">
+                  <el-col :span="14">
+                    <el-form-item label="预设名称" required>
+                      <el-input v-model="currentPreset.presetName" placeholder="如：编程专家、文案助手..." />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="10">
+                    <el-form-item label="绑定模型" required>
+                      <el-select v-model="currentPreset.model" filterable allow-create style="width: 100%">
+                        <el-option v-for="m in chatModelOptions" :key="m" :label="m" :value="m" />
+                      </el-select>
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+
+                <el-form-item label="系统提示词 (System Prompt)">
+                  <el-input
+                    v-model="currentPreset.systemMessage"
+                    type="textarea"
+                    :rows="5"
+                    placeholder="在此输入角色的系统设定，引导模型的回答风格和范围..."
+                  />
+                </el-form-item>
+
+                <div class="form-section-title">生成参数控制</div>
+                <div class="params-grid">
+                  <div class="param-card">
+                    <div class="label">Temperature (随机性)</div>
+                    <el-slider v-model="currentPreset.temperature" :min="0" :max="2" :step="0.1" show-input />
+                    <div class="tip">值越大回答越随机，值越小越严谨</div>
+                  </div>
+                  <div class="param-card">
+                    <div class="label">Top P (核采样)</div>
+                    <el-slider v-model="currentPreset.topP" :min="0" :max="1" :step="0.05" show-input />
+                    <div class="tip">影响词汇选择的范围</div>
+                  </div>
+                  <div class="param-card">
+                    <div class="label">Max Tokens (最大长度)</div>
+                    <el-input-number v-model="currentPreset.maxTokens" :min="1" :max="64000" style="width: 100%" />
+                    <div class="tip">单次生成的最大 Token 数量</div>
+                  </div>
+                </div>
+
+                <el-row :gutter="24" style="margin-top: 20px;">
+                  <el-col :span="8">
+                    <el-form-item label="Presence Penalty">
+                      <el-input-number v-model="currentPreset.presencePenalty" :min="-2" :max="2" :step="0.1" style="width: 100%" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="8">
+                    <el-form-item label="Frequency Penalty">
+                      <el-input-number v-model="currentPreset.frequencyPenalty" :min="-2" :max="2" :step="0.1" style="width: 100%" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="8">
+                    <el-form-item label="启用状态">
+                      <el-switch v-model="presetEnabledSwitch" active-text="激活" inactive-text="停用" />
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+
+                <el-form-item label="备注说明" style="margin-top: 10px;">
+                  <el-input v-model="currentPreset.remark" type="textarea" :rows="2" />
+                </el-form-item>
+
+                <div class="form-section-title">RAG 与 MCP 策略</div>
+                <el-row :gutter="24">
+                  <el-col :span="12">
+                    <el-form-item label="绑定知识库">
+                      <el-select v-model="currentPreset.kid" filterable clearable style="width: 100%" placeholder="选择知识库（可选）">
+                        <el-option
+                          v-for="k in knowledgeOptions"
+                          :key="k.id"
+                          :label="k.kname"
+                          :value="String(k.id)"
+                        />
+                      </el-select>
+                      <div class="help-text">使用此预设时将检索该知识库</div>
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="12">
+                    <el-form-item label="MCP 运行模式">
+                      <el-select v-model="currentPreset.mcpMode" style="width: 100%">
+                        <el-option label="关闭 (Off)" value="off" />
+                        <el-option label="降级 (Fallback)" value="fallback" />
+                        <el-option label="合并 (Merge)" value="merge" />
+                      </el-select>
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+
+                <el-form-item label="MCP 服务器">
+                  <el-input
+                    v-model="currentPreset.mcpServers"
+                    type="textarea"
+                    :rows="3"
+                    placeholder="请输入服务器地址，多个地址请用逗号分隔..."
+                  />
+                  <div class="help-text">配置 Model Context Protocol 服务器端点，用于扩展 AI 能力</div>
+                </el-form-item>
+              </el-form>
+            </div>
           </div>
         </div>
-      </template>
+      </el-tab-pane>
 
-      <el-form :model="globalConfig" label-width="120px">
-        <el-form-item label="默认知识库">
-          <el-select
-            v-model="globalConfig.kid"
-            filterable
-            placeholder="请选择知识库"
-            style="width: 100%"
-            @change="onKidChange"
-          >
-            <el-option
-              v-for="k in knowledgeOptions"
-              :key="k.id"
-              :label="`${k.kname}（${k.id}）`"
-              :value="String(k.id)"
-            />
-          </el-select>
-        </el-form-item>
-
-        <el-form-item label="mcpServers">
-          <el-input
-            v-model="globalConfig.mcpServers"
-            type="textarea"
-            :rows="3"
-            placeholder="多个用逗号分隔，例如：http://localhost:3000,http://localhost:3001"
-          />
-        </el-form-item>
-
-        <el-form-item label="mcpMode">
-          <el-select v-model="globalConfig.mcpMode" placeholder="选择策略" style="width: 100%">
-            <el-option label="off" value="off" />
-            <el-option label="fallback" value="fallback" />
-            <el-option label="merge" value="merge" />
-          </el-select>
-          <div class="help-text">该配置为全局联网策略；角色/预设主要控制模型与生成参数。</div>
-        </el-form-item>
-      </el-form>
-    </el-card>
+    </el-tabs>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getChatDefaultConfig, saveChatDefaultConfig } from '../../../api/ai/chatConfig'
+import {
+  Plus,
+  Refresh,
+  Connection,
+  Search,
+  Star,
+  User
+} from '@element-plus/icons-vue'
 import { getChatModelList } from '../../../api/ai/chatModel'
 import { getDefaultChatPresetId, getChatPresetList, removeChatPreset, saveChatPreset, setDefaultChatPresetId } from '../../../api/ai/chatPreset'
 import { getKnowledgeList } from '../../../api/ai/knowledge'
 import { refreshMcpClients } from '../../../api/ai/mcp'
 
+const activeTab = ref('presets')
 const presetsLoading = ref(false)
 const presetSaving = ref(false)
-const globalLoading = ref(false)
-const globalSaving = ref(false)
 const refreshingMcp = ref(false)
 
 const presetQuery = ref({
@@ -252,22 +229,6 @@ const presetEnabledSwitch = computed({
   }
 })
 
-const globalConfig = ref({
-  model: '',
-  kid: '',
-  kName: '',
-  talkCount: null,
-  max_tokens: null,
-  systemMessage: '',
-  temperature: null,
-  top_p: null,
-  presence_penalty: null,
-  frequency_penalty: null,
-  repetition_penalty: null,
-  mcpServers: '',
-  mcpMode: 'fallback'
-})
-
 const knowledgeOptions = ref([])
 const chatModelOptions = ref([])
 
@@ -280,11 +241,6 @@ const loadChatModelOptions = async () => {
   const res = await getChatModelList({ pageNum: 1, pageSize: 200, category: 'chat', modelShow: 1 })
   const records = res?.data?.records || []
   chatModelOptions.value = records.map((r) => r.modelName).filter(Boolean)
-}
-
-const onKidChange = (kid) => {
-  const found = knowledgeOptions.value.find((k) => String(k.id) === String(kid))
-  globalConfig.value.kName = found?.kname || ''
 }
 
 const loadPresets = async () => {
@@ -329,13 +285,6 @@ const selectPreset = (row) => {
   currentPreset.value = { ...row }
 }
 
-const rowClassName = ({ row }) => {
-  if (currentPreset.value?.id && Number(row?.id) === Number(currentPreset.value.id)) {
-    return 'is-current'
-  }
-  return ''
-}
-
 const createPreset = () => {
   currentPreset.value = {
     id: null,
@@ -350,7 +299,10 @@ const createPreset = () => {
     frequencyPenalty: 0,
     repetitionPenalty: 1,
     remark: '',
-    status: 1
+    status: 1,
+    kid: '',
+    mcpMode: 'fallback',
+    mcpServers: ''
   }
 }
 
@@ -422,30 +374,6 @@ const setAsDefault = async () => {
   }
 }
 
-const loadGlobal = async () => {
-  globalLoading.value = true
-  try {
-    await loadKnowledgeOptions()
-    const res = await getChatDefaultConfig()
-    globalConfig.value = { ...globalConfig.value, ...(res?.data || {}) }
-    if (globalConfig.value.kid) {
-      onKidChange(globalConfig.value.kid)
-    }
-  } finally {
-    globalLoading.value = false
-  }
-}
-
-const saveGlobal = async () => {
-  globalSaving.value = true
-  try {
-    await saveChatDefaultConfig(globalConfig.value)
-    ElMessage.success('全局配置已保存')
-  } finally {
-    globalSaving.value = false
-  }
-}
-
 const refreshMcp = async () => {
   refreshingMcp.value = true
   try {
@@ -458,22 +386,207 @@ const refreshMcp = async () => {
 
 onMounted(async () => {
   await Promise.all([loadChatModelOptions(), loadKnowledgeOptions()])
-  await Promise.all([loadDefaultPreset(), loadPresets(), loadGlobal()])
+  await Promise.all([loadDefaultPreset(), loadPresets()])
 })
 </script>
 
 <style scoped>
-.empty-tip {
-  padding: 12px 16px 16px;
-  color: var(--admin-muted, #6b7280);
+.ai-chat-config-container {
+  padding: 24px;
+  background: #f5f7fa;
+  min-height: calc(100vh - 84px);
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.page-header .title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.page-header .subtitle {
+  margin: 4px 0 0;
+  color: #606266;
+  font-size: 14px;
+}
+
+.config-tabs :deep(.el-tabs__header) {
+  margin-bottom: 0;
+  background: #fff;
+  padding: 0 20px;
+  border-radius: 8px 8px 0 0;
+  border: 1px solid #e4e7ed;
+  border-bottom: none;
+}
+
+.tab-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+}
+
+.tab-content {
+  background: #fff;
+  border: 1px solid #e4e7ed;
+  border-radius: 0 0 8px 8px;
+  min-height: 600px;
+}
+
+/* 预设管理布局 */
+.preset-manager {
+  display: flex;
+  height: 700px;
+}
+
+.preset-manager .sidebar {
+  width: 300px;
+  border-right: 1px solid #e4e7ed;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-header {
+  padding: 16px;
+  display: flex;
+  gap: 10px;
+  border-bottom: 1px solid #f2f6fc;
+}
+
+.preset-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.preset-item {
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: 1px solid transparent;
+}
+
+.preset-item:hover {
+  background: #f5f7fa;
+}
+
+.preset-item.active {
+  background: #ecf5ff;
+  border-color: #409eff;
+}
+
+.preset-item .item-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.preset-item .name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #303133;
+}
+
+.preset-item .item-sub {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 6px;
+}
+
+/* 主表单区域 */
+.main-form {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.empty-placeholder {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f2f6fc;
+}
+
+.form-title {
+  font-size: 18px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.form-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 30px 0 16px;
+  padding-left: 10px;
+  border-left: 4px solid #409eff;
+}
+
+.params-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.param-card {
+  background: #f8f9fb;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #ebeef5;
+}
+
+.param-card .label {
   font-size: 13px;
+  font-weight: 600;
+  color: #606266;
+  margin-bottom: 12px;
 }
 
-.empty-state {
-  padding: 12px 0;
+.param-card .tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 8px;
 }
 
-.is-current :deep(td) {
-  background: rgba(59, 130, 246, 0.06) !important;
+.help-text {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 5px;
+  line-height: 1.4;
+}
+
+/* 响应式适配 */
+@media (max-width: 1200px) {
+  .preset-manager {
+    flex-direction: column;
+    height: auto;
+  }
+  .preset-manager .sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid #e4e7ed;
+    height: 300px;
+  }
 }
 </style>

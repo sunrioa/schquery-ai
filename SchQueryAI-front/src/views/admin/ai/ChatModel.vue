@@ -99,55 +99,198 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="editorVisible" :title="editorTitle" width="920px">
-      <el-form :model="editor" label-width="120px">
-        <el-form-item label="category" required>
-          <el-select v-model="editor.category" placeholder="选择分类" style="width: 100%">
-            <el-option label="chat" value="chat" />
-            <el-option label="vector" value="vector" />
-            <el-option label="rerank" value="rerank" />
-            <el-option label="image" value="image" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="modelName" required>
-          <el-input v-model="editor.modelName" placeholder="例如：qwen-plus" />
-        </el-form-item>
-        <el-form-item label="providerName">
-          <el-input v-model="editor.providerName" placeholder="可选" />
-        </el-form-item>
-        <el-form-item label="modelDescribe">
-          <el-input v-model="editor.modelDescribe" placeholder="可选" />
-        </el-form-item>
-        <el-form-item label="priority">
-          <el-input-number v-model="editor.priority" :min="1" :max="9999" controls-position="right" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="modelShow">
-          <el-switch v-model="modelShowSwitch" />
-        </el-form-item>
+    <el-dialog
+      v-model="editorVisible"
+      :title="editorTitle"
+      width="800px"
+      class="model-editor-dialog"
+      destroy-on-close
+      top="5vh"
+    >
+      <el-form :model="editor" label-width="100px" class="editor-form">
+        <!-- Section: 基础信息 -->
+        <div class="form-section-title">基础配置</div>
+        <el-row :gutter="24">
+          <el-col :span="12">
+            <el-form-item required>
+              <template #label>
+                <div class="form-label-container">
+                  <span>模型分类</span>
+                  <el-tooltip content="选择模型的应用类型，不同类型的模型用于不同的场景" placement="top">
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </div>
+              </template>
+              <el-select v-model="editor.category" placeholder="选择分类" style="width: 100%">
+                <el-option label="Chat (对话)" value="chat" />
+                <el-option label="Vector (向量)" value="vector" />
+                <el-option label="Rerank (重排)" value="rerank" />
+                <el-option label="Image (绘图)" value="image" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item required>
+              <template #label>
+                <div class="form-label-container">
+                  <span>模型标识</span>
+                  <el-tooltip content="调用API时的模型ID，例如 'gpt-4' 或 'qwen-plus'" placement="top">
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </div>
+              </template>
+              <el-input v-model="editor.modelName" placeholder="例如：qwen-plus" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item>
+              <template #label>
+                <div class="form-label-container">
+                  <span>服务商</span>
+                  <el-tooltip content="模型提供商名称，仅用于前端展示标识" placement="top">
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </div>
+              </template>
+              <el-input v-model="editor.providerName" placeholder="例如：AliYun" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item>
+              <template #label>
+                <div class="form-label-container">
+                  <span>优先级</span>
+                  <el-tooltip content="数值越大，在列表中显示越靠前" placement="top">
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </div>
+              </template>
+              <el-input-number
+                v-model="editor.priority"
+                :min="1"
+                :max="9999"
+                controls-position="right"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item>
+              <template #label>
+                <div class="form-label-container">
+                  <span>模型描述</span>
+                  <el-tooltip content="展示给用户的简短描述，说明模型特点" placement="top">
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </div>
+              </template>
+              <el-input v-model="editor.modelDescribe" placeholder="简要描述该模型的特点..." />
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item>
+              <template #label>
+                <div class="form-label-container">
+                  <span>启用状态</span>
+                  <el-tooltip content="关闭后，用户端将无法看到并使用该模型" placement="top">
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </div>
+              </template>
+              <el-switch
+                v-model="modelShowSwitch"
+                active-text="已启用"
+                inactive-text="已停用"
+                inline-prompt
+                style="--el-switch-on-color: #13ce66; --el-switch-off-color: #ff4949"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
 
-        <el-divider content-position="left">API 配置</el-divider>
-        <el-form-item label="apiHost">
-          <el-input v-model="editor.apiHost" placeholder="例如：https://dashscope.aliyuncs.com" />
-        </el-form-item>
-        <el-form-item label="apiUrl">
-          <el-input v-model="editor.apiUrl" placeholder="可选：请求后缀" />
-        </el-form-item>
-        <el-form-item label="apiKey">
-          <el-input v-model="editor.apiKey" type="password" show-password placeholder="可选：密钥" />
-        </el-form-item>
+        <!-- Section: API 参数 -->
+        <div class="form-section-title">API 连接配置</div>
+        <el-row :gutter="24">
+          <el-col :span="24">
+            <el-form-item>
+              <template #label>
+                <div class="form-label-container">
+                  <span>API 域名</span>
+                  <el-tooltip content="接口的基础地址，例如 https://dashscope.aliyuncs.com" placement="top">
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </div>
+              </template>
+              <el-input v-model="editor.apiHost" placeholder="例如：https://dashscope.aliyuncs.com" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item>
+              <template #label>
+                <div class="form-label-container">
+                  <span>API 密钥</span>
+                  <el-tooltip content="用于鉴权的 API Key (sk-xxxxxxxx)" placement="top">
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </div>
+              </template>
+              <el-input v-model="editor.apiKey" type="password" show-password placeholder="请输入 API Key" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item>
+              <template #label>
+                <div class="form-label-container">
+                  <span>请求后缀</span>
+                  <el-tooltip
+                    content="如果使用标准OpenAI格式通常不需要填，特殊接口可能需要指定路径"
+                    placement="top"
+                  >
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </div>
+              </template>
+              <el-input v-model="editor.apiUrl" placeholder="可选：例如 /v1/chat/completions" />
+            </el-form-item>
+          </el-col>
+        </el-row>
 
-        <el-divider content-position="left">Prompt / 备注</el-divider>
-        <el-form-item label="systemPrompt">
-          <el-input v-model="editor.systemPrompt" type="textarea" :rows="4" placeholder="可选：仅 chat 类模型常用" />
+        <!-- Section: 高级设置 -->
+        <div class="form-section-title">高级设置</div>
+        <el-form-item v-if="editor.category === 'chat'">
+          <template #label>
+            <div class="form-label-container">
+              <span>系统提示</span>
+              <el-tooltip content="设置模型的默认系统角色（System Prompt），定义其行为模式" placement="top">
+                <el-icon class="help-icon"><QuestionFilled /></el-icon>
+              </el-tooltip>
+            </div>
+          </template>
+          <el-input
+            v-model="editor.systemPrompt"
+            type="textarea"
+            :rows="3"
+            placeholder="你是一个有用的助手..."
+          />
         </el-form-item>
-        <el-form-item label="remark">
-          <el-input v-model="editor.remark" type="textarea" :rows="2" placeholder="可选" />
+        <el-form-item>
+          <template #label>
+            <div class="form-label-container">
+              <span>后台备注</span>
+              <el-tooltip content="仅管理员可见的内部备注信息" placement="top">
+                <el-icon class="help-icon"><QuestionFilled /></el-icon>
+              </el-tooltip>
+            </div>
+          </template>
+          <el-input v-model="editor.remark" type="textarea" :rows="2" placeholder="内部备注..." />
         </el-form-item>
       </el-form>
 
       <template #footer>
-        <el-button @click="editorVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+        <div class="dialog-footer">
+          <el-button @click="editorVisible = false">取消</el-button>
+          <el-button type="primary" :loading="saving" @click="save">保存配置</el-button>
+        </div>
       </template>
     </el-dialog>
   </div>
@@ -156,7 +299,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Plus, Refresh } from '@element-plus/icons-vue'
+import { Search, Plus, Refresh, QuestionFilled } from '@element-plus/icons-vue'
 import { getChatModelList, removeChatModel, saveChatModel } from '../../../api/ai/chatModel'
 
 const loading = ref(false)
@@ -403,5 +546,58 @@ onMounted(() => loadList())
   background-color: #f8f9fb !important;
   color: #303133;
   font-weight: 600;
+}
+
+/* 弹窗样式优化 */
+.form-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  margin: 16px 0 16px;
+  padding-left: 10px;
+  border-left: 4px solid #409eff;
+  line-height: 1;
+}
+
+.form-label-container {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.help-icon {
+  color: #909399;
+  cursor: help;
+  font-size: 14px;
+}
+
+.help-icon:hover {
+  color: #409eff;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 10px;
+}
+
+:deep(.model-editor-dialog) {
+  border-radius: 12px;
+}
+
+:deep(.model-editor-dialog .el-dialog__header) {
+  margin-right: 0;
+  border-bottom: 1px solid #f0f2f5;
+  padding: 20px 24px;
+}
+
+:deep(.model-editor-dialog .el-dialog__body) {
+  padding: 24px 32px;
+}
+
+:deep(.model-editor-dialog .el-dialog__footer) {
+  border-top: 1px solid #f0f2f5;
+  padding: 16px 24px;
 }
 </style>

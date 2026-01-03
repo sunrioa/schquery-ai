@@ -135,8 +135,8 @@
                       修改密码
                     </el-dropdown-item>
                     <el-dropdown-item v-if="userStore.userInfo.role !== 'admin'" command="contact-service" divided>
-                      <el-icon><ChatDotRound /></el-icon>
-                      联系客服
+                      <el-icon><Service /></el-icon>
+                      在线客服
                     </el-dropdown-item>
                     <el-dropdown-item divided command="logout">
                       <el-icon><SwitchButton /></el-icon>
@@ -165,7 +165,7 @@
             >
               <div class="message-avatar">
                 <el-avatar
-                    :size="40"
+                    :size="36"
                     :src="message.messageType === 0 ? userStore.getDisplayAvatar() : getAIAvatar()"
                     :icon="null"
                     :class="{ 'user-avatar': message.messageType === 0, 'ai-avatar': message.messageType === 1 }"
@@ -186,7 +186,7 @@
 
             <div v-if="isTyping" class="message-item ai-message">
               <div class="message-avatar">
-                <el-avatar :size="40" :src="getAIAvatar()" class="ai-avatar" />
+                <el-avatar :size="36" :src="getAIAvatar()" class="ai-avatar" />
               </div>
               <div class="message-content">
                 <div class="typing-indicator">
@@ -270,68 +270,6 @@
       </template>
     </el-dialog>
 
-    <!-- 客服对话框 -->
-    <el-dialog
-        v-model="showCustomerServiceDialog"
-        title="联系客服"
-        width="600px"
-        @close="customerServiceMessage = ''"
-    >
-      <div class="customer-service-container">
-        <!-- 消息历史 -->
-        <div class="customer-service-messages" ref="customerServiceMessagesContainer">
-          <div v-if="customerServiceHistory.length === 0" class="empty-message">
-            <el-empty description="暂无消息" />
-          </div>
-          <div v-else>
-            <div
-                v-for="msg in customerServiceHistory"
-                :key="msg.id"
-                class="message-bubble"
-                :class="{ 'user-msg': msg.senderType === 1, 'admin-msg': msg.senderType === 2 }"
-            >
-              <div class="message-content">{{ msg.messageContent }}</div>
-              <div class="message-time">{{ formatTime(msg.createTime) }}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 主题选择 -->
-        <div class="topic-selector">
-          <el-select v-model="customerServiceTopic" placeholder="请选择咨询主题">
-            <el-option label="一般问题" value="general" />
-            <el-option label="账户问题" value="account" />
-            <el-option label="功能问题" value="feature" />
-            <el-option label="其他问题" value="other" />
-          </el-select>
-        </div>
-
-        <!-- 消息输入框 -->
-        <div class="message-input-container">
-          <el-input
-              v-model="customerServiceMessage"
-              type="textarea"
-              :rows="3"
-              placeholder="请输入您的问题或反馈..."
-              resize="none"
-          />
-        </div>
-      </div>
-
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="showCustomerServiceDialog = false">关闭</el-button>
-          <el-button
-              type="primary"
-              @click="sendCustomerServiceMessage"
-              :loading="customerServiceLoading"
-              :disabled="!customerServiceMessage.trim()"
-          >
-            发送
-          </el-button>
-        </span>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -460,7 +398,22 @@ const formatTime = (time) => {
   if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`
 
-  return date.toLocaleDateString()
+  // 判断是否为当年
+  const isSameYear = date.getFullYear() === now.getFullYear()
+
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+
+  if (isSameYear) {
+    // 当年只显示月日和时间
+    return `${month}-${day} ${hours}:${minutes}`
+  } else {
+    // 非当年显示完整日期
+    const year = date.getFullYear()
+    return `${year}-${month}-${day} ${hours}:${minutes}`
+  }
 }
 
 // 统一API错误处理函数
@@ -1389,7 +1342,7 @@ const handleUserCommand = async (command) => {
       router.push('/password')
       break
     case 'contact-service':
-      // 联系客服 - 打开新的聊天窗口
+      // 联系客服 - 跳转到独立的客服聊天窗口
       router.push('/chat-window')
       break
     case 'logout':
@@ -2402,7 +2355,7 @@ onUnmounted(() => {
 .chat-content {
   background-color: #f9fafb;
   flex-grow: 1; /* 占据剩余空间 */
-  max-height: calc(100vh - 64px - 88px); /* 总高度 - 头部(64px) - 输入区(88px) */
+  max-height: calc(100vh - 64px - 72px); /* 总高度 - 头部(64px) - 输入区(72px) */
   overflow: hidden;
   position: relative;
 }
@@ -2424,6 +2377,8 @@ onUnmounted(() => {
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .chat-messages::-webkit-scrollbar {
@@ -2444,11 +2399,18 @@ onUnmounted(() => {
   display: flex;
   margin-bottom: 16px;
   align-items: flex-start;
-  max-width: 100%;
+  max-width: 75%;
 }
 
 .user-message {
   flex-direction: row-reverse;
+  align-self: flex-end;
+  margin-left: auto;
+}
+
+.ai-message {
+  align-self: flex-start;
+  margin-right: auto;
 }
 
 /* 头像样式 */
@@ -2457,9 +2419,9 @@ onUnmounted(() => {
 }
 
 .el-avatar {
-  width: 42px !important;
-  height: 42px !important;
-  font-size: 18px !important;
+  width: 36px !important;
+  height: 36px !important;
+  font-size: 16px !important;
   border-radius: 8px !important;
   transition: all 0.2s ease;
   background-color: transparent !important;
@@ -2487,63 +2449,59 @@ onUnmounted(() => {
 
 /* 消息气泡 - 现代化样式 */
 .message-content {
-  max-width: 70%;
-  padding: 16px 20px;
+  max-width: 75%;
+  padding: 10px 14px;
   position: relative;
   line-height: 1.6;
-  font-size: 15px;
-  border-radius: 18px;
+  font-size: 14px;
+  border-radius: 12px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
-
 .message-content:hover {
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .user-message .message-content {
-  margin-right: 16px;
+  margin-right: 12px;
   margin-left: auto;
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  background: #409eff;
   color: white;
-  border-radius: 18px 18px 4px 18px;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-top-right-radius: 2px;
 }
 
 .user-message .message-content::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 100%);
-  border-radius: inherit;
-  pointer-events: none; /* 允许文本选择穿透伪元素 */
+  right: -8px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 10px 8px 0 0;
+  border-color: #409eff transparent transparent transparent;
 }
 
 .ai-message .message-content {
-  margin-left: 16px;
+  margin-left: 12px;
   margin-right: auto;
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  color: #1f2937;
-  border-radius: 18px 18px 18px 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(229, 231, 235, 0.8);
+  background-color: white;
+  color: #303133;
+  border-top-left-radius: 2px;
+  border: 1px solid rgba(229, 231, 235, 0.5);
 }
 
 .ai-message .message-content::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.02) 0%, transparent 100%);
-  border-radius: inherit;
-  pointer-events: none; /* 允许文本选择穿透伪元素 */
+  left: -8px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 8px 10px 0;
+  border-color: transparent white transparent transparent;
 }
 
 /* 消息时间样式优化 */
@@ -3180,8 +3138,8 @@ onUnmounted(() => {
 .chat-input {
   background-color: #ffffff;
   border-top: 1px solid #e5e7eb;
-  padding: 16px 24px;
-  min-height: 88px; /* 最小高度，会根据转录区域扩展 */
+  padding: 12px 24px;
+  min-height: 72px; /* 最小高度，会根据转录区域扩展 */
   flex-shrink: 0; /* 禁止收缩 */
   box-sizing: border-box;
   box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.03);
@@ -3317,14 +3275,14 @@ onUnmounted(() => {
 .message-input {
   border-radius: 12px;
   border: 1px solid #e5e7eb;
-  padding: 14px 20px;
+  padding: 10px 16px;
   padding-left: 72px; /* 给录音按钮留出空间 */
   padding-right: 72px;
-  min-height: 56px;
-  max-height: 200px; /* 限制最大高度 */
+  min-height: 44px;
+  max-height: 160px; /* 限制最大高度 */
   box-sizing: border-box;
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.5;
   resize: none;
   flex-grow: 1; /* 占满容器宽度 */
   position: relative; /* 确保输入框不会影响按钮定位 */
@@ -4081,40 +4039,22 @@ onUnmounted(() => {
 
 /* 消息气泡黑夜模式 */
 [data-theme="dark"] .ai-message .message-content {
-  background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
-  color: #e5e7eb;
-  border-color: #4b5563;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  background-color: #2b2b2b;
+  color: #e0e0e0;
+  border-color: #333;
 }
 
 [data-theme="dark"] .ai-message .message-content::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.02) 0%, transparent 100%);
-  border-radius: inherit;
-  pointer-events: none;
+  border-color: transparent #2b2b2b transparent transparent;
 }
 
 [data-theme="dark"] .user-message .message-content {
-  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  background-color: #2b6a9e;
   color: white !important;
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
 }
 
 [data-theme="dark"] .user-message .message-content::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 100%);
-  border-radius: inherit;
-  pointer-events: none;
+  border-color: #2b6a9e transparent transparent transparent;
 }
 
 /* 消息文字样式修复 */

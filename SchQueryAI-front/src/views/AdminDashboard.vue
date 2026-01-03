@@ -25,28 +25,28 @@
     <template v-else>
       <el-row :gutter="12" class="stats-row">
         <el-col :xs="24" :sm="6">
-          <el-card shadow="never" class="stat-card">
+          <el-card shadow="never" class="stat-card" v-loading="loadingStates.stats">
             <div class="stat-title">总用户</div>
             <div class="stat-value">{{ dashboardStats.totalUsers ?? 0 }}</div>
             <div class="stat-sub">今日新增 {{ dashboardStats.todayNewUsers ?? 0 }}</div>
           </el-card>
         </el-col>
         <el-col :xs="24" :sm="6">
-          <el-card shadow="never" class="stat-card">
+          <el-card shadow="never" class="stat-card" v-loading="loadingStates.stats">
             <div class="stat-title">活跃用户</div>
             <div class="stat-value">{{ dashboardStats.activeUsers ?? 0 }}</div>
             <div class="stat-sub">24小时内登录</div>
           </el-card>
         </el-col>
         <el-col :xs="24" :sm="6">
-          <el-card shadow="never" class="stat-card">
+          <el-card shadow="never" class="stat-card" v-loading="loadingStates.stats">
             <div class="stat-title">管理员</div>
             <div class="stat-value">{{ dashboardStats.adminCount ?? 0 }}</div>
             <div class="stat-sub">拥有后台权限</div>
           </el-card>
         </el-col>
         <el-col :xs="24" :sm="6">
-          <el-card shadow="never" class="stat-card">
+          <el-card shadow="never" class="stat-card" v-loading="loadingStates.customer">
             <div class="stat-title">客服待处理</div>
             <div class="stat-value">{{ customerPendingSessions }}</div>
             <div class="stat-sub">未读会话 {{ customerUnreadTotal }}</div>
@@ -56,28 +56,28 @@
 
       <el-row :gutter="12" class="stats-row">
         <el-col :xs="24" :sm="6">
-          <el-card shadow="never" class="stat-card">
+          <el-card shadow="never" class="stat-card" v-loading="loadingStates.knowledge">
             <div class="stat-title">知识库</div>
             <div class="stat-value">{{ knowledgeTotal }}</div>
             <div class="stat-sub">已配置知识库</div>
           </el-card>
         </el-col>
         <el-col :xs="24" :sm="6">
-          <el-card shadow="never" class="stat-card">
+          <el-card shadow="never" class="stat-card" v-loading="loadingStates.model">
             <div class="stat-title">模型</div>
             <div class="stat-value">{{ modelTotal }}</div>
             <div class="stat-sub">chat/vector/rerank</div>
           </el-card>
         </el-col>
         <el-col :xs="24" :sm="6">
-          <el-card shadow="never" class="stat-card">
+          <el-card shadow="never" class="stat-card" v-loading="loadingStates.monitor">
             <div class="stat-title">CPU 使用率</div>
             <div class="stat-value">{{ cpuUsageText }}</div>
             <div class="stat-sub">来自系统监控</div>
           </el-card>
         </el-col>
         <el-col :xs="24" :sm="6">
-          <el-card shadow="never" class="stat-card">
+          <el-card shadow="never" class="stat-card" v-loading="loadingStates.monitor">
             <div class="stat-title">网络流量(累计)</div>
             <div class="stat-value">{{ formatBytes(networkTotalRecv + networkTotalSent) }}</div>
             <div class="stat-sub">收 {{ formatBytes(networkTotalRecv) }} · 发 {{ formatBytes(networkTotalSent) }}</div>
@@ -87,7 +87,7 @@
 
       <el-row :gutter="12" class="charts-row">
         <el-col :xs="24" :lg="16">
-          <el-card shadow="never" class="chart-card">
+          <el-card shadow="never" class="chart-card" v-loading="loadingStates.daily">
             <template #header>
               <div class="card-header">
                 <span>最近 7 天访问量</span>
@@ -98,7 +98,7 @@
           </el-card>
         </el-col>
         <el-col :xs="24" :lg="8">
-          <el-card shadow="never" class="chart-card">
+          <el-card shadow="never" class="chart-card" v-loading="loadingStates.hourly">
             <template #header>
               <div class="card-header">
                 <span>最近 12 小时访问量</span>
@@ -112,7 +112,7 @@
 
       <el-row :gutter="12" class="tables-row split-panels" style="--admin-pane-height: 420px">
         <el-col :xs="24" :lg="12">
-          <el-card shadow="never" class="table-card split-panel">
+          <el-card shadow="never" class="table-card split-panel" v-loading="loadingStates.logins">
             <template #header>
               <div class="card-header">
                 <span>最近登录</span>
@@ -131,7 +131,7 @@
         </el-col>
 
         <el-col :xs="24" :lg="12">
-          <el-card shadow="never" class="table-card split-panel">
+          <el-card shadow="never" class="table-card split-panel" v-loading="loadingStates.logs">
             <template #header>
               <div class="card-header">
                 <span>最近操作日志</span>
@@ -218,10 +218,7 @@ import * as echarts from 'echarts'
 import {
   Refresh
 } from '@element-plus/icons-vue'
-import {
-  isAdmin,
-  getRoleDisplayName
-} from '../utils/auth'
+import { isAdmin } from '../utils/auth'
 import { userApi } from '../api/user'
 import { operationLogApi } from '../api/operationLog'
 import monitorApi from '../api/monitor'
@@ -234,6 +231,20 @@ const router = useRouter()
 const isAdminUser = computed(() => isAdmin())
 const loading = ref(false)
 const lastUpdated = ref('-')
+
+// 独立的加载状态
+const loadingStates = ref({
+  stats: true,
+  daily: true,
+  hourly: true,
+  logins: true,
+  logs: true,
+  knowledge: true,
+  model: true,
+  chatConfig: true,
+  customer: true,
+  monitor: true
+})
 
 const dashboardStats = ref({
   totalUsers: 0,
@@ -405,45 +416,124 @@ const loadMonitorSummary = async () => {
 const loadAll = async () => {
   if (!isAdminUser.value) return
   loading.value = true
+
+  // 重置所有加载状态
+  Object.keys(loadingStates.value).forEach(key => {
+    loadingStates.value[key] = true
+  })
+
+  // 异步加载各个模块，互不阻塞
+  const promises = []
+
+  // 1. 加载用户统计（优先级最高）
+  promises.push(
+    userApi.getDashboardStats()
+      .then(res => {
+        if (res?.code === 200 && res.data) {
+          dashboardStats.value = { ...dashboardStats.value, ...res.data }
+        }
+      })
+      .catch(e => console.error('加载用户统计失败:', e))
+      .finally(() => loadingStates.value.stats = false)
+  )
+
+  // 2. 加载访问量图表数据
+  promises.push(
+    userApi.getDailyVisitStats(7)
+      .then(res => {
+        if (res?.code === 200) {
+          dailyVisits.value = res.data || []
+          nextTick(() => renderCharts())
+        }
+      })
+      .catch(e => console.error('加载每日访问量失败:', e))
+      .finally(() => loadingStates.value.daily = false)
+  )
+
+  promises.push(
+    userApi.getHourlyVisitStats(12)
+      .then(res => {
+        if (res?.code === 200) {
+          hourlyVisits.value = res.data || []
+          nextTick(() => renderCharts())
+        }
+      })
+      .catch(e => console.error('加载小时访问量失败:', e))
+      .finally(() => loadingStates.value.hourly = false)
+  )
+
+  // 3. 加载最近登录
+  promises.push(
+    userApi.getRecentLogins(10)
+      .then(res => {
+        if (res?.code === 200) recentLogins.value = res.data || []
+      })
+      .catch(e => console.error('加载最近登录失败:', e))
+      .finally(() => loadingStates.value.logins = false)
+  )
+
+  // 4. 加载操作日志
+  promises.push(
+    operationLogApi.getRecentLogs(10)
+      .then(res => {
+        if (res?.code === 200) recentLogs.value = res.data || []
+      })
+      .catch(e => console.error('加载操作日志失败:', e))
+      .finally(() => loadingStates.value.logs = false)
+  )
+
+  // 5. 加载知识库统计
+  promises.push(
+    getKnowledgeList({ pageNum: 1, pageSize: 1 })
+      .then(res => {
+        knowledgeTotal.value = res?.data?.total ?? knowledgeTotal.value
+      })
+      .catch(e => console.error('加载知识库统计失败:', e))
+      .finally(() => loadingStates.value.knowledge = false)
+  )
+
+  // 6. 加载模型统计
+  promises.push(
+    getChatModelList({ pageNum: 1, pageSize: 1 })
+      .then(res => {
+        modelTotal.value = res?.data?.total ?? modelTotal.value
+      })
+      .catch(e => console.error('加载模型统计失败:', e))
+      .finally(() => loadingStates.value.model = false)
+  )
+
+  // 7. 加载聊天配置
+  promises.push(
+    getChatDefaultConfig()
+      .then(res => {
+        if (res?.code === 200 && res.data) {
+          chatDefaultConfig.value = { ...chatDefaultConfig.value, ...res.data }
+        }
+      })
+      .catch(e => console.error('加载聊天配置失败:', e))
+      .finally(() => loadingStates.value.chatConfig = false)
+  )
+
+  // 8. 加载客服统计（独立加载，不阻塞其他）
+  promises.push(
+    loadCustomerServiceStats()
+      .catch(e => console.error('加载客服统计失败:', e))
+      .finally(() => loadingStates.value.customer = false)
+  )
+
+  // 9. 加载系统监控数据（独立加载，不阻塞其他）
+  promises.push(
+    loadMonitorSummary()
+      .catch(e => console.error('加载系统监控失败:', e))
+      .finally(() => loadingStates.value.monitor = false)
+  )
+
+  // 等待所有请求完成（但各自独立，互不影响）
   try {
-    const [
-      statsRes,
-      dailyRes,
-      hourlyRes,
-      recentLoginsRes,
-      recentLogsRes,
-      knowledgeRes,
-      modelRes,
-      chatConfigRes
-    ] = await Promise.all([
-      userApi.getDashboardStats(),
-      userApi.getDailyVisitStats(7),
-      userApi.getHourlyVisitStats(12),
-      userApi.getRecentLogins(10),
-      operationLogApi.getRecentLogs(10),
-      getKnowledgeList({ pageNum: 1, pageSize: 1 }),
-      getChatModelList({ pageNum: 1, pageSize: 1 }),
-      getChatDefaultConfig()
-    ])
-
-    if (statsRes?.code === 200 && statsRes.data) dashboardStats.value = { ...dashboardStats.value, ...statsRes.data }
-    if (dailyRes?.code === 200) dailyVisits.value = dailyRes.data || []
-    if (hourlyRes?.code === 200) hourlyVisits.value = hourlyRes.data || []
-    if (recentLoginsRes?.code === 200) recentLogins.value = recentLoginsRes.data || []
-    if (recentLogsRes?.code === 200) recentLogs.value = recentLogsRes.data || []
-    knowledgeTotal.value = knowledgeRes?.data?.total ?? knowledgeTotal.value
-    modelTotal.value = modelRes?.data?.total ?? modelTotal.value
-    if (chatConfigRes?.code === 200 && chatConfigRes.data) {
-      chatDefaultConfig.value = { ...chatDefaultConfig.value, ...chatConfigRes.data }
-    }
-
-    await Promise.all([loadCustomerServiceStats(), loadMonitorSummary()])
-
+    await Promise.allSettled(promises)
     lastUpdated.value = new Date().toLocaleString('zh-CN')
-    nextTick(() => renderCharts())
   } catch (e) {
-    console.error('加载控制台失败:', e)
-    ElMessage.error('加载控制台失败')
+    console.error('加载控制台时发生错误:', e)
   } finally {
     loading.value = false
   }

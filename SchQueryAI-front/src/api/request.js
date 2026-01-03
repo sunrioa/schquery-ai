@@ -80,6 +80,19 @@ request.interceptors.response.use(
     }
   },
   error => {
+    // 检查是否配置了静默错误处理（不显示开发环境错误覆盖层）
+    const silentError = error.config?.silentError !== false
+
+    // 检查超时错误
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      ElMessage.error('请求超时，请稍后重试')
+      // 对于超时错误，默认静默处理，不向上抛出
+      if (silentError) {
+        return Promise.resolve({ code: -1, msg: '请求超时', data: null })
+      }
+      return Promise.reject(error)
+    }
+
     // 检查401状态码或令牌过期相关的错误
     if (error.response?.status === 401 ||
         error.code === 401 ||
@@ -90,6 +103,7 @@ request.interceptors.response.use(
       localStorage.removeItem('token')
       ElMessage.error('登录已过期，请重新登录')
       window.location.href = '/login'
+      return Promise.reject(error)
     } else if (error.response && error.response.data) {
       ElMessage.error(error.response.data.msg || '请求失败')
     } else if (error.msg && error.msg.includes('TOKEN_EXPIRED')) {
@@ -97,8 +111,14 @@ request.interceptors.response.use(
       localStorage.removeItem('token')
       ElMessage.error('登录已过期，请重新登录')
       window.location.href = '/login'
+      return Promise.reject(error)
     } else {
-      ElMessage.error(error.message || '网络错误')
+      ElMessage.error('网络错误，请检查网络连接')
+    }
+
+    // 默认静默处理错误，避免开发环境的错误覆盖层
+    if (silentError) {
+      return Promise.resolve({ code: -1, msg: error.message || '请求失败', data: null })
     }
     return Promise.reject(error)
   }

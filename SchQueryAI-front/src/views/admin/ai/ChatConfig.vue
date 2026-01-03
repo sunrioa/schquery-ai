@@ -84,12 +84,28 @@
               <el-form :model="currentPreset" label-position="top" class="custom-form">
                 <el-row :gutter="24">
                   <el-col :span="14">
-                    <el-form-item label="预设名称" required>
+                    <el-form-item required>
+                      <template #label>
+                        <div class="form-label-container">
+                          <span>预设名称</span>
+                          <el-tooltip content="给这个角色起个名字，方便识别" placement="top">
+                            <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                          </el-tooltip>
+                        </div>
+                      </template>
                       <el-input v-model="currentPreset.presetName" placeholder="如：编程专家、文案助手..." />
                     </el-form-item>
                   </el-col>
                   <el-col :span="10">
-                    <el-form-item label="绑定模型" required>
+                    <el-form-item required>
+                      <template #label>
+                        <div class="form-label-container">
+                          <span>绑定模型</span>
+                          <el-tooltip content="该角色默认使用的AI模型" placement="top">
+                            <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                          </el-tooltip>
+                        </div>
+                      </template>
                       <el-select v-model="currentPreset.model" filterable allow-create style="width: 100%">
                         <el-option v-for="m in chatModelOptions" :key="m" :label="m" :value="m" />
                       </el-select>
@@ -97,7 +113,15 @@
                   </el-col>
                 </el-row>
 
-                <el-form-item label="系统提示词 (System Prompt)">
+                <el-form-item>
+                  <template #label>
+                    <div class="form-label-container">
+                      <span>系统提示词 (System Prompt)</span>
+                      <el-tooltip content="设置模型的默认系统角色，定义其行为模式和回答风格" placement="top">
+                        <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                      </el-tooltip>
+                    </div>
+                  </template>
                   <el-input
                     v-model="currentPreset.systemMessage"
                     type="textarea"
@@ -109,49 +133,124 @@
                 <div class="form-section-title">生成参数控制</div>
                 <div class="params-grid">
                   <div class="param-card">
-                    <div class="label">Temperature (随机性)</div>
+                    <div class="label-row">
+                      <span class="label">Temperature (随机性)</span>
+                      <el-tooltip content="值越大回答越随机，值越小越严谨" placement="top">
+                        <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                      </el-tooltip>
+                    </div>
                     <el-slider v-model="currentPreset.temperature" :min="0" :max="2" :step="0.1" show-input />
-                    <div class="tip">值越大回答越随机，值越小越严谨</div>
                   </div>
                   <div class="param-card">
-                    <div class="label">Top P (核采样)</div>
+                    <div class="label-row">
+                      <span class="label">Top P (核采样)</span>
+                      <el-tooltip content="控制模型选择下一个token的概率范围" placement="top">
+                        <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                      </el-tooltip>
+                    </div>
                     <el-slider v-model="currentPreset.topP" :min="0" :max="1" :step="0.05" show-input />
-                    <div class="tip">影响词汇选择的范围</div>
                   </div>
                   <div class="param-card">
-                    <div class="label">Max Tokens (最大长度)</div>
-                    <el-input-number v-model="currentPreset.maxTokens" :min="1" :max="64000" style="width: 100%" />
-                    <div class="tip">单次生成的最大 Token 数量</div>
+                    <div class="label-row">
+                      <span class="label">Max Tokens (最大长度)</span>
+                      <el-tooltip content="单次回复生成的最大长度限制" placement="top">
+                        <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                      </el-tooltip>
+                    </div>
+                    <el-input-number
+                      v-model="currentPreset.maxTokens"
+                      :min="1"
+                      :max="64000"
+                      style="width: 100%"
+                    />
                   </div>
                 </div>
 
                 <el-row :gutter="24" style="margin-top: 20px;">
                   <el-col :span="8">
-                    <el-form-item label="Presence Penalty">
-                      <el-input-number v-model="currentPreset.presencePenalty" :min="-2" :max="2" :step="0.1" style="width: 100%" />
+                    <el-form-item>
+                      <template #label>
+                        <div class="form-label-container">
+                          <span>Presence Penalty</span>
+                          <el-tooltip content="数值越大，越倾向于谈论新话题" placement="top">
+                            <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                          </el-tooltip>
+                        </div>
+                      </template>
+                      <el-input-number
+                        v-model="currentPreset.presencePenalty"
+                        :min="-2"
+                        :max="2"
+                        :step="0.1"
+                        style="width: 100%"
+                      />
                     </el-form-item>
                   </el-col>
                   <el-col :span="8">
-                    <el-form-item label="Frequency Penalty">
-                      <el-input-number v-model="currentPreset.frequencyPenalty" :min="-2" :max="2" :step="0.1" style="width: 100%" />
+                    <el-form-item>
+                      <template #label>
+                        <div class="form-label-container">
+                          <span>Frequency Penalty</span>
+                          <el-tooltip content="数值越大，越减少重复词汇的出现" placement="top">
+                            <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                          </el-tooltip>
+                        </div>
+                      </template>
+                      <el-input-number
+                        v-model="currentPreset.frequencyPenalty"
+                        :min="-2"
+                        :max="2"
+                        :step="0.1"
+                        style="width: 100%"
+                      />
                     </el-form-item>
                   </el-col>
                   <el-col :span="8">
-                    <el-form-item label="启用状态">
+                    <el-form-item>
+                      <template #label>
+                        <div class="form-label-container">
+                          <span>启用状态</span>
+                          <el-tooltip content="停用后，前端将无法选择该预设" placement="top">
+                            <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                          </el-tooltip>
+                        </div>
+                      </template>
                       <el-switch v-model="presetEnabledSwitch" active-text="激活" inactive-text="停用" />
                     </el-form-item>
                   </el-col>
                 </el-row>
 
-                <el-form-item label="备注说明" style="margin-top: 10px;">
+                <el-form-item style="margin-top: 10px;">
+                  <template #label>
+                    <div class="form-label-container">
+                      <span>备注说明</span>
+                      <el-tooltip content="仅管理员可见的备注信息" placement="top">
+                        <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                      </el-tooltip>
+                    </div>
+                  </template>
                   <el-input v-model="currentPreset.remark" type="textarea" :rows="2" />
                 </el-form-item>
 
                 <div class="form-section-title">RAG 与 MCP 策略</div>
                 <el-row :gutter="24">
                   <el-col :span="12">
-                    <el-form-item label="绑定知识库">
-                      <el-select v-model="currentPreset.kid" filterable clearable style="width: 100%" placeholder="选择知识库（可选）">
+                    <el-form-item>
+                      <template #label>
+                        <div class="form-label-container">
+                          <span>绑定知识库</span>
+                          <el-tooltip content="关联知识库后，AI将根据知识库内容进行回答" placement="top">
+                            <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                          </el-tooltip>
+                        </div>
+                      </template>
+                      <el-select
+                        v-model="currentPreset.kid"
+                        filterable
+                        clearable
+                        style="width: 100%"
+                        placeholder="选择知识库（可选）"
+                      >
                         <el-option
                           v-for="k in knowledgeOptions"
                           :key="k.id"
@@ -159,11 +258,18 @@
                           :value="String(k.id)"
                         />
                       </el-select>
-                      <div class="help-text">使用此预设时将检索该知识库</div>
                     </el-form-item>
                   </el-col>
                   <el-col :span="12">
-                    <el-form-item label="MCP 运行模式">
+                    <el-form-item>
+                      <template #label>
+                        <div class="form-label-container">
+                          <span>MCP 运行模式</span>
+                          <el-tooltip content="控制Model Context Protocol工具的调用方式" placement="top">
+                            <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                          </el-tooltip>
+                        </div>
+                      </template>
                       <el-select v-model="currentPreset.mcpMode" style="width: 100%">
                         <el-option label="关闭 (Off)" value="off" />
                         <el-option label="降级 (Fallback)" value="fallback" />
@@ -173,14 +279,21 @@
                   </el-col>
                 </el-row>
 
-                <el-form-item label="MCP 服务器">
+                <el-form-item>
+                  <template #label>
+                    <div class="form-label-container">
+                      <span>MCP 服务器</span>
+                      <el-tooltip content="指定该预设可使用的外部MCP工具服务地址" placement="top">
+                        <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                      </el-tooltip>
+                    </div>
+                  </template>
                   <el-input
                     v-model="currentPreset.mcpServers"
                     type="textarea"
                     :rows="3"
                     placeholder="请输入服务器地址，多个地址请用逗号分隔..."
                   />
-                  <div class="help-text">配置 Model Context Protocol 服务器端点，用于扩展 AI 能力</div>
                 </el-form-item>
               </el-form>
             </div>
@@ -201,7 +314,8 @@ import {
   Connection,
   Search,
   Star,
-  User
+  User,
+  QuestionFilled
 } from '@element-plus/icons-vue'
 import { getChatModelList } from '../../../api/ai/chatModel'
 import { getDefaultChatPresetId, getChatPresetList, removeChatPreset, saveChatPreset, setDefaultChatPresetId } from '../../../api/ai/chatPreset'
@@ -556,17 +670,34 @@ onMounted(async () => {
   border: 1px solid #ebeef5;
 }
 
+.param-card .label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
 .param-card .label {
   font-size: 13px;
   font-weight: 600;
   color: #606266;
-  margin-bottom: 12px;
 }
 
-.param-card .tip {
-  font-size: 12px;
+.form-label-container {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.help-icon {
   color: #909399;
-  margin-top: 8px;
+  cursor: help;
+  font-size: 14px;
+}
+
+.help-icon:hover {
+  color: #409eff;
 }
 
 .help-text {

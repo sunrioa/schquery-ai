@@ -109,9 +109,9 @@ public class CustomerServiceVO {
         private String lastMessageTime;
 
         /**
-         * 用户头像
+         * 用户头像ID
          */
-        private Long userAvatar;
+        private Long avatar;
 
         /**
          * 话题

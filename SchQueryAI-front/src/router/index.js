@@ -6,7 +6,6 @@ import Password from '../views/Password.vue'
 import ForgotPassword from '../views/ForgotPassword.vue'
 import Profile from '../views/Profile.vue'
 import Chat from '../views/Chat.vue'
-import CustomerService from '../views/CustomerService.vue'
 import ChatWindow from '../views/ChatWindow.vue'
 import AdminCustomerService from '../views/admin/AdminCustomerService.vue'
 import AdminCustomerServiceInbox from '../views/admin/AdminCustomerServiceInbox.vue'
@@ -70,12 +69,6 @@ const routes = [
     path: '/chat',
     name: 'Chat',
     component: Chat,
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/customer-service',
-    name: 'CustomerService',
-    component: CustomerService,
     meta: { requiresAuth: true }
   },
   {

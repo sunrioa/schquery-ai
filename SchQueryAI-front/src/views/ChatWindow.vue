@@ -15,7 +15,7 @@
         </div>
       </div>
       <div class="header-right">
-        <el-tooltip content="刷新" placement="bottom">
+        <el-tooltip content="刷新消息" placement="bottom">
           <el-button type="text" @click="loadMessageHistory" :loading="loading">
             <el-icon><Refresh /></el-icon>
           </el-button>
@@ -44,33 +44,55 @@
               class="message-group"
               :class="msg.senderType === 1 ? 'user-group' : 'admin-group'"
           >
-            <!-- 管理员消恫 -->
-            <div v-if="msg.senderType === 2" class="message-wrapper">
-              <div class="message-bubble admin-bubble">
-                <div class="bubble-content">{{ msg.messageContent }}</div>
+            <!-- 管理员消息 (左侧) -->
+            <template v-if="msg.senderType === 2">
+              <div class="avatar-container">
+                <el-avatar :size="36" class="admin-avatar">
+                  <el-icon><Service /></el-icon>
+                </el-avatar>
               </div>
-              <div class="message-meta">
-                <span class="message-time">{{ formatTime(msg.createTime) }}</span>
+              <div class="message-wrapper">
+                <div class="sender-name">客服</div>
+                <div class="message-bubble admin-bubble">
+                  <div class="bubble-content">{{ msg.messageContent }}</div>
+                </div>
+                <div class="message-meta">
+                  <span class="message-time">{{ formatTime(msg.createTime) }}</span>
+                </div>
               </div>
-            </div>
+            </template>
 
-            <!-- 用户消恫 -->
-            <div v-else class="message-wrapper">
-              <div class="message-bubble user-bubble">
-                <div class="bubble-content">{{ msg.messageContent }}</div>
+            <!-- 用户消息 (右侧) -->
+            <template v-else>
+              <div class="avatar-container">
+                <el-avatar :size="36" class="user-avatar" :src="userStore.getDisplayAvatar()">
+                  <el-icon><UserFilled /></el-icon>
+                </el-avatar>
               </div>
-              <div class="message-meta">
-                <span class="message-time">{{ formatTime(msg.createTime) }}</span>
-                <span class="read-status" :class="msg.readStatus === 1 ? 'read' : 'unread'">
-                  {{ msg.readStatus === 1 ? '✓已读' : '未读' }}
-                </span>
+              <div class="message-wrapper">
+                <div class="message-bubble user-bubble">
+                  <div class="bubble-content">{{ msg.messageContent }}</div>
+                </div>
+                <div class="message-meta">
+                  <span class="message-time">{{ formatTime(msg.createTime) }}</span>
+                  <span class="read-status" :class="{ 'is-read': msg.readStatus === 1 }">
+                    <el-icon v-if="msg.readStatus === 1"><Check /></el-icon>
+                    <span class="status-text">{{ msg.readStatus === 1 ? '已读' : '未读' }}</span>
+                  </span>
+                </div>
               </div>
-            </div>
+            </template>
           </div>
 
           <!-- 输入中指示器 -->
           <div v-if="isTyping" key="typing-indicator" class="message-group admin-group">
+             <div class="avatar-container">
+                <el-avatar :size="36" class="admin-avatar">
+                  <el-icon><Service /></el-icon>
+                </el-avatar>
+              </div>
             <div class="message-wrapper">
+              <div class="sender-name">客服</div>
               <div class="message-bubble admin-bubble typing-bubble">
                 <div class="typing-indicator">
                   <span class="dot"></span>
@@ -85,39 +107,42 @@
 
       <!-- 输入区域 -->
       <div class="input-section">
-        <div class="topic-bar">
-          <span class="label">咨询主题：</span>
-          <el-select v-model="topic" placeholder="请选择主题" size="small" class="topic-select">
-            <el-option label="一般问题" value="general" />
-            <el-option label="账户问题" value="account" />
-            <el-option label="功能问题" value="feature" />
-            <el-option label="技术支持" value="tech" />
-            <el-option label="其他问题" value="other" />
-          </el-select>
+        <div class="toolbar">
+           <div class="topic-selector">
+            <span class="label">主题:</span>
+            <el-select v-model="topic" placeholder="选择咨询主题" size="small" style="width: 120px">
+              <el-option label="一般问题" value="general" />
+              <el-option label="账户问题" value="account" />
+              <el-option label="功能问题" value="feature" />
+              <el-option label="技术支持" value="tech" />
+              <el-option label="其他问题" value="other" />
+            </el-select>
+          </div>
         </div>
 
-        <div class="input-box">
+        <div class="input-area-wrapper">
           <el-input
               ref="inputRef"
               v-model="messageInput"
               type="textarea"
               :rows="3"
-              placeholder="输入您的问题或反馈...按 Shift+Enter 换行，Enter 发送"
+              placeholder="请输入您的问题... (Shift+Enter 换行)"
               @keydown.enter.prevent="handleEnterKey"
               resize="none"
               maxlength="500"
-              show-word-limit
+              class="custom-textarea"
           />
           <div class="input-actions">
+             <span class="char-count">{{ messageInput.length }}/500</span>
             <el-button
                 type="primary"
                 @click="sendMessage"
                 :loading="sending"
                 :disabled="!messageInput.trim() || sending"
-                size="large"
+                circle
+                class="send-btn"
             >
               <el-icon><Promotion /></el-icon>
-              发送
             </el-button>
           </div>
         </div>
@@ -130,7 +155,7 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Refresh, ChatLineRound, Promotion } from '@element-plus/icons-vue'
+import { ArrowLeft, Refresh, ChatLineRound, Promotion, UserFilled, Service, Check } from '@element-plus/icons-vue'
 import { useUserStore } from '../stores/userStore'
 
 const router = useRouter()
@@ -172,7 +197,7 @@ onMounted(async () => {
   // 加载消息历史
   await loadMessageHistory()
 
-  // 调用API标记管理员消恫为已读（发送者类型=2）
+  // 调用API标记管理员消息为已读（发送者类型=2）
   try {
     const token = localStorage.getItem('token')
     await fetch('/api/customer-service/mark-read-by-user?userId=' + userId.value + '&senderType=2', {
@@ -182,12 +207,12 @@ onMounted(async () => {
         'Content-Type': 'application/json'
       }
     })
-    console.log('[ChatWindow] 已标记管理员消恫为已读')
+    console.log('[ChatWindow] 已标记管理员消息为已读')
     
-    // 需要重新加载一次消恫，以获取最新的readStatus状态
+    // 需要重新加载一次消息，以获取最新的readStatus状态
     await loadMessageHistory()
     
-    // 触发事件，告诉AdminCustomerService消恫已读，更新红点
+    // 触发事件，告诉AdminCustomerService消息已读，更新红点
     window.dispatchEvent(new CustomEvent('user-marked-admin-read', {
       detail: { userId: userId.value }
     }))
@@ -206,10 +231,10 @@ onMounted(async () => {
 // 清理
 const handleAdminMarkedRead = async (event) => {
   console.log('[ChatWindow] 接收到管理员已标记消息事件', event?.detail)
-  const { userId } = event?.detail || {}
+  const { userId: eventUserId } = event?.detail || {}
   
   // 只有当事件中的userId与当前用户ID匹配时，才更新消息状态
-  if (userId && userId == userId.value) {
+  if (eventUserId && eventUserId == userId.value) {
     // 立即更新本地消息列表，将用户消息标记为已读
     messages.value.forEach(msg => {
       if (msg.senderType === 1) { // 用户消息
@@ -232,15 +257,30 @@ onUnmounted(() => {
 const formatTime = (timeStr) => {
   if (!timeStr) return ''
   const date = new Date(timeStr)
-  
-  const year = date.getFullYear()
+  const now = new Date()
+  const diff = now - date
+
+  // 相对时间显示
+  if (diff < 60000) return '刚刚'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`
+
+  // 判断是否为当年
+  const isSameYear = date.getFullYear() === now.getFullYear()
+
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   const hours = String(date.getHours()).padStart(2, '0')
   const minutes = String(date.getMinutes()).padStart(2, '0')
-  const seconds = String(date.getSeconds()).padStart(2, '0')
-  
-  return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`
+
+  if (isSameYear) {
+    // 当年只显示月日和时间
+    return `${month}-${day} ${hours}:${minutes}`
+  } else {
+    // 非当年显示完整日期
+    const year = date.getFullYear()
+    return `${year}-${month}-${day} ${hours}:${minutes}`
+  }
 }
 
 // 加载消息历史
@@ -282,7 +322,6 @@ const loadMessageHistory = async () => {
 const connectWebSocket = () => {
   try {
     console.log('[ChatWindow] ========== 开始连接WebSocket ==========')
-    const token = localStorage.getItem('token')
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
     const wsUrl = `${protocol}//${host}/ws/customer-service?userId=${userId.value}&userType=user`
@@ -293,7 +332,7 @@ const connectWebSocket = () => {
       console.log('[ChatWindow] ========== WebSocket连接已建立 ==========')
       console.log('[ChatWindow] 用户ID:', userId.value)
       isOnline.value = true
-      ElMessage.success('已连接到客服')
+      // ElMessage.success('已连接到客服')
     }
 
     webSocket.value.onmessage = (event) => {
@@ -311,11 +350,11 @@ const connectWebSocket = () => {
           const newMsg = {
             id: Date.now(),
             messageContent: data.content,
-            senderType: 2,  // 管理员消恫
+            senderType: 2,  // 管理员消息
             senderId: data.fromUserId,
             senderName: '客服',
             createTime: new Date().toISOString(),
-            readStatus: 1 // 管理员消恫，用户立即查看为已读
+            readStatus: 1 // 管理员消息，用户立即查看为已读
           }
           messages.value.push(newMsg)
           console.log('[ChatWindow] 消息已添加到列表，当前消息数:', messages.value.length)
@@ -328,17 +367,17 @@ const connectWebSocket = () => {
         } else if (data.type === 'typing_end') {
           isTyping.value = false
         } else if (data.type === 'admin_viewing') {
-          // 管理员正在查看你的消恫
-          console.log('[ChatWindow] 管理员正在查看你的消恫')
-          // 立即标记所有用户消恫为已读
+          // 管理员正在查看你的消息
+          console.log('[ChatWindow] 管理员正在查看你的消息')
+          // 立即标记所有用户消息为已读
           messages.value.forEach(msg => {
             if (msg.senderType === 1) {
               msg.readStatus = 1
             }
           })
-          ElMessage.success('管理员正在查看你的消恫')
+          // ElMessage.success('客服正在查看您的消息')
         } else {
-          console.warn('[ChatWindow] 未知消恫类型:', data.type)
+          console.warn('[ChatWindow] 未知消息类型:', data.type)
         }
       } catch (error) {
         console.error('[ChatWindow] 处理WebSocket消息错误:', error)
@@ -377,11 +416,11 @@ const sendMessage = async () => {
     sending.value = true
     const token = localStorage.getItem('token')
 
-    // 添加本地消恫
+    // 添加本地消息
     const userMsg = {
       id: Date.now(),
       messageContent: messageInput.value,
-      senderType: 1, // 用户消恫
+      senderType: 1, // 用户消息
       senderId: userId.value,
       senderName: userStore.userInfo.userName,
       createTime: new Date().toISOString(),
@@ -432,7 +471,7 @@ const sendMessage = async () => {
       scrollToBottom()
       inputRef.value?.focus()
     })
-    ElMessage.success('消息已发送')
+    // ElMessage.success('消息已发送')
   } catch (error) {
     console.error('发送消息失败:', error)
     ElMessage.error(`发送消息失败: ${error.message}`)
@@ -472,13 +511,13 @@ const goBack = () => {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background-color: #fff;
+  background-color: #f5f7fa;
   overflow: hidden;
 }
 
 /* 深色主题 */
 [data-theme="dark"] .chat-window {
-  background-color: #1a1a1a;
+  background-color: #121212;
 }
 
 /* 头部 */
@@ -486,15 +525,17 @@ const goBack = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 24px;
-  background: linear-gradient(135deg, #1e90ff 0%, #0066cc 100%);
-  color: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  min-height: 70px;
+  padding: 0 20px;
+  height: 60px;
+  background: white;
+  border-bottom: 1px solid #ebeef5;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  z-index: 10;
 }
 
 [data-theme="dark"] .chat-header {
-  background: linear-gradient(135deg, #1e90ff 0%, #0066cc 100%);
+  background: #1e1e1e;
+  border-bottom-color: #333;
 }
 
 .header-left {
@@ -504,26 +545,40 @@ const goBack = () => {
 }
 
 .back-btn {
-  color: white;
-  font-size: 24px;
-  cursor: pointer;
-  transition: transform 0.2s;
+  font-size: 20px;
+  color: #606266;
+  padding: 8px;
 }
 
 .back-btn:hover {
-  transform: scale(1.1);
+  color: #409eff;
+  background-color: #ecf5ff;
+  border-radius: 50%;
+}
+
+[data-theme="dark"] .back-btn {
+  color: #a0a0a0;
+}
+[data-theme="dark"] .back-btn:hover {
+  background-color: #333;
 }
 
 .header-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  justify-content: center;
 }
 
 .header-info h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
+  color: #303133;
+  line-height: 1.2;
+}
+
+[data-theme="dark"] .header-info h3 {
+  color: #e0e0e0;
 }
 
 .status {
@@ -531,42 +586,24 @@ const goBack = () => {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  opacity: 0.9;
+  color: #909399;
 }
 
 .status .dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: #ff6b6b;
-  animation: pulse 2s infinite;
+  background-color: #c0c4cc;
+  transition: all 0.3s;
 }
 
 .status.online .dot {
-  background-color: #51cf66;
+  background-color: #67c23a;
+  box-shadow: 0 0 6px rgba(103, 194, 58, 0.4);
 }
 
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
-
-.header-right {
-  display: flex;
-  gap: 12px;
-}
-
-.header-right :deep(.el-button) {
-  color: white;
-  font-size: 18px;
-}
-
-.header-right :deep(.el-button:hover) {
-  color: #e9ecef;
+.status.online {
+  color: #67c23a;
 }
 
 /* 主内容区 */
@@ -575,42 +612,29 @@ const goBack = () => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background-color: #f8f9fa;
-}
-
-[data-theme="dark"] .chat-content {
-  background-color: #252525;
+  position: relative;
 }
 
 /* 消息容器 */
 .messages-container {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
+  scroll-behavior: smooth;
 }
 
 .messages-container::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
-
-.messages-container::-webkit-scrollbar-track {
-  background-color: transparent;
-}
-
 .messages-container::-webkit-scrollbar-thumb {
-  background-color: #ddd;
-  border-radius: 4px;
+  background-color: rgba(144, 147, 153, 0.3);
+  border-radius: 3px;
 }
-
-.messages-container::-webkit-scrollbar-thumb:hover {
-  background-color: #999;
-}
-
-[data-theme="dark"] .messages-container::-webkit-scrollbar-thumb {
-  background-color: #555;
+.messages-container::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .empty-state {
@@ -621,148 +645,158 @@ const goBack = () => {
 }
 
 .empty-icon {
-  font-size: 80px;
-  color: #ddd;
+  font-size: 64px;
+  color: #dcdfe6;
   margin-bottom: 16px;
 }
 
 /* 消息列表 */
-.messages-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
 .message-group {
   display: flex;
-  animation: slideIn 0.3s ease;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: 75%;
 }
 
 .message-group.user-group {
-  justify-content: flex-end;
+  align-self: flex-end;
+  flex-direction: row-reverse;
+  margin-left: auto;
 }
 
 .message-group.admin-group {
-  justify-content: flex-start;
+  align-self: flex-start;
+  margin-right: auto;
 }
 
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* 头像 */
+.avatar-container {
+  flex-shrink: 0;
+}
+.admin-avatar {
+  background-color: #409eff;
+}
+.user-avatar {
+  background-color: #909399;
 }
 
+/* 消息包裹层 */
 .message-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  max-width: 70%;
+  gap: 4px;
+  min-width: 0; /* 防止文本溢出 */
 }
 
-.message-group.user-group .message-wrapper {
+.user-group .message-wrapper {
   align-items: flex-end;
 }
 
-.message-group.admin-group .message-wrapper {
-  align-items: flex-start;
+.sender-name {
+  font-size: 12px;
+  color: #909399;
+  margin-left: 4px;
 }
 
 /* 消息气泡 */
 .message-bubble {
-  padding: 12px 16px;
-  border-radius: 16px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  position: relative;
   word-wrap: break-word;
   word-break: break-word;
-  line-height: 1.6;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-
-.user-bubble {
-  background: linear-gradient(135deg, #1e90ff 0%, #0066cc 100%);
-  color: white;
-  border-bottom-right-radius: 4px;
+  line-height: 1.5;
+  font-size: 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .admin-bubble {
   background-color: white;
-  color: #333;
-  border: 1px solid #e0e0e0;
-  border-bottom-left-radius: 4px;
+  color: #303133;
+  border-top-left-radius: 2px;
+}
+
+.user-bubble {
+  background-color: #409eff;
+  color: white;
+  border-top-right-radius: 2px;
 }
 
 [data-theme="dark"] .admin-bubble {
-  background-color: #2a2a2a;
+  background-color: #2b2b2b;
   color: #e0e0e0;
-  border-color: #444;
 }
 
-.bubble-content {
-  white-space: pre-wrap;
+[data-theme="dark"] .user-bubble {
+  background-color: #2b6a9e;
 }
 
-/* 消恫时间 */
-.message-time {
-  font-size: 12px;
-  color: #999;
-  padding: 0 8px;
+/* 气泡小尾巴 (仅在非深色模式简单背景下显示较好，这里使用伪元素简单实现) */
+.admin-bubble::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -8px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 8px 10px 0;
+  border-color: transparent white transparent transparent;
+}
+.user-bubble::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: -8px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 10px 8px 0 0;
+  border-color: #409eff transparent transparent transparent;
 }
 
-.message-group.user-group .message-time {
-  text-align: right;
+[data-theme="dark"] .admin-bubble::before {
+  border-color: transparent #2b2b2b transparent transparent;
+}
+[data-theme="dark"] .user-bubble::before {
+  border-color: #2b6a9e transparent transparent transparent;
 }
 
-[data-theme="dark"] .message-time {
-  color: #777;
-}
 
-/* 消恫元信息容器 */
+/* 消息元数据 */
 .message-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 8px;
+  gap: 6px;
   font-size: 12px;
+  color: #c0c4cc;
+  padding: 0 2px;
 }
 
-.message-group.user-group .message-meta {
-  justify-content: flex-end;
-}
-
-/* 已读/未读状态 */
 .read-status {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 2px 6px;
-  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0.6;
+}
+.read-status.is-read {
+  color: #67c23a;
+  opacity: 1;
 }
 
-.read-status.read {
-  color: #52c41a;
-  background-color: #f6ffed;
+.status-text {
+  display: none; /* 默认隐藏文字，保持界面清爽 */
 }
 
-.read-status.unread {
-  color: #ff4d4f;
-  background-color: #fff1f0;
+/* 鼠标悬停显示文字 */
+.read-status:hover .status-text {
+  display: inline;
 }
 
-[data-theme="dark"] .read-status.read {
-  background-color: rgba(82, 196, 26, 0.1);
-}
-
-[data-theme="dark"] .read-status.unread {
-  background-color: rgba(255, 77, 79, 0.1);
-}
-
-/* 输入指示器 */
+/* 输入中指示器 */
 .typing-bubble {
   padding: 12px 16px;
-  min-height: 40px;
+  min-height: 36px;
   display: flex;
   align-items: center;
 }
@@ -770,185 +804,118 @@ const goBack = () => {
 .typing-indicator {
   display: flex;
   gap: 4px;
-  align-items: center;
 }
-
 .typing-indicator .dot {
-  width: 8px;
-  height: 8px;
-  background-color: #1e90ff;
+  width: 6px;
+  height: 6px;
+  background-color: #909399;
   border-radius: 50%;
   animation: typing 1.4s infinite;
 }
-
-.typing-indicator .dot:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.typing-indicator .dot:nth-child(3) {
-  animation-delay: 0.4s;
-}
+.typing-indicator .dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator .dot:nth-child(3) { animation-delay: 0.4s; }
 
 @keyframes typing {
-  0%, 60%, 100% {
-    opacity: 0.5;
-    transform: translateY(0);
-  }
-  30% {
-    opacity: 1;
-    transform: translateY(-8px);
-  }
+  0%, 100% { transform: translateY(0); opacity: 0.5; }
+  50% { transform: translateY(-4px); opacity: 1; }
 }
 
 /* 输入区域 */
 .input-section {
-  padding: 16px 24px;
   background-color: white;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid #ebeef5;
+  padding: 12px 20px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.03);
 }
 
 [data-theme="dark"] .input-section {
-  background-color: #1f1f1f;
+  background-color: #1e1e1e;
   border-top-color: #333;
 }
 
-/* 主题选择 */
-.topic-bar {
+.toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
 }
 
-.topic-bar .label {
-  font-size: 14px;
-  color: #666;
-  white-space: nowrap;
-}
-
-[data-theme="dark"] .topic-bar .label {
-  color: #999;
-}
-
-.topic-select {
-  width: 200px;
-}
-
-/* 输入框 */
-.input-box {
+.topic-selector {
   display: flex;
-  gap: 12px;
-  align-items: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+.topic-selector .label {
+  font-size: 13px;
+  color: #606266;
+}
+[data-theme="dark"] .topic-selector .label {
+  color: #a0a0a0;
 }
 
-.input-box :deep(.el-textarea) {
-  flex: 1;
-  max-height: 120px;
+.input-area-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #dcdfe6;
+  border-radius: 8px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background: white;
+  padding: 2px;
+}
+.input-area-wrapper:focus-within {
+  border-color: #409eff;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
 }
 
-.input-box :deep(.el-textarea__inner) {
-  font-size: 14px;
-  line-height: 1.6;
-  resize: none;
-}
-
-.input-box :deep(.el-input__count) {
-  color: #999;
-}
-
-[data-theme="dark"] .input-box :deep(.el-textarea__inner) {
-  background-color: #2a2a2a;
-  color: #e0e0e0;
+[data-theme="dark"] .input-area-wrapper {
+  background: #2b2b2b;
   border-color: #444;
+}
+[data-theme="dark"] .input-area-wrapper:focus-within {
+  border-color: #409eff;
+}
+
+.custom-textarea :deep(.el-textarea__inner) {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  padding: 6px 10px;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .input-actions {
   display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 4px 8px 4px;
   gap: 12px;
 }
 
-.input-actions :deep(.el-button) {
-  flex-shrink: 0;
+.char-count {
+  font-size: 12px;
+  color: #909399;
+}
+
+.send-btn {
+  width: 36px;
+  height: 36px;
+  font-size: 16px;
 }
 
 /* 过渡动画 */
 .message-list-enter-active,
 .message-list-leave-active {
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28); /* 弹性效果 */
 }
-
 .message-list-enter-from {
   opacity: 0;
-  transform: translateY(10px);
+  transform: translateY(20px) scale(0.9);
 }
-
 .message-list-leave-to {
   opacity: 0;
-  transform: translateY(-10px);
-}
-
-/* el-card暗夜模式适配 */
-:deep(.el-card) {
-  --el-card-bg-color: white;
-  --el-card-border-color: #ebeef5;
-  --el-card-text-color: #333;
-}
-
-[data-theme="dark"] :deep(.el-card) {
-  --el-card-bg-color: #2a2a2a !important;
-  --el-card-border-color: #444 !important;
-  --el-card-text-color: #e0e0e0 !important;
-  background-color: #2a2a2a !important;
-  border-color: #444 !important;
-  color: #e0e0e0 !important;
-}
-
-[data-theme="dark"] :deep(.el-card__header) {
-  border-bottom-color: #444 !important;
-  background-color: #2a2a2a !important;
-}
-
-[data-theme="dark"] :deep(.el-card__body) {
-  color: #e0e0e0 !important;
-  background-color: #2a2a2a !important;
-}
-
-[data-theme="dark"] :deep(.el-card__title) {
-  color: #e0e0e0 !important;
-}
-
-/* el-dialog暗夜模式适配 */
-:deep(.el-dialog) {
-  --el-dialog-bg-color: white;
-}
-
-[data-theme="dark"] :deep(.el-dialog) {
-  --el-dialog-bg-color: #2a2a2a;
-}
-
-[data-theme="dark"] :deep(.el-dialog__header) {
-  border-bottom-color: #444;
-}
-
-[data-theme="dark"] :deep(.el-dialog__title) {
-  color: #e0e0e0;
-}
-
-[data-theme="dark"] :deep(.el-dialog__close) {
-  color: #999;
-}
-
-[data-theme="dark"] :deep(.el-dialog__close:hover) {
-  color: #e0e0e0;
-}
-
-[data-theme="dark"] :deep(.el-dialog__body) {
-  color: #e0e0e0;
-}
-
-[data-theme="dark"] :deep(.el-dialog__footer) {
-  border-top-color: #444;
+  transform: translateY(-20px);
 }
 </style>

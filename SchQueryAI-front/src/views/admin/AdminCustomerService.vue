@@ -135,7 +135,7 @@
           <div class="messages-area" ref="messagesContainer">
             <div v-for="msg in sortedMessages" :key="msg.id" class="message-item" :class="{ 'admin-msg': msg.senderType === 2, 'user-msg': msg.senderType === 1 }">
               <div class="message-avatar">
-                <el-avatar :size="36" :src="msg.senderAvatar || (msg.senderType === 1 ? getDefaultUserAvatar() : userStore.getDisplayAvatar())" />
+                <el-avatar :size="36" :src="getMessageSenderAvatar(msg)" />
               </div>
               <div class="message-content">
                 <div class="sender-name">{{ msg.senderName || (msg.senderType === 1 ? currentSession.userName : '我') }}</div>
@@ -196,6 +196,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Upload, Moon, Position, ChatDotRound, CircleCheck } from '@element-plus/icons-vue'
 import { useUserStore } from '../../stores/userStore'
+import { userApi } from '../../api/user'
 
 const router = useRouter()
 const route = useRoute()
@@ -214,6 +215,7 @@ const isInputFocused = ref(false)
 const webSocket = ref(null)
 const pendingCount = ref(0)
 const isDarkMode = ref(false)
+const userAvatarCache = ref({}) // 用户头像缓存 { userId: avatarBase64 }
 
 // 计算过滤后的会话
 const filteredSessions = computed(() => {
@@ -303,6 +305,10 @@ const loadSessions = async () => {
       const result = await response.json()
       if (result.code === 200) {
         sessions.value = result.data || []
+        console.log('[AdminCustomerService] 加载会话列表成功，会话数:', sessions.value.length)
+        if (sessions.value.length > 0) {
+          console.log('[AdminCustomerService] 第一个会话数据示例:', sessions.value[0])
+        }
         // 计算待处理数
         updatePendingCount()
 
@@ -340,9 +346,22 @@ const updatePendingCount = () => {
 
 // 选中会话
 const selectSession = async (session) => {
+  console.log('[AdminCustomerService] 选中会话:', session)
+  console.log('[AdminCustomerService] 会话 userId:', session.userId, 'avatar:', session.avatar)
+
   currentSession.value = session
   replyMessage.value = ''
-  
+
+  // 加载用户头像（如果尚未缓存）
+  if (session.userId && !userAvatarCache.value[session.userId]) {
+    console.log('[AdminCustomerService] 开始加载用户头像, userId:', session.userId, 'avatarId:', session.avatar)
+    // 使用 session 中的 avatar 字段作为 avatarId
+    const avatarData = await getUserAvatar(session.userId, session.avatar)
+    console.log('[AdminCustomerService] 用户头像加载完成, avatarData 长度:', avatarData?.length)
+  } else {
+    console.log('[AdminCustomerService] 用户头像已缓存, userId:', session.userId)
+  }
+
   // 调用API标记仅该用户的消恫为已读
   try {
     const token = localStorage.getItem('token')
@@ -354,7 +373,7 @@ const selectSession = async (session) => {
         'Content-Type': 'application/json'
       }
     })
-    
+
     // 本地立即更新消除状态，实时显示已读
     if (currentSession.value && currentSession.value.messages) {
       currentSession.value.messages.forEach(msg => {
@@ -363,11 +382,11 @@ const selectSession = async (session) => {
         }
       })
     }
-    
+
     // 清除红点
     session.unreadCount = 0
     console.log('[AdminCustomerService] 已标记用户', session.userId, '的消恫为已读')
-    
+
     // 更新待处理会话数
     updatePendingCount()
     // 通过WebSocket通知用户：管理员正在查看你的消息
@@ -383,7 +402,7 @@ const selectSession = async (session) => {
         console.error('[AdminCustomerService] 发送viewing事件失败:', error)
       }
     }
-    
+
     // 触发事件，告诉其他页面已标记为已读
     window.dispatchEvent(new CustomEvent('admin-marked-read', {
       detail: { userId: session.userId }
@@ -391,7 +410,7 @@ const selectSession = async (session) => {
   } catch (error) {
     console.error('[AdminCustomerService] 标记已读失败:', error)
   }
-  
+
   nextTick(() => {
     scrollToBottom()
     replyInput.value?.focus()
@@ -817,6 +836,56 @@ const toggleDarkMode = () => {
 // 获取默认用户头像
 const getDefaultUserAvatar = () => {
   return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect fill="%23e6f7ff" width="200" height="200"/><circle cx="100" cy="70" r="30" fill="%231890ff"/><path d="M60 140 Q100 120 140 140 L140 180 L60 180 Z" fill="%231890ff"/></svg>'
+}
+
+// 获取用户头像（带缓存）
+const getUserAvatar = async (userId, avatarId) => {
+  console.log('[getUserAvatar] 调用 - userId:', userId, 'avatarId:', avatarId)
+
+  // 如果已经缓存，直接返回
+  if (userAvatarCache.value[userId]) {
+    console.log('[getUserAvatar] 从缓存返回头像')
+    return userAvatarCache.value[userId]
+  }
+
+  // 如果没有 avatarId，返回默认头像
+  if (!avatarId) {
+    console.log('[getUserAvatar] 没有 avatarId，返回默认头像')
+    return getDefaultUserAvatar()
+  }
+
+  try {
+    console.log('[getUserAvatar] 调用 API 获取头像, avatarId:', avatarId)
+    const result = await userApi.getAvatarById(avatarId)
+    console.log('[getUserAvatar] API 返回结果:', result)
+
+    if (result.code === 200 && result.data) {
+      console.log('[getUserAvatar] 头像获取成功，缓存到本地')
+      // 缓存头像
+      userAvatarCache.value[userId] = result.data
+      return result.data
+    } else {
+      console.log('[getUserAvatar] API 返回失败或无数据，使用默认头像')
+    }
+  } catch (error) {
+    console.error('[getUserAvatar] 获取用户头像失败:', error)
+  }
+
+  return getDefaultUserAvatar()
+}
+
+// 获取消息发送者头像
+const getMessageSenderAvatar = (msg) => {
+  if (msg.senderType === 1) {
+    // 用户消息 - 从缓存中获取
+    const avatar = userAvatarCache.value[currentSession.value?.userId] || getDefaultUserAvatar()
+    console.log('[getMessageSenderAvatar] 用户消息, userId:', currentSession.value?.userId, '头像缓存:', !!userAvatarCache.value[currentSession.value?.userId])
+    return avatar
+  } else {
+    // 管理员消息
+    console.log('[getMessageSenderAvatar] 管理员消息')
+    return userStore.getDisplayAvatar()
+  }
 }
 
 // 格式化时间

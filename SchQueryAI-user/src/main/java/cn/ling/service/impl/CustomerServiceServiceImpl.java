@@ -4,10 +4,12 @@ import cn.ling.Result;
 import cn.ling.dto.CustomerServiceDTO;
 import cn.ling.domain.pojo.CustomerServiceMessage;
 import cn.ling.domain.pojo.CustomerServiceSession;
+import cn.ling.domain.pojo.User;
 import cn.ling.domain.vo.CustomerServiceVO;
 import cn.ling.exception.CustomException;
 import cn.ling.mapper.CustomerServiceMapper;
 import cn.ling.mapper.CustomerServiceSessionMapper;
+import cn.ling.mapper.UserMapper;
 import cn.ling.service.CustomerServiceService;
 import cn.ling.service.ICustomerServiceBridge;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -28,9 +30,11 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
         implements CustomerServiceService, ICustomerServiceBridge {
 
     private final CustomerServiceSessionMapper customerServiceSessionMapper;
+    private final UserMapper userMapper;
 
-    public CustomerServiceServiceImpl(CustomerServiceSessionMapper customerServiceSessionMapper) {
+    public CustomerServiceServiceImpl(CustomerServiceSessionMapper customerServiceSessionMapper, UserMapper userMapper) {
         this.customerServiceSessionMapper = customerServiceSessionMapper;
+        this.userMapper = userMapper;
     }
 
     @Override
@@ -189,12 +193,12 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
     public Result<List<CustomerServiceVO.UserSessionVO>> getPendingSessions() {
         try {
             List<CustomerServiceSession> sessions = customerServiceSessionMapper.selectPendingSessions();
-            
+
             List<CustomerServiceVO.UserSessionVO> result = sessions.stream()
                     .map(session -> {
                         // 获取该用户的消息列表
                         List<CustomerServiceMessage> messages = this.baseMapper.selectByUserId(session.getUserId());
-                        
+
                         List<CustomerServiceVO> messageVOs = messages.stream()
                                 .map(msg -> CustomerServiceVO.builder()
                                         .id(msg.getId())
@@ -221,6 +225,17 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
                             }
                         }
 
+                        // 查询用户头像
+                        Long avatar = null;
+                        try {
+                            User user = userMapper.selectById(session.getUserId());
+                            if (user != null) {
+                                avatar = user.getAvatar();
+                            }
+                        } catch (Exception e) {
+                            log.warn("查询用户 {} 头像失败", session.getUserId(), e);
+                        }
+
                         return CustomerServiceVO.UserSessionVO.builder()
                                 .id(session.getUserId())  // 使用 userId 作为 id
                                 .userId(session.getUserId())
@@ -228,6 +243,7 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
                                 .lastMessage(session.getLastMessage())
                                 .unreadCount(session.getUnreadCount())
                                 .lastMessageTime(session.getUpdateTime().toString())
+                                .avatar(avatar)  // 添加用户头像ID
                                 .topic(messages.isEmpty() ? "general" : (messages.get(messages.size() - 1).getTopic() != null ? messages.get(messages.size() - 1).getTopic() : "general"))
                                 .status(status)
                                 .messages(messageVOs)

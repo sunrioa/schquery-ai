@@ -100,110 +100,258 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="editorVisible" :title="editorTitle" width="760px">
-      <el-form :model="editor" label-width="120px">
-        <el-form-item label="知识库名称" required>
-          <el-input v-model="editor.kname" placeholder="例如：研发知识库" />
-        </el-form-item>
-        <el-form-item label="描述">
-          <el-input v-model="editor.description" type="textarea" :rows="2" placeholder="可选" />
-        </el-form-item>
-        <el-form-item label="状态">
-          <el-radio-group v-model="editor.status">
-            <el-radio :value="1">启用</el-radio>
-            <el-radio :value="0">停用</el-radio>
-          </el-radio-group>
-        </el-form-item>
+    <el-dialog
+      v-model="editorVisible"
+      :title="editorTitle"
+      width="800px"
+      class="knowledge-editor-dialog"
+      destroy-on-close
+      top="5vh"
+    >
+      <el-form :model="editor" label-width="100px" class="editor-form">
+        <!-- Section: 基础配置 -->
+        <div class="form-section-title">基础配置</div>
+        <el-row :gutter="24">
+          <el-col :span="16">
+            <el-form-item required>
+              <template #label>
+                <div class="form-label-container">
+                  <span>名称</span>
+                  <el-tooltip content="知识库的唯一名称，用于在配置角色预设时识别" placement="top">
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </div>
+              </template>
+              <el-input v-model="editor.kname" placeholder="例如：产品说明书、研发内部文档" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="8">
+            <el-form-item>
+              <template #label>
+                <div class="form-label-container">
+                  <span>状态</span>
+                  <el-tooltip content="停用后，该知识库将不会被检索" placement="top">
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </div>
+              </template>
+              <el-switch
+                v-model="editor.status"
+                :active-value="1"
+                :inactive-value="0"
+                active-text="启用"
+                inactive-text="停用"
+                inline-prompt
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item>
+              <template #label>
+                <div class="form-label-container">
+                  <span>说明</span>
+                  <el-tooltip content="简要描述知识库涵盖的内容范围" placement="top">
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </div>
+              </template>
+              <el-input v-model="editor.description" type="textarea" :rows="2" placeholder="请输入知识库描述..." />
+            </el-form-item>
+          </el-col>
+        </el-row>
 
-        <el-divider content-position="left">分块参数</el-divider>
-        <el-form-item label="textBlockSize">
-          <el-input-number
-            v-model="editor.textBlockSize"
-            :min="100"
-            :max="4000"
-            controls-position="right"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="overlapChar">
-          <el-input-number
-            v-model="editor.overlapChar"
-            :min="0"
-            :max="2000"
-            controls-position="right"
-            style="width: 100%"
-          />
-        </el-form-item>
-
-        <el-divider content-position="left">检索参数</el-divider>
-        <el-form-item label="retrieveLimit(topK)">
-          <el-input-number
-            v-model="editor.retrieveLimit"
-            :min="1"
-            :max="50"
-            controls-position="right"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="candidateCount">
-          <el-input-number
-            v-model="editor.candidateCount"
-            :min="1"
-            :max="200"
-            controls-position="right"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="useRerank">
-          <el-switch v-model="useRerankSwitch" />
-        </el-form-item>
-        <el-form-item v-if="useRerankSwitch" label="rerankModelName">
-          <el-select
-            v-model="editor.rerankModelName"
-            filterable
-            allow-create
-            default-first-option
-            placeholder="例如：bge-reranker-v2-m3"
-            style="width: 100%"
-          >
-            <el-option v-for="m in rerankModelOptions" :key="m" :label="m" :value="m" />
-          </el-select>
-        </el-form-item>
-        <el-form-item v-if="useRerankSwitch" label="minScore">
-          <el-input-number
-            v-model="editor.minScore"
-            :min="0"
-            :max="1"
-            :step="0.01"
-            controls-position="right"
-            style="width: 100%"
-          />
-        </el-form-item>
-
-        <el-divider content-position="left">向量模型</el-divider>
-        <el-form-item label="embeddingModelName">
+        <!-- Section: 向量模型 -->
+        <div class="form-section-title">向量模型配置</div>
+        <el-form-item>
+          <template #label>
+            <div class="form-label-container">
+              <span>Embedding</span>
+              <el-tooltip content="用于将文本转换为向量的模型。创建后不建议更改，否则需要重新索引所有文档" placement="top">
+                <el-icon class="help-icon"><QuestionFilled /></el-icon>
+              </el-tooltip>
+            </div>
+          </template>
           <el-select
             v-model="editor.embeddingModelName"
             filterable
             clearable
             allow-create
             default-first-option
-            placeholder="不填则使用系统默认 embedding 模型"
+            placeholder="不填则使用系统全局默认 Embedding 模型"
             style="width: 100%"
           >
             <el-option v-for="m in embeddingModelOptions" :key="m" :label="m" :value="m" />
           </el-select>
         </el-form-item>
 
-        <el-divider content-position="left">提示词</el-divider>
-        <el-form-item label="systemPrompt">
-          <el-input v-model="editor.systemPrompt" type="textarea" :rows="4" placeholder="可选：知识库专用系统提示词" />
+        <!-- Section: 分块策略 -->
+        <div class="form-section-title">分块策略 (Chunking Strategy)</div>
+        <el-row :gutter="24">
+          <el-col :span="12">
+            <el-form-item>
+              <template #label>
+                <div class="form-label-container">
+                  <span>块大小</span>
+                  <el-tooltip content="每个文本分块的最大字符数。值越小，上下文越精准但可能丢失连贯性" placement="top">
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </div>
+              </template>
+              <el-input-number
+                v-model="editor.textBlockSize"
+                :min="100"
+                :max="4000"
+                controls-position="right"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item>
+              <template #label>
+                <div class="form-label-container">
+                  <span>重叠长度</span>
+                  <el-tooltip content="相邻分块之间重复的字符数，用于保持语义的连续性" placement="top">
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </div>
+              </template>
+              <el-input-number
+                v-model="editor.overlapChar"
+                :min="0"
+                :max="2000"
+                controls-position="right"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <!-- Section: 检索参数 -->
+        <div class="form-section-title">检索参数 (Retrieval Params)</div>
+        <el-row :gutter="24">
+          <el-col :span="12">
+            <el-form-item>
+              <template #label>
+                <div class="form-label-container">
+                  <span>Top K</span>
+                  <el-tooltip content="最终返回给 AI 的相关分块数量" placement="top">
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </div>
+              </template>
+              <el-input-number
+                v-model="editor.retrieveLimit"
+                :min="1"
+                :max="50"
+                controls-position="right"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item>
+              <template #label>
+                <div class="form-label-container">
+                  <span>候选数量</span>
+                  <el-tooltip content="初步检索时的候选分块数，仅在开启 Rerank 时生效" placement="top">
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </div>
+              </template>
+              <el-input-number
+                v-model="editor.candidateCount"
+                :min="1"
+                :max="200"
+                controls-position="right"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="24">
+            <el-form-item>
+              <template #label>
+                <div class="form-label-container">
+                  <span>Rerank 重排</span>
+                  <el-tooltip content="开启后，将使用重排模型对检索结果进行二次精排，极大提高准确度" placement="top">
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </div>
+              </template>
+              <el-switch v-model="useRerankSwitch" active-text="开启重排" inactive-text="仅向量检索" inline-prompt />
+            </el-form-item>
+          </el-col>
+          <template v-if="useRerankSwitch">
+            <el-col :span="12">
+              <el-form-item>
+                <template #label>
+                  <div class="form-label-container">
+                    <span>重排模型</span>
+                    <el-tooltip content="用于重排的模型名称" placement="top">
+                      <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                    </el-tooltip>
+                  </div>
+                </template>
+                <el-select
+                  v-model="editor.rerankModelName"
+                  filterable
+                  allow-create
+                  default-first-option
+                  placeholder="例如：bge-reranker-v2-m3"
+                  style="width: 100%"
+                >
+                  <el-option v-for="m in rerankModelOptions" :key="m" :label="m" :value="m" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item>
+                <template #label>
+                  <div class="form-label-container">
+                    <span>分数阈值</span>
+                    <el-tooltip content="仅保留重排分数高于此值的块（0-1 之间）" placement="top">
+                      <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                    </el-tooltip>
+                  </div>
+                </template>
+                <el-input-number
+                  v-model="editor.minScore"
+                  :min="0"
+                  :max="1"
+                  :step="0.01"
+                  controls-position="right"
+                  style="width: 100%"
+                />
+              </el-form-item>
+            </el-col>
+          </template>
+        </el-row>
+
+        <!-- Section: 高级设置 -->
+        <div class="form-section-title">高级设置</div>
+        <el-form-item>
+          <template #label>
+            <div class="form-label-container">
+              <span>系统提示词</span>
+              <el-tooltip content="针对该知识库检索结果的特定指令（System Prompt）" placement="top">
+                <el-icon class="help-icon"><QuestionFilled /></el-icon>
+              </el-tooltip>
+            </div>
+          </template>
+          <el-input
+            v-model="editor.systemPrompt"
+            type="textarea"
+            :rows="3"
+            placeholder="可选：例如'请优先根据知识库中的内容回答问题'..."
+          />
         </el-form-item>
       </el-form>
 
       <template #footer>
-        <el-button @click="editorVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+        <div class="dialog-footer">
+          <el-button @click="editorVisible = false">取消</el-button>
+          <el-button type="primary" :loading="saving" @click="save">保存知识库</el-button>
+        </div>
       </template>
     </el-dialog>
   </div>
@@ -213,7 +361,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
-import { Search, Plus, Refresh, Document } from '@element-plus/icons-vue'
+import { Search, Plus, Refresh, Document, QuestionFilled } from '@element-plus/icons-vue'
 import { getKnowledgeList, removeKnowledge, saveKnowledge } from '../../../api/ai/knowledge'
 import { getChatModelList } from '../../../api/ai/chatModel'
 
@@ -473,5 +621,58 @@ onMounted(() => {
   background-color: #f8f9fb !important;
   color: #303133;
   font-weight: 600;
+}
+
+/* 弹窗样式优化 */
+.form-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  margin: 16px 0 16px;
+  padding-left: 10px;
+  border-left: 4px solid #409eff;
+  line-height: 1;
+}
+
+.form-label-container {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.help-icon {
+  color: #909399;
+  cursor: help;
+  font-size: 14px;
+}
+
+.help-icon:hover {
+  color: #409eff;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 10px;
+}
+
+:deep(.knowledge-editor-dialog) {
+  border-radius: 12px;
+}
+
+:deep(.knowledge-editor-dialog .el-dialog__header) {
+  margin-right: 0;
+  border-bottom: 1px solid #f0f2f5;
+  padding: 20px 24px;
+}
+
+:deep(.knowledge-editor-dialog .el-dialog__body) {
+  padding: 24px 32px;
+}
+
+:deep(.knowledge-editor-dialog .el-dialog__footer) {
+  border-top: 1px solid #f0f2f5;
+  padding: 16px 24px;
 }
 </style>

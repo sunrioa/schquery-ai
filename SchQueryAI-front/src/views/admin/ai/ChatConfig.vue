@@ -506,37 +506,37 @@ onMounted(async () => {
 
 <style scoped>
 .ai-chat-config-container {
-  padding: 24px;
-  background: #f5f7fa;
-  min-height: calc(100vh - 84px);
+  padding: 0;
+  background: transparent;
 }
 
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 16px;
 }
 
 .page-header .title {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--app-text);
 }
 
 .page-header .subtitle {
   margin: 4px 0 0;
-  color: #606266;
+  color: var(--app-muted);
   font-size: 14px;
 }
 
 .config-tabs :deep(.el-tabs__header) {
   margin-bottom: 0;
-  background: #fff;
+  background: var(--app-surface);
   padding: 0 20px;
   border-radius: 8px 8px 0 0;
-  border: 1px solid #e4e7ed;
+  border: 1px solid var(--app-border);
   border-bottom: none;
 }
 
@@ -548,8 +548,8 @@ onMounted(async () => {
 }
 
 .tab-content {
-  background: #fff;
-  border: 1px solid #e4e7ed;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
   border-radius: 0 0 8px 8px;
   min-height: 600px;
 }
@@ -562,7 +562,7 @@ onMounted(async () => {
 
 .preset-manager .sidebar {
   width: 300px;
-  border-right: 1px solid #e4e7ed;
+  border-right: 1px solid var(--app-border);
   display: flex;
   flex-direction: column;
 }
@@ -571,7 +571,7 @@ onMounted(async () => {
   padding: 16px;
   display: flex;
   gap: 10px;
-  border-bottom: 1px solid #f2f6fc;
+  border-bottom: 1px solid var(--app-border);
 }
 
 .preset-list {
@@ -590,12 +590,12 @@ onMounted(async () => {
 }
 
 .preset-item:hover {
-  background: #f5f7fa;
+  background: var(--app-surface-2);
 }
 
 .preset-item.active {
-  background: #ecf5ff;
-  border-color: #409eff;
+  background: var(--app-primary-soft);
+  border-color: var(--app-primary);
 }
 
 .preset-item .item-main {
@@ -608,12 +608,12 @@ onMounted(async () => {
 .preset-item .name {
   font-weight: 600;
   font-size: 14px;
-  color: #303133;
+  color: var(--app-text);
 }
 
 .preset-item .item-sub {
   font-size: 12px;
-  color: #909399;
+  color: var(--app-muted-2);
   margin-bottom: 6px;
 }
 
@@ -653,7 +653,7 @@ onMounted(async () => {
   font-weight: 600;
   margin: 30px 0 16px;
   padding-left: 10px;
-  border-left: 4px solid #409eff;
+  border-left: 4px solid var(--app-primary);
 }
 
 .params-grid {
@@ -664,10 +664,10 @@ onMounted(async () => {
 }
 
 .param-card {
-  background: #f8f9fb;
+  background: var(--app-surface-2);
   padding: 16px;
   border-radius: 8px;
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--app-border);
 }
 
 .param-card .label-row {
@@ -680,7 +680,7 @@ onMounted(async () => {
 .param-card .label {
   font-size: 13px;
   font-weight: 600;
-  color: #606266;
+  color: var(--app-muted);
 }
 
 .form-label-container {
@@ -691,18 +691,18 @@ onMounted(async () => {
 }
 
 .help-icon {
-  color: #909399;
+  color: var(--app-muted-2);
   cursor: help;
   font-size: 14px;
 }
 
 .help-icon:hover {
-  color: #409eff;
+  color: var(--app-primary);
 }
 
 .help-text {
   font-size: 12px;
-  color: #909399;
+  color: var(--app-muted-2);
   margin-top: 5px;
   line-height: 1.4;
 }
@@ -716,7 +716,7 @@ onMounted(async () => {
   .preset-manager .sidebar {
     width: 100%;
     border-right: none;
-    border-bottom: 1px solid #e4e7ed;
+    border-bottom: 1px solid var(--app-border);
     height: 300px;
   }
 }

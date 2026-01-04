@@ -242,7 +242,8 @@ const handleRegister = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+  background: linear-gradient(135deg, rgba(var(--app-primary-rgb), 0.08) 0%, rgba(var(--app-primary-rgb), 0.02) 100%),
+    var(--app-bg);
   padding: 20px;
 }
 
@@ -255,10 +256,10 @@ const handleRegister = async () => {
 /* 注册卡片样式 - 与登录页卡片风格统一 */
 .register-card {
   border-radius: 16px;
-  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--app-shadow-sm);
   border: none;
   padding: 40px 50px;
-  background-color: #fff;
+  background-color: var(--app-surface);
 }
 
 /* 卡片头部 - 与登录页保持一致的布局 */
@@ -271,7 +272,7 @@ const handleRegister = async () => {
 
 .card-header h2 {
   font-size: 24px;
-  color: #1D2129;
+  color: var(--app-text);
   margin: 0;
   font-weight: 600;
 }
@@ -287,7 +288,7 @@ const handleRegister = async () => {
 
 .el-form-item__label {
   font-size: 15px;
-  color: #4E5969;
+  color: var(--app-muted);
   padding-right: 15px;
 }
 
@@ -295,7 +296,7 @@ const handleRegister = async () => {
 :deep(.el-input__inner) {
   height: 46px;
   border-radius: 8px;
-  border-color: #E5E6EB;
+  border-color: var(--app-border);
   padding: 0 15px;
   font-size: 15px;
   transition: all 0.3s ease;
@@ -303,12 +304,12 @@ const handleRegister = async () => {
 }
 
 :deep(.el-input__inner):focus {
-  border-color: #165DFF;
-  box-shadow: 0 0 0 2px rgba(22, 93, 255, 0.15);
+  border-color: var(--app-primary);
+  box-shadow: var(--app-ring);
 }
 
 :deep(.el-input__prefix) {
-  color: #86909C;
+  color: var(--app-muted-2);
 }
 
 /* 验证码按钮 */
@@ -330,30 +331,30 @@ const handleRegister = async () => {
 }
 
 :deep(.el-button--primary) {
-  background-color: #165DFF;
-  border-color: #165DFF;
+  background-color: var(--app-primary);
+  border-color: var(--app-primary);
 }
 
 :deep(.el-button--primary):hover {
-  background-color: #0E42D2;
-  border-color: #0E42D2;
+  background-color: var(--app-primary-hover);
+  border-color: var(--app-primary-hover);
 }
 
 :deep(.el-button--primary).is-loading {
-  background-color: #165DFF;
-  border-color: #165DFF;
+  background-color: var(--app-primary);
+  border-color: var(--app-primary);
 }
 
 /* 链接样式统一 */
 :deep(.el-link) {
   font-size: 14px;
-  color: #165DFF;
+  color: var(--app-primary);
   padding: 0;
   height: auto;
 }
 
 :deep(.el-link):hover {
-  color: #0E42D2;
+  color: var(--app-primary-hover);
 }
 
 /* 响应式调整 - 小屏幕适配 */

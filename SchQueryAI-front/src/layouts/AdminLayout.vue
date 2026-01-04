@@ -152,6 +152,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { clearUserInfo, getCurrentUser } from '../utils/auth'
+import { applyTheme, isDarkTheme } from '../utils/theme'
 
 const router = useRouter()
 const route = useRoute()
@@ -160,8 +161,8 @@ const collapsed = ref(false)
 const isDarkMode = ref(false)
 const currentUser = ref(getCurrentUser())
 
-const menuTextColor = computed(() => (isDarkMode.value ? '#9ca3af' : '#6b7280'))
-const menuActiveTextColor = computed(() => (isDarkMode.value ? '#e5e7eb' : '#111827'))
+const menuTextColor = computed(() => 'var(--app-muted)')
+const menuActiveTextColor = computed(() => 'var(--app-text)')
 
 const activeMenu = computed(() => {
   const p = route.path || ''
@@ -186,21 +187,9 @@ const toggleCollapse = () => {
   collapsed.value = !collapsed.value
 }
 
-const applyTheme = (dark) => {
-  const html = document.documentElement
-  if (dark) {
-    html.setAttribute('data-theme', 'dark')
-    localStorage.setItem('theme', 'dark')
-  } else {
-    html.removeAttribute('data-theme')
-    localStorage.setItem('theme', 'light')
-  }
-}
-
 const toggleDarkMode = () => {
   isDarkMode.value = !isDarkMode.value
-  applyTheme(isDarkMode.value)
-  window.dispatchEvent(new CustomEvent('theme-change', { detail: { isDark: isDarkMode.value } }))
+  applyTheme(isDarkMode.value ? 'dark' : 'light')
 }
 
 const logout = () => {
@@ -211,9 +200,7 @@ const logout = () => {
 
 onMounted(() => {
   currentUser.value = getCurrentUser()
-  const storedTheme = localStorage.getItem('theme')
-  isDarkMode.value = storedTheme === 'dark'
-  applyTheme(isDarkMode.value)
+  isDarkMode.value = isDarkTheme()
 })
 </script>
 
@@ -223,17 +210,12 @@ onMounted(() => {
 }
 
 .sidebar {
-  background: #ffffff;
-  border-right: 1px solid #eef2f7;
+  background: var(--app-surface);
+  border-right: 1px solid var(--app-border);
   overflow: hidden;
   height: 100vh;
   display: flex;
   flex-direction: column;
-}
-
-[data-theme="dark"] .sidebar {
-  background: #1f2937;
-  border-right-color: #374151;
 }
 
 .sidebar-brand {
@@ -242,11 +224,7 @@ onMounted(() => {
   gap: 12px;
   padding: 14px 16px;
   cursor: pointer;
-  border-bottom: 1px solid #eef2f7;
-}
-
-[data-theme="dark"] .sidebar-brand {
-  border-bottom-color: #374151;
+  border-bottom: 1px solid var(--app-border);
 }
 
 .brand-icon {
@@ -258,7 +236,7 @@ onMounted(() => {
   justify-content: center;
   color: #fff;
   font-weight: 700;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--app-primary) 0%, var(--app-primary-deep) 100%);
 }
 
 .brand-text {
@@ -271,20 +249,12 @@ onMounted(() => {
   margin: 0;
   font-size: 14px;
   font-weight: 700;
-  color: #111827;
-}
-
-[data-theme="dark"] .brand-name {
-  color: #e5e7eb;
+  color: var(--app-text);
 }
 
 .brand-sub {
   font-size: 12px;
-  color: #6b7280;
-}
-
-[data-theme="dark"] .brand-sub {
-  color: #9ca3af;
+  color: var(--app-muted);
 }
 
 .sidebar-menu {
@@ -308,29 +278,16 @@ onMounted(() => {
 }
 
 .sidebar-menu :deep(.el-menu-item.is-active) {
-  background: rgba(59, 130, 246, 0.12);
+  background: var(--app-primary-soft);
 }
 
 .sidebar-menu :deep(.el-menu-item:hover),
 .sidebar-menu :deep(.el-sub-menu__title:hover) {
-  background: rgba(59, 130, 246, 0.08);
-}
-
-[data-theme="dark"] .sidebar-menu :deep(.el-menu-item.is-active) {
-  background: rgba(96, 165, 250, 0.18);
-}
-
-[data-theme="dark"] .sidebar-menu :deep(.el-menu-item:hover),
-[data-theme="dark"] .sidebar-menu :deep(.el-sub-menu__title:hover) {
-  background: rgba(96, 165, 250, 0.12);
+  background: var(--app-primary-soft-2);
 }
 
 .main {
-  background: #f0f2f5;
-}
-
-[data-theme="dark"] .main {
-  background: #111827;
+  background: var(--app-bg);
 }
 
 .topbar {
@@ -339,15 +296,9 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 0 12px;
-  background: #ffffff;
-  border-bottom: 1px solid #eef2f7;
-  color: #111827;
-}
-
-[data-theme="dark"] .topbar {
-  background: #1f2937;
-  border-bottom-color: #374151;
-  color: #e5e7eb;
+  background: var(--app-surface);
+  border-bottom: 1px solid var(--app-border);
+  color: var(--app-text);
 }
 
 .topbar-left,
@@ -367,14 +318,9 @@ onMounted(() => {
   gap: 6px;
   padding: 6px 10px;
   border-radius: 999px;
-  background: #f3f4f6;
-  color: #111827;
+  background: var(--app-surface-2);
+  color: var(--app-text);
   cursor: pointer;
-}
-
-[data-theme="dark"] .user-chip {
-  background: #374151;
-  color: #e5e7eb;
 }
 
 .user-name {

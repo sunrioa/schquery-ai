@@ -1,0 +1,134 @@
+:root {
+  color-scheme: light;
+
+  --app-font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+
+  --app-bg: #f8fafc;
+  --app-surface: #ffffff;
+  --app-surface-2: #f1f5f9;
+  --app-border: #e2e8f0;
+  --app-border-strong: #cbd5e1;
+  --app-text: #111827;
+  --app-muted: #6b7280;
+  --app-muted-2: #94a3b8;
+
+  --app-primary: #165dff;
+  --app-primary-hover: #0e42d2;
+  --app-primary-active: #0b39b9;
+  --app-primary-rgb: 22, 93, 255;
+  --app-primary-soft: rgba(var(--app-primary-rgb), 0.12);
+  --app-primary-soft-2: rgba(var(--app-primary-rgb), 0.08);
+  --app-primary-deep: #0a2463;
+
+  --app-radius: 12px;
+  --app-radius-sm: 10px;
+
+  --app-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04), 0 2px 12px rgba(15, 23, 42, 0.08);
+  --app-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06), 0 12px 28px rgba(15, 23, 42, 0.1);
+  --app-ring: 0 0 0 3px rgba(var(--app-primary-rgb), 0.18);
+
+  /* Element Plus theme mapping */
+  --el-font-family: var(--app-font-family);
+  --el-border-radius-base: var(--app-radius-sm);
+
+  --el-color-primary: var(--app-primary);
+  --el-color-success: #00b42a;
+  --el-color-warning: #ff7d00;
+  --el-color-danger: #f53f3f;
+
+  --el-bg-color: var(--app-surface);
+  --el-bg-color-page: var(--app-bg);
+  --el-bg-color-overlay: var(--app-surface);
+
+  --el-border-color: var(--app-border);
+  --el-border-color-light: var(--app-border);
+  --el-border-color-lighter: rgba(226, 232, 240, 0.7);
+
+  --el-text-color-primary: var(--app-text);
+  --el-text-color-regular: var(--app-text);
+  --el-text-color-secondary: var(--app-muted);
+  --el-text-color-placeholder: var(--app-muted-2);
+
+  --el-fill-color: var(--app-surface-2);
+  --el-fill-color-light: var(--app-surface-2);
+  --el-fill-color-lighter: rgba(241, 245, 249, 0.75);
+  --el-fill-color-blank: var(--app-surface);
+
+  --el-box-shadow-light: var(--app-shadow-xs);
+  --el-box-shadow: var(--app-shadow-sm);
+  --el-box-shadow-lighter: var(--app-shadow-xs);
+
+  --el-mask-color: rgba(15, 23, 42, 0.52);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--app-font-family);
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+#app {
+  height: 100%;
+}
+
+html.dark,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --app-bg: #111827;
+  --app-surface: #1f2937;
+  --app-surface-2: #374151;
+  --app-border: #374151;
+  --app-border-strong: #4b5563;
+  --app-text: #e5e7eb;
+  --app-muted: #9ca3af;
+  --app-muted-2: #6b7280;
+
+  /* Dark mode primary slightly brighter for readability */
+  --app-primary: #60a5fa;
+  --app-primary-hover: #93c5fd;
+  --app-primary-active: #3b82f6;
+  --app-primary-rgb: 96, 165, 250;
+  --app-primary-soft: rgba(var(--app-primary-rgb), 0.18);
+  --app-primary-soft-2: rgba(var(--app-primary-rgb), 0.12);
+  --app-primary-deep: #1e40af;
+
+  --el-mask-color: rgba(0, 0, 0, 0.64);
+  --el-bg-color-overlay: #0f172a;
+  --el-border-color-lighter: rgba(55, 65, 81, 0.7);
+}
+
+/* Subtle, consistent scrollbar styling (doesn't affect Firefox unless supported) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.55) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.5);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.65);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}

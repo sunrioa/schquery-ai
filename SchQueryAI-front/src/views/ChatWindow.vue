@@ -511,13 +511,8 @@ const goBack = () => {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background-color: #f5f7fa;
+  background-color: var(--app-bg);
   overflow: hidden;
-}
-
-/* 深色主题 */
-[data-theme="dark"] .chat-window {
-  background-color: #121212;
 }
 
 /* 头部 */
@@ -527,15 +522,10 @@ const goBack = () => {
   align-items: center;
   padding: 0 20px;
   height: 60px;
-  background: white;
-  border-bottom: 1px solid #ebeef5;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  background: var(--app-surface);
+  border-bottom: 1px solid var(--app-border);
+  box-shadow: var(--app-shadow-xs);
   z-index: 10;
-}
-
-[data-theme="dark"] .chat-header {
-  background: #1e1e1e;
-  border-bottom-color: #333;
 }
 
 .header-left {
@@ -546,21 +536,14 @@ const goBack = () => {
 
 .back-btn {
   font-size: 20px;
-  color: #606266;
+  color: var(--app-muted);
   padding: 8px;
 }
 
 .back-btn:hover {
-  color: #409eff;
-  background-color: #ecf5ff;
+  color: var(--app-primary);
+  background-color: var(--app-primary-soft-2);
   border-radius: 50%;
-}
-
-[data-theme="dark"] .back-btn {
-  color: #a0a0a0;
-}
-[data-theme="dark"] .back-btn:hover {
-  background-color: #333;
 }
 
 .header-info {
@@ -573,12 +556,8 @@ const goBack = () => {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #303133;
+  color: var(--app-text);
   line-height: 1.2;
-}
-
-[data-theme="dark"] .header-info h3 {
-  color: #e0e0e0;
 }
 
 .status {
@@ -586,14 +565,14 @@ const goBack = () => {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #909399;
+  color: var(--app-muted-2);
 }
 
 .status .dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: #c0c4cc;
+  background-color: var(--app-muted-2);
   transition: all 0.3s;
 }
 
@@ -646,7 +625,7 @@ const goBack = () => {
 
 .empty-icon {
   font-size: 64px;
-  color: #dcdfe6;
+  color: var(--app-border);
   margin-bottom: 16px;
 }
 
@@ -674,10 +653,10 @@ const goBack = () => {
   flex-shrink: 0;
 }
 .admin-avatar {
-  background-color: #409eff;
+  background-color: var(--app-primary);
 }
 .user-avatar {
-  background-color: #909399;
+  background-color: var(--app-muted);
 }
 
 /* 消息包裹层 */
@@ -694,7 +673,7 @@ const goBack = () => {
 
 .sender-name {
   font-size: 12px;
-  color: #909399;
+  color: var(--app-muted-2);
   margin-left: 4px;
 }
 
@@ -707,28 +686,20 @@ const goBack = () => {
   word-break: break-word;
   line-height: 1.5;
   font-size: 14px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--app-shadow-xs);
 }
 
 .admin-bubble {
-  background-color: white;
-  color: #303133;
+  background-color: var(--app-surface);
+  border: 1px solid var(--app-border);
+  color: var(--app-text);
   border-top-left-radius: 2px;
 }
 
 .user-bubble {
-  background-color: #409eff;
+  background-color: var(--app-primary);
   color: white;
   border-top-right-radius: 2px;
-}
-
-[data-theme="dark"] .admin-bubble {
-  background-color: #2b2b2b;
-  color: #e0e0e0;
-}
-
-[data-theme="dark"] .user-bubble {
-  background-color: #2b6a9e;
 }
 
 /* 气泡小尾巴 (仅在非深色模式简单背景下显示较好，这里使用伪元素简单实现) */
@@ -741,7 +712,7 @@ const goBack = () => {
   height: 0;
   border-style: solid;
   border-width: 0 8px 10px 0;
-  border-color: transparent white transparent transparent;
+  border-color: transparent var(--app-surface) transparent transparent;
 }
 .user-bubble::before {
   content: "";
@@ -752,14 +723,7 @@ const goBack = () => {
   height: 0;
   border-style: solid;
   border-width: 10px 8px 0 0;
-  border-color: #409eff transparent transparent transparent;
-}
-
-[data-theme="dark"] .admin-bubble::before {
-  border-color: transparent #2b2b2b transparent transparent;
-}
-[data-theme="dark"] .user-bubble::before {
-  border-color: #2b6a9e transparent transparent transparent;
+  border-color: var(--app-primary) transparent transparent transparent;
 }
 
 
@@ -769,7 +733,7 @@ const goBack = () => {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #c0c4cc;
+  color: var(--app-muted-2);
   padding: 0 2px;
 }
 
@@ -808,7 +772,7 @@ const goBack = () => {
 .typing-indicator .dot {
   width: 6px;
   height: 6px;
-  background-color: #909399;
+  background-color: var(--app-muted-2);
   border-radius: 50%;
   animation: typing 1.4s infinite;
 }
@@ -822,18 +786,13 @@ const goBack = () => {
 
 /* 输入区域 */
 .input-section {
-  background-color: white;
-  border-top: 1px solid #ebeef5;
+  background-color: var(--app-surface);
+  border-top: 1px solid var(--app-border);
   padding: 12px 20px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.03);
-}
-
-[data-theme="dark"] .input-section {
-  background-color: #1e1e1e;
-  border-top-color: #333;
 }
 
 .toolbar {
@@ -848,33 +807,22 @@ const goBack = () => {
 }
 .topic-selector .label {
   font-size: 13px;
-  color: #606266;
-}
-[data-theme="dark"] .topic-selector .label {
-  color: #a0a0a0;
+  color: var(--app-muted);
 }
 
 .input-area-wrapper {
   position: relative;
   display: flex;
   flex-direction: column;
-  border: 1px solid #dcdfe6;
+  border: 1px solid var(--app-border);
   border-radius: 8px;
   transition: border-color 0.2s, box-shadow 0.2s;
-  background: white;
+  background: var(--app-surface);
   padding: 2px;
 }
 .input-area-wrapper:focus-within {
-  border-color: #409eff;
-  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
-}
-
-[data-theme="dark"] .input-area-wrapper {
-  background: #2b2b2b;
-  border-color: #444;
-}
-[data-theme="dark"] .input-area-wrapper:focus-within {
-  border-color: #409eff;
+  border-color: var(--app-primary);
+  box-shadow: var(--app-ring);
 }
 
 .custom-textarea :deep(.el-textarea__inner) {
@@ -896,7 +844,7 @@ const goBack = () => {
 
 .char-count {
   font-size: 12px;
-  color: #909399;
+  color: var(--app-muted-2);
 }
 
 .send-btn {

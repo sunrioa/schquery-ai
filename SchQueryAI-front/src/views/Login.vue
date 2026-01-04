@@ -178,7 +178,8 @@ if (rememberedUser) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+  background: linear-gradient(135deg, rgba(var(--app-primary-rgb), 0.08) 0%, rgba(var(--app-primary-rgb), 0.02) 100%),
+    var(--app-bg);
   padding: 20px;
 }
 
@@ -187,8 +188,8 @@ if (rememberedUser) {
   max-width: 900px;
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.12);
-  background: #fff;
+  box-shadow: var(--app-shadow-sm);
+  background: var(--app-surface);
 }
 
 .card-content {
@@ -199,7 +200,7 @@ if (rememberedUser) {
 .login-promo {
   flex: 1;
   min-width: 400px;
-  background: linear-gradient(135deg, #165DFF 0%, #0A2463 100%);
+  background: linear-gradient(135deg, var(--app-primary) 0%, var(--app-primary-deep) 100%);
   color: #fff;
   padding: 40px;
   display: flex;
@@ -251,7 +252,7 @@ if (rememberedUser) {
 .login-form-wrapper {
   flex: 1;
   min-width: 350px;
-  background-color: #fff;
+  background-color: var(--app-surface);
   padding: 40px 50px;
   display: flex;
   flex-direction: column;
@@ -267,7 +268,7 @@ if (rememberedUser) {
 
 .card-header h2 {
   font-size: 24px;
-  color: #1D2129;
+  color: var(--app-text);
   margin: 0;
   font-weight: 600;
 }
@@ -288,26 +289,26 @@ if (rememberedUser) {
 
 .el-form-item__label {
   font-size: 15px;
-  color: #4E5969;
+  color: var(--app-muted);
   padding-right: 15px;
 }
 
 :deep(.el-input__inner) {
   height: 46px;
   border-radius: 8px;
-  border-color: #E5E6EB;
+  border-color: var(--app-border);
   padding: 0 15px;
   font-size: 15px;
   transition: all 0.3s ease;
 }
 
 :deep(.el-input__inner):focus {
-  border-color: #165DFF;
-  box-shadow: 0 0 0 2px rgba(22, 93, 255, 0.15);
+  border-color: var(--app-primary);
+  box-shadow: var(--app-ring);
 }
 
 :deep(.el-input__prefix) {
-  color: #86909C;
+  color: var(--app-muted-2);
 }
 
 .form-options {
@@ -321,36 +322,36 @@ if (rememberedUser) {
 
 :deep(.el-checkbox__label) {
   font-size: 14px;
-  color: #4E5969;
+  color: var(--app-muted);
 }
 
 :deep(.el-link) {
   font-size: 14px;
-  color: #165DFF;
+  color: var(--app-primary);
 }
 
 :deep(.el-link):hover {
-  color: #0E42D2;
+  color: var(--app-primary-hover);
 }
 
 :deep(.el-button--primary) {
   height: 48px;
   font-size: 16px;
   border-radius: 8px;
-  background-color: #165DFF;
-  border-color: #165DFF;
+  background-color: var(--app-primary);
+  border-color: var(--app-primary);
   transition: all 0.3s ease;
   font-weight: 500;
 }
 
 :deep(.el-button--primary):hover {
-  background-color: #0E42D2;
-  border-color: #0E42D2;
+  background-color: var(--app-primary-hover);
+  border-color: var(--app-primary-hover);
 }
 
 :deep(.el-button--primary).is-loading {
-  background-color: #165DFF;
-  border-color: #165DFF;
+  background-color: var(--app-primary);
+  border-color: var(--app-primary);
 }
 
 @media (max-width: 900px) {

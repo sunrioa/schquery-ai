@@ -206,17 +206,18 @@ const updatePassword = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+  background: linear-gradient(135deg, rgba(var(--app-primary-rgb), 0.08) 0%, rgba(var(--app-primary-rgb), 0.02) 100%),
+    var(--app-bg);
   padding: 20px;
 }
 
 .change-password-card {
   width: 100%;
   max-width: 450px;
-  background: #fff;
+  background: var(--app-surface);
   border-radius: 16px;
   padding: 40px;
-  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--app-shadow-sm);
 }
 
 .card-header {
@@ -226,13 +227,13 @@ const updatePassword = async () => {
 
 .card-header h1 {
   font-size: 28px;
-  color: #1D2129;
+  color: var(--app-text);
   margin: 0 0 10px 0;
   font-weight: 600;
 }
 
 .card-header p {
-  color: #86909C;
+  color: var(--app-muted-2);
   margin: 0;
   font-size: 14px;
 }
@@ -249,14 +250,14 @@ const updatePassword = async () => {
 .password-tips {
   margin-top: 8px;
   padding: 12px;
-  background-color: #f7f8fa;
+  background-color: var(--app-surface-2);
   border-radius: 6px;
-  border-left: 3px solid #409eff;
+  border-left: 3px solid var(--app-primary);
 }
 
 .password-tips p {
   margin: 0 0 4px 0;
-  color: #606266;
+  color: var(--app-muted);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -268,36 +269,36 @@ const updatePassword = async () => {
 :deep(.el-input__inner) {
   height: 46px;
   border-radius: 8px;
-  border-color: #E5E6EB;
+  border-color: var(--app-border);
   padding: 0 15px;
   font-size: 15px;
   transition: all 0.3s ease;
 }
 
 :deep(.el-input__inner):focus {
-  border-color: #165DFF;
-  box-shadow: 0 0 0 2px rgba(22, 93, 255, 0.15);
+  border-color: var(--app-primary);
+  box-shadow: var(--app-ring);
 }
 
 :deep(.el-button--primary) {
   height: 48px;
   font-size: 16px;
   border-radius: 8px;
-  background-color: #165DFF;
-  border-color: #165DFF;
+  background-color: var(--app-primary);
+  border-color: var(--app-primary);
   transition: all 0.3s ease;
   font-weight: 500;
 }
 
 :deep(.el-button--primary):hover {
-  background-color: #0E42D2;
-  border-color: #0E42D2;
+  background-color: var(--app-primary-hover);
+  border-color: var(--app-primary-hover);
 }
 
 .back-to-chat {
   text-align: center;
   padding-top: 20px;
-  border-top: 1px solid #E5E6EB;
+  border-top: 1px solid var(--app-border);
 }
 
 @media (max-width: 600px) {

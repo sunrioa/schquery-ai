@@ -204,17 +204,18 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+  background: linear-gradient(135deg, rgba(var(--app-primary-rgb), 0.08) 0%, rgba(var(--app-primary-rgb), 0.02) 100%),
+    var(--app-bg);
   padding: 20px;
 }
 
 .profile-card {
   width: 100%;
   max-width: 600px;
-  background: #fff;
+  background: var(--app-surface);
   border-radius: 16px;
   padding: 40px;
-  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--app-shadow-sm);
 }
 
 .card-header {
@@ -224,13 +225,13 @@ onMounted(async () => {
 
 .card-header h1 {
   font-size: 28px;
-  color: #1D2129;
+  color: var(--app-text);
   margin: 0 0 10px 0;
   font-weight: 600;
 }
 
 .card-header p {
-  color: #86909C;
+  color: var(--app-muted-2);
   margin: 0;
   font-size: 14px;
 }
@@ -255,7 +256,7 @@ onMounted(async () => {
   width: 100px;
   height: 100px;
   border-radius: 50%;
-  border: 3px solid #E5E6EB;
+  border: 3px solid var(--app-border);
   cursor: pointer;
   overflow: hidden;
   position: relative;
@@ -267,8 +268,8 @@ onMounted(async () => {
 }
 
 .avatar-preview:hover {
-  border-color: #165DFF;
-  transform: scale(1.05);
+  border-color: var(--app-primary);
+  box-shadow: var(--app-shadow-xs);
 }
 
 .avatar-image {
@@ -279,7 +280,7 @@ onMounted(async () => {
 
 .avatar-placeholder {
   font-size: 40px;
-  color: #86909C;
+  color: var(--app-muted-2);
 }
 
 .avatar-overlay {
@@ -307,13 +308,13 @@ onMounted(async () => {
 .avatar-info h3 {
   margin: 0 0 8px 0;
   font-size: 16px;
-  color: #1D2129;
+  color: var(--app-text);
   font-weight: 600;
 }
 
 .avatar-info p {
   margin: 0 0 12px 0;
-  color: #86909C;
+  color: var(--app-muted-2);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -325,12 +326,12 @@ onMounted(async () => {
 
 :deep(.el-descriptions__label) {
   font-weight: 600;
-  color: #4E5969;
+  color: var(--app-muted);
   width: 120px;
 }
 
 :deep(.el-descriptions__content) {
-  color: #1D2129;
+  color: var(--app-text);
 }
 
 /* 分割线 */
@@ -344,7 +345,7 @@ onMounted(async () => {
   justify-content: center;
   gap: 16px;
   padding-top: 20px;
-  border-top: 1px solid #E5E6EB;
+  border-top: 1px solid var(--app-border);
 }
 
 :deep(.el-button) {
@@ -355,13 +356,13 @@ onMounted(async () => {
 }
 
 :deep(.el-button--primary) {
-  background-color: #165DFF;
-  border-color: #165DFF;
+  background-color: var(--app-primary);
+  border-color: var(--app-primary);
 }
 
 :deep(.el-button--primary):hover {
-  background-color: #0E42D2;
-  border-color: #0E42D2;
+  background-color: var(--app-primary-hover);
+  border-color: var(--app-primary-hover);
 }
 
 /* 响应式设计 */

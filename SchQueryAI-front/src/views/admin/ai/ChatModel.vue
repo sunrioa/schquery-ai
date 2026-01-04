@@ -457,28 +457,28 @@ onMounted(() => loadList())
 
 <style scoped>
 .ai-model-container {
-  padding: 24px;
-  background: #f5f7fa;
-  min-height: calc(100vh - 84px);
+  padding: 0;
+  background: transparent;
 }
 
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 16px;
 }
 
 .page-header .title {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--app-text);
 }
 
 .page-header .subtitle {
   margin: 4px 0 0;
-  color: #606266;
+  color: var(--app-muted);
   font-size: 14px;
 }
 
@@ -509,12 +509,12 @@ onMounted(() => loadList())
 
 .name-text {
   font-weight: 600;
-  color: #303133;
+  color: var(--app-text);
 }
 
 .provider-text {
   font-size: 12px;
-  color: #909399;
+  color: var(--app-muted-2);
   margin-top: 4px;
 }
 
@@ -543,8 +543,8 @@ onMounted(() => loadList())
 }
 
 :deep(.el-table__header-wrapper th) {
-  background-color: #f8f9fb !important;
-  color: #303133;
+  background-color: var(--app-surface-2) !important;
+  color: var(--app-text);
   font-weight: 600;
 }
 
@@ -552,10 +552,10 @@ onMounted(() => loadList())
 .form-section-title {
   font-size: 15px;
   font-weight: 600;
-  color: #303133;
+  color: var(--app-text);
   margin: 16px 0 16px;
   padding-left: 10px;
-  border-left: 4px solid #409eff;
+  border-left: 4px solid var(--app-primary);
   line-height: 1;
 }
 
@@ -567,13 +567,13 @@ onMounted(() => loadList())
 }
 
 .help-icon {
-  color: #909399;
+  color: var(--app-muted-2);
   cursor: help;
   font-size: 14px;
 }
 
 .help-icon:hover {
-  color: #409eff;
+  color: var(--app-primary);
 }
 
 .dialog-footer {
@@ -588,7 +588,7 @@ onMounted(() => loadList())
 
 :deep(.model-editor-dialog .el-dialog__header) {
   margin-right: 0;
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid var(--app-border);
   padding: 20px 24px;
 }
 
@@ -597,7 +597,7 @@ onMounted(() => loadList())
 }
 
 :deep(.model-editor-dialog .el-dialog__footer) {
-  border-top: 1px solid #f0f2f5;
+  border-top: 1px solid var(--app-border);
   padding: 16px 24px;
 }
 </style>

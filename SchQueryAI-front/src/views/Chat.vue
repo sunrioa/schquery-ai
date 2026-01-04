@@ -274,12 +274,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick, watch, getCurrentInstance } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox, ElEmpty, ElAvatar, ElDropdown, ElDropdownMenu, ElDropdownItem, ElButton, ElInput, ElDialog, ElForm, ElFormItem, ElIcon } from 'element-plus'
-import { Plus, Setting, Edit, Delete, Service, Upload, Microphone, SwitchButton, User, Lock, ArrowDown, ArrowLeft, Moon, Sunny, ChatDotRound, Tools } from '@element-plus/icons-vue'
-import { chatApi } from '../api/chat'
-import { userApi } from '../api/user'
+ import { ref, onMounted, onUnmounted, nextTick, watch, getCurrentInstance } from 'vue'
+ import { useRouter } from 'vue-router'
+ import { ElMessage, ElMessageBox, ElEmpty, ElAvatar, ElDropdown, ElDropdownMenu, ElDropdownItem, ElButton, ElInput, ElDialog, ElForm, ElFormItem, ElIcon } from 'element-plus'
+ import { Plus, Setting, Edit, Delete, Service, Upload, Microphone, SwitchButton, User, Lock, ArrowDown, ArrowLeft, Moon, Sunny, ChatDotRound, Tools } from '@element-plus/icons-vue'
+ import { chatApi } from '../api/chat'
+ import { userApi } from '../api/user'
 import { getChatPresetList, getDefaultChatPresetId } from '../api/ai/chatPreset'
 import { useUserStore } from '../stores/userStore'
 import { getAIAvatar } from '../utils/avatarUtils'
@@ -288,10 +288,11 @@ import {
   isAdmin,
   isWorker,
   hasAnyRole,
-  getCurrentUser
-} from '../utils/auth'
-import hljs from 'highlight.js'
-import 'highlight.js/styles/github.css'
+   getCurrentUser
+ } from '../utils/auth'
+ import { applyTheme, isDarkTheme } from '../utils/theme'
+ import hljs from 'highlight.js'
+ import 'highlight.js/styles/github.css'
 
 // 路由实例和用户store
 const router = useRouter()
@@ -340,38 +341,12 @@ let renderVersion = 0 // 渲染版本号，用于强制重新渲染
 const streamingMessageIds = ref(new Set()) // 用于标记正在流式传输的消息ID
 
 // 黑夜模式状态
-const isDarkMode = ref(localStorage.getItem('darkMode') === 'true')
+const isDarkMode = ref(isDarkTheme())
 
 // 切换黑夜模式
 const toggleDarkMode = () => {
   isDarkMode.value = !isDarkMode.value
-  localStorage.setItem('darkMode', isDarkMode.value)
-  document.documentElement.setAttribute('data-theme', isDarkMode.value ? 'dark' : 'light')
-
-  // 强制应用输入框样式
-  nextTick(() => {
-    forceInputStyling()
-  })
-}
-
-// 强制应用输入框样式的函数
-const forceInputStyling = () => {
-  const textareas = document.querySelectorAll('textarea.el-textarea__inner')
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
-
-  textareas.forEach(textarea => {
-    if (isDark) {
-      textarea.style.backgroundColor = '#374151'
-      textarea.style.color = '#e5e7eb'
-      textarea.style.borderColor = '#4b5563'
-      textarea.style.backgroundImage = 'none'
-    } else {
-      textarea.style.backgroundColor = '#ffffff'
-      textarea.style.color = '#374151'
-      textarea.style.borderColor = '#e5e7eb'
-      textarea.style.backgroundImage = 'none'
-    }
-  })
+  applyTheme(isDarkMode.value ? 'dark' : 'light')
 }
 
 // 检查登录状态，返回是否已登录
@@ -2016,52 +1991,11 @@ onMounted(() => {
     loadSessions()
     loadUserInfo()
   }
-  // 初始化黑夜模式
-  document.documentElement.setAttribute('data-theme', isDarkMode.value ? 'dark' : 'light')
-
-  // 强制应用输入框样式
-  nextTick(() => {
-    forceInputStyling()
-  })
-
-  // 监听DOM变化，确保动态创建的输入框也有正确的样式
-  const observer = new MutationObserver((mutations) => {
-    let shouldUpdate = false
-    mutations.forEach((mutation) => {
-      if (mutation.type === 'childList') {
-        const addedNodes = Array.from(mutation.addedNodes)
-        if (addedNodes.some(node =>
-          node.nodeType === Node.ELEMENT_NODE &&
-          (node.querySelector?.('textarea.el-textarea__inner') || node.tagName === 'TEXTAREA')
-        )) {
-          shouldUpdate = true
-        }
-      }
-    })
-
-    if (shouldUpdate) {
-      setTimeout(() => forceInputStyling(), 50)
-    }
-  })
-
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  })
-
-  // 保存observer实例以便清理
-  window._styleObserver = observer
 })
 
 // 组件卸载时清理资源
 onUnmounted(() => {
   cleanupRecording()
-
-  // 清理样式监听器
-  if (window._styleObserver) {
-    window._styleObserver.disconnect()
-    window._styleObserver = null
-  }
 
   console.log('Component unmounted, cleanup completed')
 })
@@ -2071,17 +2005,16 @@ onUnmounted(() => {
 /* 全局基础样式 */
 .chat-container {
   height: 100vh;
-  background-color: #f9fafb;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--app-bg);
   overflow: hidden;
-  color: #111827;
+  color: var(--app-text);
 }
 
 /* 侧边栏样式 */
 .session-sidebar {
-  background-color: #ffffff;
-  border-right: 1px solid #e5e7eb;
-  box-shadow: 0 0 12px rgba(0, 0, 0, 0.03);
+  background-color: var(--app-surface);
+  border-right: 1px solid var(--app-border);
+  box-shadow: var(--app-shadow-xs);
   width: 280px !important;
   transition: all 0.3s ease;
 }
@@ -2089,7 +2022,7 @@ onUnmounted(() => {
 /* 侧边栏头部 */
 .session-header {
   padding: 16px 20px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--app-border);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -2097,7 +2030,7 @@ onUnmounted(() => {
 
 .session-header h3 {
   margin: 0;
-  color: #111827;
+  color: var(--app-text);
   font-size: 17px;
   font-weight: 600;
   line-height: 1.4;
@@ -2110,7 +2043,7 @@ onUnmounted(() => {
   font-size: 15px;
   font-weight: 500;
   border-radius: 8px;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: linear-gradient(135deg, var(--app-primary) 0%, var(--app-primary-hover) 100%);
   border: none;
   transition: all 0.2s ease;
   display: flex;
@@ -2120,14 +2053,12 @@ onUnmounted(() => {
 }
 
 .new-session-btn:hover {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+  background: linear-gradient(135deg, var(--app-primary-hover) 0%, var(--app-primary-active) 100%);
+  box-shadow: var(--app-shadow-sm);
 }
 
 .new-session-btn:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+  box-shadow: var(--app-shadow-xs);
 }
 
 .plus-icon {
@@ -2139,19 +2070,6 @@ onUnmounted(() => {
   height: calc(100vh - 120px);
   overflow-y: auto;
   padding: 8px 0;
-}
-
-.session-list::-webkit-scrollbar {
-  width: 6px;
-}
-
-.session-list::-webkit-scrollbar-thumb {
-  background-color: #d1d5db;
-  border-radius: 3px;
-}
-
-.session-list::-webkit-scrollbar-track {
-  background-color: #f3f4f6;
 }
 
 /* 会话项 */
@@ -2167,12 +2085,12 @@ onUnmounted(() => {
 }
 
 .session-item:hover {
-  background-color: #f0f9ff;
+  background-color: var(--app-primary-soft-2);
 }
 
 .session-item.active {
-  background-color: #dbeafe;
-  border-left: 3px solid #3b82f6;
+  background-color: var(--app-primary-soft);
+  border-left: 3px solid var(--app-primary);
 }
 
 .session-info {
@@ -2182,7 +2100,7 @@ onUnmounted(() => {
 
 .session-name {
   font-weight: 500;
-  color: #111827;
+  color: var(--app-text);
   margin-bottom: 3px;
   font-size: 14px;
   white-space: nowrap;
@@ -2192,12 +2110,12 @@ onUnmounted(() => {
 
 .session-time {
   font-size: 11px;
-  color: #6b7280;
+  color: var(--app-muted);
 }
 
 /* 会话操作图标 */
 .session-actions {
-  color: #6b7280;
+  color: var(--app-muted);
   cursor: pointer;
   padding: 6px;
   border-radius: 6px;
@@ -2206,8 +2124,8 @@ onUnmounted(() => {
 }
 
 .session-actions:hover {
-  color: #3b82f6;
-  background-color: rgba(59, 130, 246, 0.1);
+  color: var(--app-primary);
+  background-color: var(--app-primary-soft-2);
 }
 
 /* 聊天主区域 - 核心布局控制 */
@@ -2222,12 +2140,12 @@ onUnmounted(() => {
 
 /* 聊天头部 - 固定高度 */
 .chat-header {
-  background-color: #ffffff;
-  border-bottom: 1px solid #e5e7eb;
+  background-color: var(--app-surface);
+  border-bottom: 1px solid var(--app-border);
   padding: 0 24px;
   height: 64px; /* 固定高度 */
   flex-shrink: 0; /* 禁止收缩 */
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  box-shadow: var(--app-shadow-xs);
   display: flex;
   align-items: center;
 }
@@ -2254,7 +2172,7 @@ onUnmounted(() => {
 
 .chat-page-header .title h2 {
   margin: 0 0 6px 0;
-  color: #111827;
+  color: var(--app-text);
   font-size: 16px;
   font-weight: 700;
   overflow: hidden;
@@ -2264,16 +2182,16 @@ onUnmounted(() => {
 
 .chat-page-header .sub {
   margin: 0;
-  color: #6b7280;
+  color: var(--app-muted);
   font-size: 13px;
 }
 
 .rename-btn {
-  color: #6b7280;
+  color: var(--app-muted);
 }
 
 .rename-btn:hover {
-  color: #3b82f6;
+  color: var(--app-primary);
 }
 
 /* 返回按钮样式 - 使用深度选择器确保样式穿透 */
@@ -2284,20 +2202,20 @@ onUnmounted(() => {
   display: flex !important;
   align-items: center;
   justify-content: center;
-  color: #6b7280 !important;
+  color: var(--app-muted) !important;
   font-size: 18px !important;
   min-width: 36px !important;
   height: 36px !important;
-  background-color: #f9fafb !important;
-  border: 1px solid #e5e7eb !important;
+  background-color: var(--app-surface-2) !important;
+  border: 1px solid var(--app-border) !important;
   position: relative;
   z-index: 10;
   margin-right: 8px;
 }
 
 :deep(.back-btn:hover) {
-  background-color: #f3f4f6 !important;
-  color: #3b82f6 !important;
+  background-color: var(--app-primary-soft-2) !important;
+  color: var(--app-primary) !important;
   transform: translateX(-2px);
 }
 
@@ -2331,18 +2249,18 @@ onUnmounted(() => {
 }
 
 .user-dropdown:hover {
-  background-color: #f3f4f6;
+  background-color: var(--app-primary-soft-2);
 }
 
 .username {
   margin: 0 8px;
-  color: #374151;
+  color: var(--app-text);
   font-size: 14px;
   font-weight: 500;
 }
 
 .user-dropdown .el-icon--right {
-  color: #9ca3af;
+  color: var(--app-muted-2);
   font-size: 12px;
   transition: transform 0.2s ease;
 }
@@ -2353,7 +2271,7 @@ onUnmounted(() => {
 
 /* 聊天内容区域 - 精确高度控制（解决挤压问题核心） */
 .chat-content {
-  background-color: #f9fafb;
+  background-color: var(--app-bg);
   flex-grow: 1; /* 占据剩余空间 */
   max-height: calc(100vh - 64px - 72px); /* 总高度 - 头部(64px) - 输入区(72px) */
   overflow: hidden;
@@ -2379,19 +2297,6 @@ onUnmounted(() => {
   width: 100%;
   display: flex;
   flex-direction: column;
-}
-
-.chat-messages::-webkit-scrollbar {
-  width: 8px;
-}
-
-.chat-messages::-webkit-scrollbar-thumb {
-  background-color: #d1d5db;
-  border-radius: 4px;
-}
-
-.chat-messages::-webkit-scrollbar-track {
-  background-color: #f3f4f6;
 }
 
 /* 消息项样式 */
@@ -2440,11 +2345,11 @@ onUnmounted(() => {
 }
 
 .user-avatar {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--app-border);
 }
 
 .ai-avatar {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--app-border);
 }
 
 /* 消息气泡 - 现代化样式 */
@@ -2456,17 +2361,17 @@ onUnmounted(() => {
   font-size: 14px;
   border-radius: 12px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--app-shadow-xs);
 }
 
 .message-content:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--app-shadow-sm);
 }
 
 .user-message .message-content {
   margin-right: 12px;
   margin-left: auto;
-  background: #409eff;
+  background: var(--app-primary);
   color: white;
   border-top-right-radius: 2px;
 }
@@ -2480,16 +2385,16 @@ onUnmounted(() => {
   height: 0;
   border-style: solid;
   border-width: 10px 8px 0 0;
-  border-color: #409eff transparent transparent transparent;
+  border-color: var(--app-primary) transparent transparent transparent;
 }
 
 .ai-message .message-content {
   margin-left: 12px;
   margin-right: auto;
-  background-color: white;
-  color: #303133;
+  background-color: var(--app-surface);
+  color: var(--app-text);
   border-top-left-radius: 2px;
-  border: 1px solid rgba(229, 231, 235, 0.5);
+  border: 1px solid var(--app-border);
 }
 
 .ai-message .message-content::before {
@@ -2501,7 +2406,7 @@ onUnmounted(() => {
   height: 0;
   border-style: solid;
   border-width: 0 8px 10px 0;
-  border-color: transparent white transparent transparent;
+  border-color: transparent var(--app-surface) transparent transparent;
 }
 
 /* 消息时间样式优化 */
@@ -2510,7 +2415,7 @@ onUnmounted(() => {
   opacity: 0.6;
   margin-top: 8px;
   text-align: right;
-  color: #6b7280;
+  color: var(--app-muted);
   font-weight: 500;
   letter-spacing: 0.5px;
 }
@@ -3136,13 +3041,13 @@ onUnmounted(() => {
 
 /* 输入区域 - 固定高度 */
 .chat-input {
-  background-color: #ffffff;
-  border-top: 1px solid #e5e7eb;
+  background-color: var(--app-surface);
+  border-top: 1px solid var(--app-border);
   padding: 12px 24px;
   min-height: 72px; /* 最小高度，会根据转录区域扩展 */
   flex-shrink: 0; /* 禁止收缩 */
   box-sizing: border-box;
-  box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 -1px 3px rgba(15, 23, 42, 0.06);
 }
 
 /* 输入框容器 */
@@ -3180,20 +3085,20 @@ onUnmounted(() => {
   align-items: center !important;
   justify-content: center !important;
   padding: 0 !important;
-  background-color: #f3f4f6;
-  border: 1px solid #e5e7eb;
-  color: #6b7280;
+  background-color: var(--app-surface-2);
+  border: 1px solid var(--app-border);
+  color: var(--app-muted);
   z-index: 9999;
   user-select: none;
   cursor: pointer;
   outline: none;
   pointer-events: auto;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--app-shadow-xs);
 }
 
 .voice-btn:focus {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  box-shadow: var(--app-ring);
 }
 
 /* 确保图标正确显示 */
@@ -3205,9 +3110,9 @@ onUnmounted(() => {
 }
 
 .voice-btn:hover {
-  background-color: #e5e7eb;
-  color: #374151;
-  border-color: #d1d5db;
+  background-color: var(--app-primary-soft-2);
+  color: var(--app-text);
+  border-color: var(--app-border-strong);
 }
 
 .voice-btn.recording {
@@ -3218,8 +3123,8 @@ onUnmounted(() => {
 }
 
 .voice-btn.voice-loading {
-  background-color: #fbbf24;
-  border-color: #f59e0b;
+  background-color: #ffb020;
+  border-color: #ff9a00;
   color: white;
   display: flex !important; /* 强制显示 */
   visibility: visible !important;
@@ -3227,9 +3132,9 @@ onUnmounted(() => {
 }
 
 .voice-btn:disabled {
-  background-color: #f9fafb;
-  color: #9ca3af;
-  border-color: #e5e7eb;
+  background-color: var(--app-surface-2);
+  color: var(--app-muted-2);
+  border-color: var(--app-border);
   cursor: not-allowed;
   display: flex !important; /* 强制显示 */
   visibility: visible !important;
@@ -3246,13 +3151,13 @@ onUnmounted(() => {
   top: 8px;
   left: 72px;
   right: 72px;
-  background-color: #f0f9ff;
-  border: 1px solid #bfdbfe;
+  background-color: var(--app-primary-soft-2);
+  border: 1px solid rgba(var(--app-primary-rgb), 0.25);
   border-radius: 8px;
   padding: 8px 12px;
   z-index: 5;
   font-size: 13px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--app-shadow-xs);
 }
 
 .transcript-input-header {
@@ -3273,8 +3178,16 @@ onUnmounted(() => {
 
 /* 输入框样式 */
 .message-input {
+  flex-grow: 1; /* 占满容器宽度 */
+  position: relative; /* 确保输入框不会影响按钮定位 */
+  z-index: 0; /* 降低输入框层级 */
+}
+
+:deep(.message-input .el-textarea__inner) {
   border-radius: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--app-border);
+  background-color: var(--app-surface);
+  color: var(--app-text);
   padding: 10px 16px;
   padding-left: 72px; /* 给录音按钮留出空间 */
   padding-right: 72px;
@@ -3284,30 +3197,38 @@ onUnmounted(() => {
   font-size: 14px;
   line-height: 1.5;
   resize: none;
-  flex-grow: 1; /* 占满容器宽度 */
-  position: relative; /* 确保输入框不会影响按钮定位 */
-  z-index: 0; /* 降低输入框层级 */
+  background-image: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
 }
 
-/* 有转录时调整输入框样式 */
-.message-input.with-transcript {
+:deep(.message-input.with-transcript .el-textarea__inner) {
   padding-top: 80px; /* 为转录区域留出空间 */
 }
 
-.message-input::placeholder {
-  color: #9ca3af;
+:deep(.message-input .el-textarea__inner::placeholder) {
+  color: var(--app-muted-2);
   font-size: 14px;
   opacity: 1;
 }
 
+:deep(.message-input .el-textarea__inner:hover) {
+  border-color: var(--app-border-strong);
+}
+
+:deep(.message-input .el-textarea__inner:focus) {
+  border-color: var(--app-primary);
+  box-shadow: var(--app-ring);
+  outline: none;
+}
+
 .el-input:hover .el-input__inner {
-  border-color: #93c5fd;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.08);
+  border-color: var(--app-border-strong);
+  box-shadow: 0 0 0 2px rgba(var(--app-primary-rgb), 0.06);
 }
 
 .el-input:focus-within .el-input__inner {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  border-color: var(--app-primary);
+  box-shadow: var(--app-ring);
   outline: none;
 }
 
@@ -3324,27 +3245,25 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   padding: 0;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: linear-gradient(135deg, var(--app-primary) 0%, var(--app-primary-hover) 100%);
   border: none;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 2px 10px rgba(var(--app-primary-rgb), 0.22);
   transition: all 0.2s ease;
   z-index: 50; /* 提高发送按钮的层级 */
 }
 
 .send-btn:hover {
-  transform: translateY(-50%) scale(1.05);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  box-shadow: 0 8px 18px rgba(var(--app-primary-rgb), 0.28);
+  background: linear-gradient(135deg, var(--app-primary-hover) 0%, var(--app-primary-active) 100%);
 }
 
 .send-btn:active {
-  transform: translateY(-50%) scale(0.98);
-  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 2px 10px rgba(var(--app-primary-rgb), 0.22);
 }
 
 .send-btn:disabled {
-  background: #f3f4f6;
-  color: #9ca3af;
+  background: var(--app-surface-2);
+  color: var(--app-muted-2);
   box-shadow: none;
   transform: translateY(-50%);
 }
@@ -3361,7 +3280,7 @@ onUnmounted(() => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: #6b7280;
+  background-color: var(--app-muted);
   animation: typing 1.4s infinite ease-in-out both;
 }
 
@@ -3384,15 +3303,16 @@ onUnmounted(() => {
 
 /* 流式文本样式 */
 .streaming-text {
-  color: #374151;
+  color: inherit;
   white-space: pre-wrap;
   word-wrap: break-word;
   line-height: 1.6;
   font-family: inherit;
-  background-color: #f8fafc;
-  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(var(--app-primary-rgb), 0.12) 0%, rgba(var(--app-primary-rgb), 0.06) 100%);
+  border-radius: 12px;
   padding: 12px 16px;
-  border-left: 3px solid #3b82f6;
+  border-left: 3px solid var(--app-primary);
+  animation: none;
 }
 
 /* ===== 现代化Markdown样式 ===== */
@@ -3400,10 +3320,10 @@ onUnmounted(() => {
 /* 基础文本样式 */
 .markdown-content {
   line-height: 1.7;
-  color: #374151;
+  color: inherit;
   font-size: 15px;
   word-wrap: break-word;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  font-family: inherit;
 }
 
 .markdown-content p {
@@ -3427,7 +3347,7 @@ onUnmounted(() => {
 
 .markdown-content h1 {
   font-size: 28px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--app-primary) 0%, var(--app-primary-deep) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -3442,15 +3362,15 @@ onUnmounted(() => {
   left: 0;
   width: 60px;
   height: 3px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--app-primary) 0%, var(--app-primary-deep) 100%);
   border-radius: 2px;
 }
 
 .markdown-content h2 {
   font-size: 22px;
-  color: #1f2937;
+  color: inherit;
   padding-bottom: 8px;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid var(--app-border);
   position: relative;
 }
 
@@ -3461,37 +3381,40 @@ onUnmounted(() => {
   left: 0;
   width: 40px;
   height: 2px;
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  background: linear-gradient(135deg, var(--app-primary) 0%, var(--app-primary-hover) 100%);
   border-radius: 1px;
 }
 
 .markdown-content h3 {
   font-size: 18px;
-  color: #374151;
+  color: inherit;
   display: flex;
   align-items: center;
 }
 
 .markdown-content h3::before {
   content: '▸';
-  color: #3b82f6;
+  color: var(--app-primary);
   margin-right: 8px;
   font-size: 16px;
 }
 
 .markdown-content h4 {
   font-size: 16px;
-  color: #4b5563;
+  color: inherit;
+  opacity: 0.95;
 }
 
 .markdown-content h5 {
   font-size: 15px;
-  color: #6b7280;
+  color: inherit;
+  opacity: 0.9;
 }
 
 .markdown-content h6 {
   font-size: 14px;
-  color: #9ca3af;
+  color: inherit;
+  opacity: 0.85;
 }
 
 /* 现代化代码块样式 */
@@ -3566,11 +3489,11 @@ onUnmounted(() => {
   border-spacing: 0;
   margin: 24px 0;
   font-size: 14px;
-  background: #ffffff;
+  background: var(--app-surface);
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  border: 1px solid #e5e7eb;
+  box-shadow: var(--app-shadow-xs);
+  border: 1px solid var(--app-border);
 }
 
 .markdown-content th,
@@ -3578,17 +3501,17 @@ onUnmounted(() => {
   padding: 16px;
   text-align: left;
   line-height: 1.5;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--app-border);
 }
 
 .markdown-content th {
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  background: var(--app-surface-2);
   font-weight: 700;
-  color: #1f2937;
+  color: var(--app-text);
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid var(--app-border);
 }
 
 .markdown-content tr:last-child td {
@@ -3596,11 +3519,11 @@ onUnmounted(() => {
 }
 
 .markdown-content tr:nth-child(even) {
-  background-color: #fafbfc;
+  background-color: rgba(var(--app-primary-rgb), 0.03);
 }
 
 .markdown-content tr:hover {
-  background-color: #f8fafc;
+  background-color: rgba(var(--app-primary-rgb), 0.06);
   transition: background-color 0.2s ease;
 }
 
@@ -3626,7 +3549,7 @@ onUnmounted(() => {
   content: '•';
   position: absolute;
   left: 8px;
-  color: #3b82f6;
+  color: var(--app-primary);
   font-size: 18px;
   font-weight: bold;
   top: 8px;
@@ -3644,7 +3567,7 @@ onUnmounted(() => {
 }
 
 .markdown-content ol li::marker {
-  color: #3b82f6;
+  color: var(--app-primary);
   font-weight: 600;
 }
 
@@ -3666,12 +3589,12 @@ onUnmounted(() => {
   margin: 24px 0;
   padding: 20px 24px;
   border-left: 5px solid;
-  border-image: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) 1;
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  color: #1e40af;
+  border-image: linear-gradient(135deg, var(--app-primary) 0%, var(--app-primary-hover) 100%) 1;
+  background: linear-gradient(135deg, rgba(var(--app-primary-rgb), 0.1) 0%, rgba(var(--app-primary-rgb), 0.06) 100%);
+  color: inherit;
   font-style: normal;
   border-radius: 0 12px 12px 0;
-  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 4px 12px rgba(var(--app-primary-rgb), 0.1);
   position: relative;
 }
 
@@ -3685,14 +3608,14 @@ onUnmounted(() => {
   top: 8px;
   left: 12px;
   font-size: 48px;
-  color: #3b82f6;
+  color: var(--app-primary);
   opacity: 0.2;
   font-family: Georgia, serif;
 }
 
 /* 链接样式 */
 .markdown-content a {
-  color: #3b82f6;
+  color: var(--app-primary);
   text-decoration: none;
   font-weight: 500;
   border-bottom: 1px solid transparent;
@@ -3701,8 +3624,8 @@ onUnmounted(() => {
 }
 
 .markdown-content a:hover {
-  color: #1d4ed8;
-  border-bottom-color: #1d4ed8;
+  color: var(--app-primary-hover);
+  border-bottom-color: var(--app-primary-hover);
 }
 
 .markdown-content a::after {
@@ -3719,12 +3642,12 @@ onUnmounted(() => {
 
 /* 粗体和斜体 */
 .markdown-content strong {
-  color: #1f2937;
+  color: inherit;
   font-weight: 700;
 }
 
 .markdown-content em {
-  color: #4b5563;
+  color: inherit;
   font-style: italic;
 }
 
@@ -3732,7 +3655,7 @@ onUnmounted(() => {
 .markdown-content hr {
   border: 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, #e5e7eb, transparent);
+  background: linear-gradient(90deg, transparent, var(--app-border), transparent);
   margin: 32px 0;
   border-radius: 2px;
 }
@@ -3742,9 +3665,9 @@ onUnmounted(() => {
   white-space: pre-wrap;
   word-wrap: break-word;
   line-height: 1.6;
-  color: #374151;
+  color: inherit;
   margin: 16px 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  font-family: inherit;
 }
 
 /* 防止文本选中 - 保持原有行为 */
@@ -3937,646 +3860,6 @@ onUnmounted(() => {
   }
 }
 
-/* ===== 黑夜模式样式 ===== */
-
-/* 基础黑夜模式变量定义 */
-[data-theme="dark"] .chat-container {
-  background-color: #1f2937;
-  color: #f9fafb;
-}
-
-/* 侧边栏黑夜模式 */
-[data-theme="dark"] .session-sidebar {
-  background-color: #111827;
-  border-right-color: #374151;
-  box-shadow: 0 0 12px rgba(0, 0, 0, 0.1);
-}
-
-[data-theme="dark"] .session-header {
-  border-bottom-color: #374151;
-}
-
-[data-theme="dark"] .session-header h3 {
-  color: #f9fafb;
-}
-
-[data-theme="dark"] .new-session-btn {
-  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
-}
-
-[data-theme="dark"] .new-session-btn:hover {
-  background: linear-gradient(135deg, #4338ca 0%, #3730a3 100%);
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
-}
-
-[data-theme="dark"] .session-item:hover {
-  background-color: #374151;
-}
-
-[data-theme="dark"] .session-item.active {
-  background-color: #1e40af;
-  border-left-color: #60a5fa;
-}
-
-[data-theme="dark"] .session-name {
-  color: #f9fafb;
-}
-
-[data-theme="dark"] .session-time {
-  color: #9ca3af;
-}
-
-/* 聊天头部黑夜模式 */
-[data-theme="dark"] .chat-header {
-  background-color: #111827;
-  border-bottom-color: #374151;
-}
-
-[data-theme="dark"] .chat-page-header .title h2 {
-  color: #f9fafb;
-}
-
-[data-theme="dark"] .chat-page-header .sub {
-  color: #9ca3af;
-}
-
-[data-theme="dark"] .rename-btn {
-  color: #9ca3af;
-}
-
-[data-theme="dark"] .rename-btn:hover {
-  color: #60a5fa;
-}
-
-[data-theme="dark"] .user-dropdown:hover {
-  background-color: #374151;
-}
-
-[data-theme="dark"] .username {
-  color: #e5e7eb;
-}
-
-[data-theme="dark"] .user-dropdown .el-icon--right {
-  color: #6b7280;
-}
-
-[data-theme="dark"] .dark-mode-toggle {
-  background-color: #374151 !important;
-  border-color: #4b5563 !important;
-  color: #e5e7eb !important;
-}
-
-[data-theme="dark"] .dark-mode-toggle:hover {
-  background-color: #4b5563 !important;
-  border-color: #6b7280 !important;
-  color: #f9fafb !important;
-}
-
-/* 聊天内容区域黑夜模式 */
-[data-theme="dark"] .chat-content {
-  background-color: #1f2937;
-}
-
-/* 消息气泡黑夜模式 */
-[data-theme="dark"] .ai-message .message-content {
-  background-color: #2b2b2b;
-  color: #e0e0e0;
-  border-color: #333;
-}
-
-[data-theme="dark"] .ai-message .message-content::before {
-  border-color: transparent #2b2b2b transparent transparent;
-}
-
-[data-theme="dark"] .user-message .message-content {
-  background-color: #2b6a9e;
-  color: white !important;
-}
-
-[data-theme="dark"] .user-message .message-content::before {
-  border-color: #2b6a9e transparent transparent transparent;
-}
-
-/* 消息文字样式修复 */
-[data-theme="dark"] .message-text {
-  color: inherit !important;
-}
-
-[data-theme="dark"] .user-message .message-text {
-  color: white !important;
-}
-
-[data-theme="dark"] .ai-message .message-text {
-  color: #e5e7eb !important;
-}
-
-/* Markdown内容样式修复 */
-[data-theme="dark"] .markdown-content {
-  color: #e5e7eb !important;
-}
-
-[data-theme="dark"] .user-message .markdown-content {
-  color: white !important;
-}
-
-[data-theme="dark"] .ai-message .markdown-content {
-  color: #e5e7eb !important;
-}
-
-/* 流式文本样式 */
-[data-theme="dark"] .streaming-text {
-  background: linear-gradient(135deg, #1e293b 0%, #334155 100%) !important;
-  border-left-color: #60a5fa !important;
-  color: #e5e7eb !important;
-}
-
-[data-theme="dark"] .plain-text {
-  color: #e5e7eb !important;
-}
-
-[data-theme="dark"] .user-message .plain-text {
-  color: white !important;
-}
-
-[data-theme="dark"] .ai-message .plain-text {
-  color: #e5e7eb !important;
-}
-
-[data-theme="dark"] .message-time {
-  color: #9ca3af !important;
-}
-
-[data-theme="dark"] .user-message .message-time {
-  color: rgba(255, 255, 255, 0.7) !important;
-}
-
-/* 输入区域黑夜模式 */
-[data-theme="dark"] .chat-input {
-  background-color: #111827;
-  border-top-color: #374151;
-}
-
-
-/* 按钮黑夜模式 */
-[data-theme="dark"] .voice-btn {
-  background-color: #374151 !important;
-  border-color: #4b5563 !important;
-  color: #e5e7eb !important;
-}
-
-[data-theme="dark"] .voice-btn:hover {
-  background-color: #4b5563 !important;
-  border-color: #6b7280 !important;
-  color: #f9fafb !important;
-}
-
-[data-theme="dark"] .voice-btn.recording {
-  background-color: #ef4444 !important;
-  border-color: #dc2626 !important;
-  color: white !important;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4) !important;
-}
-
-/* 发送按钮黑夜模式修复 */
-[data-theme="dark"] .send-btn {
-  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%) !important;
-  border: none !important;
-  color: white !important;
-}
-
-[data-theme="dark"] .send-btn:hover {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-  box-shadow: 0 4px 12px rgba(96, 165, 250, 0.25) !important;
-}
-
-[data-theme="dark"] .send-btn:active {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-  box-shadow: 0 2px 6px rgba(96, 165, 250, 0.2) !important;
-}
-
-[data-theme="dark"] .send-btn:disabled {
-  background: #4b5563 !important;
-  color: #9ca3af !important;
-  box-shadow: none !important;
-}
-
-/* 确保所有按钮在暗夜模式下的通用样式 */
-[data-theme="dark"] .el-button {
-  background-color: #374151 !important;
-  border-color: #4b5563 !important;
-  color: #e5e7eb !important;
-}
-
-[data-theme="dark"] .el-button--primary {
-  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%) !important;
-  border-color: transparent !important;
-  color: white !important;
-}
-
-[data-theme="dark"] .el-button--primary:hover {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-}
-
-[data-theme="dark"] .el-button:hover {
-  background-color: #4b5563 !important;
-  border-color: #6b7280 !important;
-  color: #f9fafb !important;
-}
-
-[data-theme="dark"] .el-button:disabled {
-  background-color: #374151 !important;
-  border-color: #4b5563 !important;
-  color: #9ca3af !important;
-}
-
-/* 转录显示区域黑夜模式 */
-[data-theme="dark"] .transcript-input-display {
-  background-color: #1e3a8a;
-  border-color: #3730a3;
-  color: #e5e7eb;
-}
-
-[data-theme="dark"] .transcript-label {
-  color: #a5b4fc;
-}
-
-[data-theme="dark"] .transcript-icon {
-  color: #60a5fa;
-}
-
-/* 下拉菜单黑夜模式 */
-[data-theme="dark"] .el-dropdown-menu {
-  background-color: #1f2937;
-  border-color: #374151;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-[data-theme="dark"] .el-dropdown-menu__item {
-  color: #e5e7eb;
-}
-
-[data-theme="dark"] .el-dropdown-menu__item:hover {
-  background-color: #374151;
-  color: #f9fafb;
-}
-
-/* 对话框黑夜模式 */
-[data-theme="dark"] .el-dialog {
-  background-color: #1f2937;
-  color: #e5e7eb;
-}
-
-[data-theme="dark"] .el-dialog__header {
-  border-bottom-color: #374151;
-}
-
-[data-theme="dark"] .el-dialog__title {
-  color: #f9fafb;
-}
-
-[data-theme="dark"] .el-dialog__body {
-  background-color: #1f2937;
-}
-
-[data-theme="dark"] .el-dialog__footer {
-  border-top-color: #374151;
-}
-
-/* el-card黑夜模式 */
-[data-theme="dark"] :deep(.el-card) {
-  background-color: #1f2937 !important;
-  border-color: #374151 !important;
-  color: #e5e7eb !important;
-}
-
-[data-theme="dark"] :deep(.el-card__header) {
-  border-bottom-color: #374151 !important;
-  background-color: #111827 !important;
-}
-
-[data-theme="dark"] :deep(.el-card__body) {
-  background-color: #1f2937 !important;
-  color: #e5e7eb !important;
-}
-
-[data-theme="dark"] :deep(.el-card__title) {
-  color: #e5e7eb !important;
-}
-
-[data-theme="dark"] .el-form-item__label {
-  color: #e5e7eb;
-}
-
-[data-theme="dark"] .el-input__inner {
-  background-color: #374151;
-  border-color: #4b5563;
-  color: #e5e7eb;
-}
-
-/* 代码块黑夜模式优化 */
-[data-theme="dark"] .markdown-content pre {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-  border-color: #334155;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
-}
-
-[data-theme="dark"] .markdown-content pre code {
-  color: #e2e8f0;
-}
-
-[data-theme="dark"] .markdown-content code:not(pre code) {
-  background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
-  color: #fbbf24;
-  border-color: #4b5563;
-}
-
-/* 表格黑夜模式 */
-[data-theme="dark"] .markdown-content table {
-  background: #1f2937;
-  border-color: #374151;
-}
-
-[data-theme="dark"] .markdown-content th {
-  background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
-  color: #f9fafb;
-  border-bottom-color: #4b5563;
-}
-
-[data-theme="dark"] .markdown-content td {
-  border-bottom-color: #374151;
-  color: #e5e7eb;
-}
-
-[data-theme="dark"] .markdown-content tr:nth-child(even) {
-  background-color: #374151;
-}
-
-[data-theme="dark"] .markdown-content tr:hover {
-  background-color: #4b5563;
-}
-
-/* 引用块黑夜模式 */
-[data-theme="dark"] .markdown-content blockquote {
-  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
-  border-left-color: #60a5fa;
-  color: #dbeafe;
-  box-shadow: 0 4px 6px -1px rgba(96, 165, 250, 0.1);
-}
-
-/* 链接黑夜模式 */
-[data-theme="dark"] .markdown-content a {
-  color: #60a5fa;
-}
-
-[data-theme="dark"] .markdown-content a:hover {
-  color: #93c5fd;
-}
-
-/* 粗体和斜体黑夜模式 */
-[data-theme="dark"] .markdown-content strong {
-  color: #f9fafb;
-}
-
-[data-theme="dark"] .markdown-content em {
-  color: #e5e7eb;
-}
-
-/* 滚动条黑夜模式 */
-[data-theme="dark"] .session-list::-webkit-scrollbar-track {
-  background-color: #1f2937;
-}
-
-[data-theme="dark"] .session-list::-webkit-scrollbar-thumb {
-  background-color: #4b5563;
-}
-
-[data-theme="dark"] .chat-messages::-webkit-scrollbar-track {
-  background-color: #1f2937;
-}
-
-[data-theme="dark"] .chat-messages::-webkit-scrollbar-thumb {
-  background-color: #4b5563;
-}
-
-/* 确保所有文字内容在黑夜模式下正确显示 */
-[data-theme="dark"] .message-content * {
-  color: inherit !important;
-}
-
-[data-theme="dark"] .user-message .message-content * {
-  color: white !important;
-}
-
-[data-theme="dark"] .ai-message .message-content * {
-  color: #e5e7eb !important;
-}
-
-/* 链接和特殊元素保持可读性 */
-[data-theme="dark"] .user-message .message-content a {
-  color: #93c5fd !important;
-}
-
-[data-theme="dark"] .ai-message .message-content a {
-  color: #60a5fa !important;
-}
-
-[data-theme="dark"] .message-content strong {
-  color: inherit !important;
-}
-
-[data-theme="dark"] .user-message .message-content strong {
-  color: white !important;
-}
-
-[data-theme="dark"] .ai-message .message-content strong {
-  color: #f9fafb !important;
-}
-
-[data-theme="dark"] .message-content em {
-  color: inherit !important;
-}
-
-[data-theme="dark"] .user-message .message-content em {
-  color: rgba(255, 255, 255, 0.9) !important;
-}
-
-[data-theme="dark"] .ai-message .message-content em {
-  color: #e5e7eb !important;
-}
-
-/* ===== 输入框暗夜模式修复（最高优先级） ===== */
-
-/* 覆盖所有可能的输入框样式 - 使用最高优先级 */
-body[data-theme="dark"] .message-input,
-body[data-theme="dark"] .message-input .el-textarea,
-body[data-theme="dark"] .message-input .el-textarea__inner,
-body[data-theme="dark"] .chat-container .message-input,
-body[data-theme="dark"] .chat-container .message-input .el-textarea,
-body[data-theme="dark"] .chat-container .message-input .el-textarea__inner,
-html[data-theme="dark"] .message-input,
-html[data-theme="dark"] .message-input .el-textarea,
-html[data-theme="dark"] .message-input .el-textarea__inner {
-  background-color: #374151 !important;
-  border-color: #4b5563 !important;
-  color: #e5e7eb !important;
-  box-shadow: none !important;
-  background-image: none !important;
-}
-
-/* 针对textarea元素的最高优先级样式 */
-body[data-theme="dark"] textarea,
-body[data-theme="dark"] .el-textarea textarea,
-body[data-theme="dark"] .message-input textarea,
-html[data-theme="dark"] textarea,
-html[data-theme="dark"] .el-textarea textarea,
-html[data-theme="dark"] .message-input textarea {
-  background-color: #374151 !important;
-  border-color: #4b5563 !important;
-  color: #e5e7eb !important;
-  background-image: none !important;
-}
-
-/* Element Plus组件最高优先级覆盖 */
-body[data-theme="dark"] .el-input__inner,
-body[data-theme="dark"] .el-textarea__inner,
-body[data-theme="dark"] .el-input .el-input__inner,
-body[data-theme="dark"] .el-textarea .el-textarea__inner,
-html[data-theme="dark"] .el-input__inner,
-html[data-theme="dark"] .el-textarea__inner,
-html[data-theme="dark"] .el-input .el-input__inner,
-html[data-theme="dark"] .el-textarea .el-textarea__inner {
-  background-color: #374151 !important;
-  border-color: #4b5563 !important;
-  color: #e5e7eb !important;
-  box-shadow: none !important;
-  background-image: none !important;
-}
-
-/* 占位符样式修复 */
-body[data-theme="dark"] .message-input::placeholder,
-body[data-theme="dark"] .message-input .el-textarea__inner::placeholder,
-body[data-theme="dark"] .el-textarea__inner::placeholder,
-body[data-theme="dark"] textarea::placeholder,
-html[data-theme="dark"] .message-input::placeholder,
-html[data-theme="dark"] .message-input .el-textarea__inner::placeholder,
-html[data-theme="dark"] .el-textarea__inner::placeholder,
-html[data-theme="dark"] textarea::placeholder {
-  color: #9ca3af !important;
-  opacity: 1 !important;
-}
-
-/* hover和focus状态 */
-body[data-theme="dark"] .message-input .el-textarea__inner:hover,
-body[data-theme="dark"] .el-textarea__inner:hover,
-body[data-theme="dark"] textarea:hover,
-html[data-theme="dark"] .message-input .el-textarea__inner:hover,
-html[data-theme="dark"] .el-textarea__inner:hover,
-html[data-theme="dark"] textarea:hover {
-  border-color: #60a5fa !important;
-}
-
-body[data-theme="dark"] .message-input .el-textarea__inner:focus,
-body[data-theme="dark"] .el-textarea__inner:focus,
-body[data-theme="dark"] textarea:focus,
-html[data-theme="dark"] .message-input .el-textarea__inner:focus,
-html[data-theme="dark"] .el-textarea__inner:focus,
-html[data-theme="dark"] textarea:focus {
-  border-color: #60a5fa !important;
-  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2) !important;
-  outline: none !important;
-}
-
-/* 通用样式覆盖 */
-body[data-theme="dark"] [class*="el-input"],
-body[data-theme="dark"] [class*="el-textarea"],
-body[data-theme="dark"] [class*="message-input"],
-html[data-theme="dark"] [class*="el-input"],
-html[data-theme="dark"] [class*="el-textarea"],
-html[data-theme="dark"] [class*="message-input"] {
-  background-color: #374151 !important;
-  border-color: #4b5563 !important;
-  color: #e5e7eb !important;
-}
-
-/* 最终备用方案 - 直接样式注入 */
-[data-theme="dark"] .chat-input .el-textarea .el-textarea__inner {
-  background-color: #374151 !important;
-  border-color: #4b5563 !important;
-  color: #e5e7eb !important;
-}
-
-[data-theme="dark"] .input-container .el-textarea .el-textarea__inner {
-  background-color: #374151 !important;
-  border-color: #4b5563 !important;
-  color: #e5e7eb !important;
-}
-
-/* ===== 超强优先级暗夜模式输入框修复 ===== */
-
-/* 使用超高优先级选择器覆盖所有可能的Element Plus样式 */
-[data-theme="dark"] .chat-container .chat-input .input-container .el-textarea .el-textarea__inner,
-[data-theme="dark"] .chat-container .input-container .message-input .el-textarea__inner,
-[data-theme="dark"] .chat-input .input-container .message-input .el-textarea__inner,
-[data-theme="dark"] body .chat-container .chat-input .el-textarea .el-textarea__inner,
-[data-theme="dark"] html[data-theme="dark"] .chat-container .chat-input .el-textarea .el-textarea__inner {
-  background-color: #374151 !important;
-  background-image: none !important;
-  border-color: #4b5563 !important;
-  color: #e5e7eb !important;
-  box-shadow: none !important;
-  -webkit-appearance: none !important;
-  outline: none !important;
-}
-
-/* 直接针对textarea元素，使用所有可能的选择器组合 */
-[data-theme="dark"] textarea.el-textarea__inner,
-[data-theme="dark"] .el-textarea textarea,
-[data-theme="dark"] textarea.message-input,
-[data-theme="dark"] body textarea,
-[data-theme="dark"] html textarea {
-  background-color: #374151 !important;
-  background-image: none !important;
-  border-color: #4b5563 !important;
-  color: #e5e7eb !important;
-}
-
-/* 超强优先级 - 使用属性选择器 */
-[data-theme="dark"] textarea[class="el-textarea__inner"],
-[data-theme="dark"] textarea[rows],
-[data-theme="dark"] textarea[resize="none"],
-[data-theme="dark"] input[type="text"],
-[data-theme="dark"] textarea[tabindex] {
-  background-color: #374151 !important;
-  background-image: none !important;
-  border-color: #4b5563 !important;
-  color: #e5e7eb !important;
-}
-
-/* 占位符文字颜色 - 超强优先级 */
-[data-theme="dark"] ::placeholder,
-[data-theme="dark"] input::placeholder,
-[data-theme="dark"] textarea::placeholder,
-[data-theme="dark"] .el-textarea__inner::placeholder,
-[data-theme="dark"] textarea[class="el-textarea__inner"]::placeholder,
-[data-theme="dark"] ::-webkit-input-placeholder,
-[data-theme="dark"] ::-moz-placeholder {
-  color: #9ca3af !important;
-  opacity: 1 !important;
-}
-
-/* 焦点和悬停状态 - 超强优先级 */
-[data-theme="dark"] textarea:focus,
-[data-theme="dark"] textarea:hover,
-[data-theme="dark"] .el-textarea__inner:focus,
-[data-theme="dark"] .el-textarea__inner:hover,
-[data-theme="dark"] textarea[class="el-textarea__inner"]:focus,
-[data-theme="dark"] textarea[class="el-textarea__inner"]:hover {
-  border-color: #60a5fa !important;
-  background-color: #374151 !important;
-  color: #e5e7eb !important;
-  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2) !important;
-}
-
 /* ===== 客服对话框样式 ===== */
 
 .customer-service-container {
@@ -4589,10 +3872,10 @@ html[data-theme="dark"] [class*="message-input"] {
 .customer-service-messages {
   flex: 1;
   overflow-y: auto;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
   padding: 12px;
-  background-color: #f9fafb;
+  background-color: var(--app-surface-2);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -4610,7 +3893,7 @@ html[data-theme="dark"] [class*="message-input"] {
   flex-direction: column;
   gap: 4px;
   padding: 10px 12px;
-  border-radius: 6px;
+  border-radius: var(--app-radius-sm);
   max-width: 80%;
   word-wrap: break-word;
   word-break: break-word;
@@ -4618,14 +3901,15 @@ html[data-theme="dark"] [class*="message-input"] {
 
 .message-bubble.user-msg {
   align-self: flex-end;
-  background-color: #3b82f6;
+  background-color: var(--app-primary);
   color: white;
 }
 
 .message-bubble.admin-msg {
   align-self: flex-start;
-  background-color: #e5e7eb;
-  color: #374151;
+  background-color: var(--app-surface);
+  border: 1px solid var(--app-border);
+  color: var(--app-text);
 }
 
 .message-content {
@@ -4646,7 +3930,7 @@ html[data-theme="dark"] [class*="message-input"] {
 
 .message-bubble.admin-msg .message-time {
   text-align: left;
-  color: #6b7280;
+  color: var(--app-muted);
 }
 
 .topic-selector {
@@ -4667,35 +3951,4 @@ html[data-theme="dark"] [class*="message-input"] {
   flex: 1;
 }
 
-/* 客服对话框黑夜模式 */
-[data-theme="dark"] .customer-service-messages {
-  border-color: #4b5563;
-  background-color: #1f2937;
-}
-
-[data-theme="dark"] .message-bubble.admin-msg {
-  background-color: #4b5563;
-  color: #e5e7eb;
-}
-
-[data-theme="dark"] .message-bubble.admin-msg .message-time {
-  color: #9ca3af;
-}
-
-[data-theme="dark"] .el-select {
-  color: #e5e7eb;
-}
-
-[data-theme="dark"] .el-input__inner,
-[data-theme="dark"] .customer-service-container .el-input__inner {
-  background-color: #374151 !important;
-  border-color: #4b5563 !important;
-  color: #e5e7eb !important;
-}
-
-[data-theme="dark"] .customer-service-container .el-textarea__inner {
-  background-color: #374151 !important;
-  border-color: #4b5563 !important;
-  color: #e5e7eb !important;
-}
 </style>

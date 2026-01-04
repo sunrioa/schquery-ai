@@ -362,16 +362,17 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+  background: linear-gradient(135deg, rgba(var(--app-primary-rgb), 0.08) 0%, rgba(var(--app-primary-rgb), 0.02) 100%),
+    var(--app-bg);
   padding: 20px;
 }
 
 .forgot-password-card {
   width: 100%;
   max-width: 400px;
-  background: #fff;
+  background: var(--app-surface);
   border-radius: 16px;
-  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--app-shadow-sm);
   padding: 40px;
 }
 
@@ -382,14 +383,14 @@ onUnmounted(() => {
 
 .card-header h1 {
   font-size: 28px;
-  color: #1D2129;
+  color: var(--app-text);
   margin: 0 0 10px 0;
   font-weight: 600;
 }
 
 .card-header p {
   font-size: 14px;
-  color: #6B7280;
+  color: var(--app-muted);
   margin: 0;
   line-height: 1.5;
 }
@@ -405,31 +406,31 @@ onUnmounted(() => {
 :deep(.el-input__inner) {
   height: 48px;
   border-radius: 8px;
-  border-color: #E5E6EB;
+  border-color: var(--app-border);
   padding: 0 15px;
   font-size: 15px;
   transition: all 0.3s ease;
 }
 
 :deep(.el-input__inner):focus {
-  border-color: #165DFF;
-  box-shadow: 0 0 0 2px rgba(22, 93, 255, 0.15);
+  border-color: var(--app-primary);
+  box-shadow: var(--app-ring);
 }
 
 :deep(.el-input__prefix) {
-  color: #86909C;
+  color: var(--app-muted-2);
 }
 
 :deep(.el-button--primary) {
-  background-color: #165DFF;
-  border-color: #165DFF;
+  background-color: var(--app-primary);
+  border-color: var(--app-primary);
   transition: all 0.3s ease;
   font-weight: 500;
 }
 
 :deep(.el-button--primary):hover {
-  background-color: #0E42D2;
-  border-color: #0E42D2;
+  background-color: var(--app-primary-hover);
+  border-color: var(--app-primary-hover);
 }
 
 .code-btn {
@@ -439,23 +440,22 @@ onUnmounted(() => {
 }
 
 .send-btn {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: linear-gradient(135deg, var(--app-primary) 0%, var(--app-primary-hover) 100%);
   border: none;
   border-radius: 10px;
-  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 15px rgba(var(--app-primary-rgb), 0.28);
   transition: all 0.3s ease;
 }
 
 .send-btn:hover {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+  background: linear-gradient(135deg, var(--app-primary-hover) 0%, var(--app-primary-active) 100%);
+  box-shadow: 0 6px 20px rgba(var(--app-primary-rgb), 0.34);
 }
 
 .send-btn:disabled {
-  background: #94a3b8;
+  background: var(--app-surface-2);
+  color: var(--app-muted-2);
   box-shadow: none;
-  transform: none;
 }
 
 .verify-btn {
@@ -474,27 +474,27 @@ onUnmounted(() => {
 
 .resend-btn {
   background: transparent;
-  border: 1px solid #e2e8f0;
-  color: #64748b;
+  border: 1px solid var(--app-border);
+  color: var(--app-muted);
   border-radius: 8px;
   transition: all 0.3s ease;
 }
 
 .resend-btn:hover:not(:disabled) {
-  border-color: #3b82f6;
-  color: #3b82f6;
-  background: #f0f9ff;
+  border-color: var(--app-primary);
+  color: var(--app-primary);
+  background: var(--app-primary-soft-2);
 }
 
 .email-display {
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border: 1px solid #bfdbfe;
+  background: linear-gradient(135deg, rgba(var(--app-primary-rgb), 0.12) 0%, rgba(var(--app-primary-rgb), 0.06) 100%);
+  border: 1px solid rgba(var(--app-primary-rgb), 0.25);
   border-radius: 12px;
   padding: 16px;
   margin-bottom: 10px;
   display: flex;
   align-items: center;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+  box-shadow: var(--app-shadow-xs);
 }
 
 .email-display-icon {

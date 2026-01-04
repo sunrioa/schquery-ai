@@ -550,14 +550,14 @@ onMounted(() => {
 }
 
 .history-tip strong {
-  color: #409eff;
+  color: var(--app-primary);
 }
 
 .device-info {
   display: inline-block;
   padding: 4px 8px;
-  background-color: rgba(64, 158, 255, 0.08);
-  border-left: 3px solid #409eff;
+  background-color: rgba(var(--app-primary-rgb), 0.08);
+  border-left: 3px solid var(--app-primary);
   color: var(--admin-text, #111827);
   font-size: 12px;
   border-radius: 2px;

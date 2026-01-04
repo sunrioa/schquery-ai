@@ -1,20 +1,13 @@
 .admin-layout {
-  --admin-bg: #f0f2f5;
-  --admin-card-bg: #ffffff;
-  --admin-border: #eef2f7;
-  --admin-text: #111827;
-  --admin-muted: #6b7280;
-  --admin-radius: 10px;
+  --admin-bg: var(--app-bg);
+  --admin-card-bg: var(--app-surface);
+  --admin-border: var(--app-border);
+  --admin-text: var(--app-text);
+  --admin-muted: var(--app-muted);
+  --admin-radius: var(--app-radius-sm);
   --admin-pane-height: 640px;
+  background: var(--admin-bg);
   color: var(--admin-text);
-}
-
-[data-theme="dark"] .admin-layout {
-  --admin-bg: #111827;
-  --admin-card-bg: #1f2937;
-  --admin-border: #374151;
-  --admin-text: #e5e7eb;
-  --admin-muted: #9ca3af;
 }
 
 /* 页面容器（对齐 rin-admin：统一留白） */
@@ -87,8 +80,14 @@
 .admin-layout .el-card {
   border-radius: var(--admin-radius);
   border: 1px solid var(--admin-border);
-  box-shadow: none;
+  box-shadow: var(--app-shadow-xs);
   background: var(--admin-card-bg);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.admin-layout .el-card:hover {
+  border-color: var(--app-border-strong);
+  box-shadow: var(--app-shadow-sm);
 }
 
 .admin-layout .el-card__header {
@@ -107,15 +106,19 @@
   background: var(--admin-card-bg);
 }
 
-[data-theme="dark"] .admin-layout .el-table__header th,
-[data-theme="dark"] .admin-layout .el-table__cell {
-  background: var(--admin-card-bg) !important;
+.admin-layout .el-table__header th {
+  background: var(--app-surface-2) !important;
   border-color: var(--admin-border) !important;
+  color: var(--admin-text);
 }
 
 /* 表格头部更“轻” */
 .admin-layout .el-table__header th {
   font-weight: 600;
+}
+
+.admin-layout .el-table__row:hover > td.el-table__cell {
+  background: var(--app-primary-soft-2) !important;
 }
 
 /* 分页对齐右侧 */

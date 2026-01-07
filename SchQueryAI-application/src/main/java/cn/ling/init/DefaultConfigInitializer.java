@@ -16,6 +16,7 @@ import org.springframework.util.StringUtils;
 public class DefaultConfigInitializer implements ApplicationRunner {
 
     private static final String KEY_MCP_MODE = "chat.default.mcpMode";
+    private static final String KEY_MCP_SERVERS = "chat.default.mcpServers";
 
     private final KnowledgeInfoService knowledgeInfoService;
     private final SysConfigService sysConfigService;
@@ -38,6 +39,8 @@ public class DefaultConfigInitializer implements ApplicationRunner {
 
         try {
             ensureConfigIfMissing(KEY_MCP_MODE, "MCP检索策略", "fallback", "MCP配置");
+            // 对齐 rin-ai 默认 MCP Server（ruoyi-mcp-server / rin-mcp-server）
+            ensureConfigIfMissing(KEY_MCP_SERVERS, "MCP服务URL列表", "http://127.0.0.1:8081", "MCP配置");
         } catch (Exception e) {
             log.warn("初始化默认MCP配置失败：{}", e.getMessage());
         }
@@ -51,4 +54,3 @@ public class DefaultConfigInitializer implements ApplicationRunner {
         sysConfigService.upsertConfig(key, value, name, remark);
     }
 }
-

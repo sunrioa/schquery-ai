@@ -68,6 +68,11 @@ yarn-error.log*
 # 缓存
 /.cache/
 .parcel-cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+${maven.multiModuleProjectDirectory}/
 
 # 其他工具
 .history/

@@ -21,6 +21,7 @@
         <module>SchQueryAI-utils</module>
         <module>SchQueryAI-ai</module>
         <module>SchQueryAI-application</module>
+        <module>SchQueryAI-mcp-server</module>
     </modules>
     <properties>
         <java.version>17</java.version>

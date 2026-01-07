@@ -292,7 +292,7 @@ import {
  } from '../utils/auth'
  import { applyTheme, isDarkTheme } from '../utils/theme'
  import hljs from 'highlight.js'
- import 'highlight.js/styles/github.css'
+ import 'highlight.js/styles/atom-one-dark.css' // 更现代的深色主题
 
 // 路由实例和用户store
 const router = useRouter()
@@ -443,43 +443,27 @@ const cleanAIResponse = (text) => {
   return cleaned
 }
 
-// 高质量语法高亮处理
+// 使用 highlight.js 进行语法高亮
 const highlightCode = (code, lang) => {
   if (!code) return ''
 
-  // 检测语言类型
-  const detectedLang = detectLanguage(code, lang)
-  const cleanLang = detectedLang.toLowerCase().replace(/[^a-z0-9]/g, '')
+  try {
+    // 检测语言类型
+    const detectedLang = detectLanguage(code, lang)
+    const cleanLang = detectedLang.toLowerCase().replace(/[^a-z0-9]/g, '')
 
-  // 应用语法高亮
-  let highlightedCode = escapeHtml(code)
-
-  // SQL特殊处理
-  if (cleanLang === 'sql' || isSQLCode(code)) {
-    highlightedCode = highlightSQL(code)
+    // 使用 highlight.js 进行高亮
+    if (cleanLang && cleanLang !== 'text' && hljs.getLanguage(cleanLang)) {
+      return hljs.highlight(code, { language: cleanLang, ignoreIllegals: true }).value
+    } else {
+      // 自动检测语言
+      const result = hljs.highlightAuto(code)
+      return result.value
+    }
+  } catch (error) {
+    console.error('Syntax highlighting error:', error)
+    return escapeHtml(code)
   }
-  // JavaScript/TypeScript处理
-  else if (cleanLang === 'javascript' || cleanLang === 'js' || cleanLang === 'typescript' || cleanLang === 'ts') {
-    highlightedCode = highlightJavaScript(code)
-  }
-  // Python处理
-  else if (cleanLang === 'python' || cleanLang === 'py') {
-    highlightedCode = highlightPython(code)
-  }
-  // Java处理
-  else if (cleanLang === 'java') {
-    highlightedCode = highlightJava(code)
-  }
-  // CSS处理
-  else if (cleanLang === 'css') {
-    highlightedCode = highlightCSS(code)
-  }
-  // 通用处理
-  else {
-    highlightedCode = highlightGeneric(code)
-  }
-
-  return highlightedCode
 }
 
 // 检测语言类型
@@ -509,149 +493,6 @@ const isSQLCode = (code) => {
   const sqlKeywords = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'ALTER', 'DROP', 'FROM', 'WHERE', 'GROUP BY', 'ORDER BY', 'HAVING', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN']
   const upperCode = code.toUpperCase()
   return sqlKeywords.some(keyword => upperCode.includes(keyword))
-}
-
-// SQL语法高亮
-const highlightSQL = (code) => {
-  const sqlPatterns = [
-    // 关键字
-    { pattern: /\b(SELECT|FROM|WHERE|GROUP BY|ORDER BY|HAVING|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TABLE|INDEX|VIEW|DATABASE|SCHEMA|PRIMARY|KEY|FOREIGN|REFERENCES|UNIQUE|NOT NULL|DEFAULT|AUTO_INCREMENT|VARCHAR|INT|BIGINT|TEXT|DATETIME|TIMESTAMP|BOOLEAN|CHAR|FLOAT|DOUBLE|DECIMAL|AS|ON|AND|OR|IN|EXISTS|BETWEEN|LIKE|IS|NULL|TRUE|FALSE|CASE|WHEN|THEN|ELSE|END|UNION|ALL|DISTINCT|COUNT|SUM|AVG|MIN|MAX|CAST|CONCAT|SUBSTRING|LENGTH|UPPER|LOWER|TRIM|COALESCE|IFNULL|ROUND|FLOOR|CEIL|MOD|ABS|POWER|SQRT)\b/gi, replacement: '<span class="sql-keyword">$1</span>' },
-
-    // 函数名
-    { pattern: /\b(COUNT|SUM|AVG|MIN|MAX|CAST|CONCAT|SUBSTRING|LENGTH|UPPER|LOWER|TRIM|COALESCE|IFNULL|ROUND|FLOOR|CEIL|MOD|ABS|POWER|SQRT|DATE_FORMAT|NOW|CURDATE|CURTIME)\s*\(/gi, replacement: '<span class="sql-function">$1</span>(' },
-
-    // 字符串
-    { pattern: /'([^']*)'/g, replacement: '<span class="sql-string">\'$1\'</span>' },
-    { pattern: /"([^"]*)"/g, replacement: '<span class="sql-string">"$1"</span>' },
-
-    // 数字
-    { pattern: /\b(\d+)\b/g, replacement: '<span class="sql-number">$1</span>' },
-
-    // 表名和列名
-    { pattern: /\b([a-zA-Z_][a-zA-Z0-9_]*)\s*(?=\.|\s*(?:AS\s+|FROM|WHERE|GROUP|ORDER|HAVING|JOIN|$))/gi, replacement: '<span class="sql-identifier">$1</span>' },
-
-    // 表别名
-    { pattern: /\b([a-zA-Z_][a-zA-Z0-9_]*)\s+AS\s+/gi, replacement: '<span class="sql-identifier">$1</span> AS ' },
-
-    // 操作符
-    { pattern: /(=|!=|<>|<=|>=|<|>|\+|-|\*|\/|%) /g, replacement: ' <span class="sql-operator">$1</span> ' },
-    { pattern: / (=|!=|<>|<=|>=|<|>|\+|-|\*|\/|%)$/g, replacement: ' <span class="sql-operator">$1</span>' },
-
-    // 逗号
-    { pattern: /,/g, replacement: '<span class="sql-comma">,</span>' },
-
-    // 括号
-    { pattern: /\(/g, replacement: '<span class="sql-bracket">(</span>' },
-    { pattern: /\)/g, replacement: '<span class="sql-bracket">)</span>' }
-  ]
-
-  let highlightedCode = code
-  sqlPatterns.forEach(({ pattern, replacement }) => {
-    highlightedCode = highlightedCode.replace(pattern, replacement)
-  })
-
-  return highlightedCode
-}
-
-// JavaScript语法高亮
-const highlightJavaScript = (code) => {
-  const jsPatterns = [
-    { pattern: /\b(function|const|let|var|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|new|class|extends|import|export|default|async|await|yield|this|super)\b/g, replacement: '<span class="js-keyword">$1</span>' },
-    { pattern: /'([^']*)'/g, replacement: '<span class="js-string">\'$1\'</span>' },
-    { pattern: /"([^"]*)"/g, replacement: '<span class="js-string">"$1"</span>' },
-    { pattern: /`([^`]*)`/g, replacement: '<span class="js-template">`$1`</span>' },
-    { pattern: /\b(\d+)\b/g, replacement: '<span class="js-number">$1</span>' },
-    { pattern: /\b(true|false|null|undefined)\b/g, replacement: '<span class="js-boolean">$1</span>' },
-    { pattern: /\/\/(.*)$/gm, replacement: '<span class="js-comment">//$1</span>' },
-    { pattern: /\/\*([\s\S]*?)\*\//g, replacement: '<span class="js-comment">/*$1*/</span>' }
-  ]
-
-  let highlightedCode = code
-  jsPatterns.forEach(({ pattern, replacement }) => {
-    highlightedCode = highlightedCode.replace(pattern, replacement)
-  })
-
-  return highlightedCode
-}
-
-// Python语法高亮
-const highlightPython = (code) => {
-  const pyPatterns = [
-    { pattern: /\b(def|class|if|elif|else|for|while|try|except|finally|return|yield|import|from|as|global|nonlocal|lambda|with|pass|break|continue|and|or|not|in|is|None|True|False)\b/g, replacement: '<span class="py-keyword">$1</span>' },
-    { pattern: /'([^']*)'/g, replacement: '<span class="py-string">\'$1\'</span>' },
-    { pattern: /"([^"]*)"/g, replacement: '<span class="py-string">"$1"</span>' },
-    { pattern: /\b(\d+)\b/g, replacement: '<span class="py-number">$1</span>' },
-    { pattern: /#(.*)$/gm, replacement: '<span class="py-comment">#$1</span>' }
-  ]
-
-  let highlightedCode = code
-  pyPatterns.forEach(({ pattern, replacement }) => {
-    highlightedCode = highlightedCode.replace(pattern, replacement)
-  })
-
-  return highlightedCode
-}
-
-// Java语法高亮
-const highlightJava = (code) => {
-  const javaPatterns = [
-    { pattern: /\b(public|private|protected|static|final|abstract|synchronized|volatile|transient|native|strictfp|class|interface|enum|extends|implements|import|package|void|boolean|byte|char|short|int|long|float|double|String|Object|System|out|print|println|return|if|else|for|while|do|try|catch|finally|throw|new|this|super)\b/g, replacement: '<span class="java-keyword">$1</span>' },
-    { pattern: /@Override|@Deprecated|@SuppressWarnings/g, replacement: '<span class="java-annotation">$1</span>' },
-    { pattern: /"([^"]*)"/g, replacement: '<span class="java-string">"$1"</span>' },
-    { pattern: /'([^']*)'/g, replacement: '<span class="java-char">\'$1\'</span>' },
-    { pattern: /\b(\d+)\b/g, replacement: '<span class="java-number">$1</span>' },
-    { pattern: /\/\/(.*)$/gm, replacement: '<span class="java-comment">//$1</span>' },
-    { pattern: /\/\*([\s\S]*?)\*\//g, replacement: '<span class="java-comment">/*$1*/</span>' }
-  ]
-
-  let highlightedCode = code
-  javaPatterns.forEach(({ pattern, replacement }) => {
-    highlightedCode = highlightedCode.replace(pattern, replacement)
-  })
-
-  return highlightedCode
-}
-
-// CSS语法高亮
-const highlightCSS = (code) => {
-  const cssPatterns = [
-    { pattern: /([a-zA-Z-]+)\s*:/g, replacement: '<span class="css-property">$1</span>:' },
-    { pattern: /#[a-zA-Z0-9_-]+/g, replacement: '<span class="css-id">$1</span>' },
-    { pattern: /\.[a-zA-Z0-9_-]+/g, replacement: '<span class="css-class">$1</span>' },
-    { pattern: /:([a-zA-Z-]+)(?=\s*[;{])/g, replacement: ':<span class="css-pseudo">$1</span>' },
-    { pattern: /"([^"]*)"/g, replacement: '<span class="css-string">"$1"</span>' },
-    { pattern: /'([^']*)'/g, replacement: '<span class="css-string">\'$1\'</span>' },
-    { pattern: /\b(\d+\.?\d*(px|em|rem|%|vh|vw|pt|pc|in|cm|mm|ex|ch|vw|vh|vmin|vmax))\b/g, replacement: '<span class="css-number">$1$2</span>' },
-    { pattern: /#[0-9a-fA-F]{3,6}\b/g, replacement: '<span class="css-color">$&</span>' },
-    { pattern: /rgb\((\d+,\s*\d+,\s*\d+)\)/g, replacement: 'rgb(<span class="css-number">$1</span>, <span class="css-number">$2</span>, <span class="css-number">$3</span>)' },
-    { pattern: /rgba\((\d+,\s*\d+,\s*\d+,\s*[\d.]+)\)/g, replacement: 'rgba(<span class="css-number">$1</span>, <span class="css-number">$2</span>, <span class="css-number">$3</span>, <span class="css-number">$4</span>)' },
-    { pattern: /\/\*([\s\S]*?)\*\//g, replacement: '<span class="css-comment">/*$1*/</span>' }
-  ]
-
-  let highlightedCode = code
-  cssPatterns.forEach(({ pattern, replacement }) => {
-    highlightedCode = highlightedCode.replace(pattern, replacement)
-  })
-
-  return highlightedCode
-}
-
-// 通用语法高亮
-const highlightGeneric = (code) => {
-  const genericPatterns = [
-    { pattern: /'([^']*)'/g, replacement: '<span class="code-string">\'$1\'</span>' },
-    { pattern: /"([^"]*)"/g, replacement: '<span class="code-string">"$1"</span>' },
-    { pattern: /\b(\d+)\b/g, replacement: '<span class="code-number">$1</span>' },
-    { pattern: /\/\/(.*)$/gm, replacement: '<span class="code-comment">//$1</span>' },
-    { pattern: /\/\*([\s\S]*?)\*\//g, replacement: '<span class="code-comment">/*$1*/</span>' }
-  ]
-
-  let highlightedCode = code
-  genericPatterns.forEach(({ pattern, replacement }) => {
-    highlightedCode = highlightedCode.replace(pattern, replacement)
-  })
-
-  return highlightedCode
 }
 
 // 改进的Markdown渲染方法
@@ -722,226 +563,18 @@ const renderMarkdown = (text) => {
   }
 }
 
-// 检测内容是否被截断的辅助函数
-const detectTruncatedContent = (text) => {
-  // 检测常见的截断模式
-  const truncationPatterns = [
-    // SQL关键字截断
-    /\b(ELECT|LECT|NSERT|PDATE|ELETE|ROM|HERE|RDER|ROUP|AVING|ND|N|S|NTO|NER|EFT|IGHT|OIN)\b/gi,
-    // 代码块未闭合
-    /```[^\n]*$/m,
-    /[^```]\n*```\s*$/m,
-    // 表格未完成
-    /\|[^|]*$/m,
-    // 句子不完整（以常见介词、连词结尾）
-    /\b(and|or|but|in|on|at|to|for|with|by|from|up|about|into|through|during|before|after|above|below|between|among|within|without|upon|across|behind|beyond|plus|except|but|nor|yet|so|since|unless|until|while|whereas|if|when|where|why|how|that|which|who|whom|whose|what|whatever|whichever|whoever|whomever|whenever|wherever|however)\s*$/i,
-    // 字符串未闭合
-    /'[^']*$/m,
-    /"[^"]*$/m,
-    // 括号不匹配
-    /(\([^)]*$|^\([^)]*$|\[[^\]]*$|^\[[^\]]*$|\{[^}]*$|^\{[^}]*$)/m,
-    // 标记不完整
-    /\*\*[^*]*$/m,
-    /\*[^*]*$/m,
-    /#[^#\s]*$/m,
-    // 句子中间突然结束（大写字母后跟标点但没有后续内容）
-    /[A-Z][a-z]*[^.!?]*[.!?]?\s*$/m
-  ]
-
-  return truncationPatterns.some(pattern => pattern.test(text))
-}
-
-// 修复截断内容的辅助函数
-const fixTruncatedContent = (text) => {
-  let fixedText = text
-
-  // 修复SQL关键字截断 - 更加全面的版本
-  const sqlFixes = {
-    'ELECT': 'SELECT',
-    'LECT': 'SELECT',
-    'NSERT': 'INSERT',
-    'PDATE': 'UPDATE',
-    'ELETE': 'DELETE',
-    'ROM': 'FROM',
-    'HERE': 'WHERE',
-    'RDER': 'ORDER',
-    'ROUP': 'GROUP',
-    'AVING': 'HAVING',
-    'ND': 'AND',
-    'N': 'IN',
-    'S': 'AS',
-    'NTO': 'INTO',
-    'NER': 'INNER',
-    'EFT': 'LEFT',
-    'IGHT': 'RIGHT',
-    'OIN': 'JOIN'
-  }
-
-  // 应用SQL修复
-  Object.entries(sqlFixes).forEach(([broken, correct]) => {
-    const regex = new RegExp(`\\b${broken}\\b`, 'gi')
-    fixedText = fixedText.replace(regex, correct)
-  })
-
-  // 修复代码块
-  const codeBlockCount = (fixedText.match(/```/g) || []).length
-  if (codeBlockCount % 2 !== 0) {
-    fixedText += '\n```'
-  }
-
-  // 修复加粗标记
-  const boldCount = (fixedText.match(/\*\*/g) || []).length
-  if (boldCount % 2 !== 0) {
-    fixedText += '**'
-  }
-
-  // 修复斜体标记
-  const italicCount = (fixedText.match(/(?<!\*)\*(?!\*)/g) || []).length
-  if (italicCount % 2 !== 0) {
-    fixedText += '*'
-  }
-
-  // 修复单引号
-  const singleQuoteCount = (fixedText.match(/'/g) || []).length
-  if (singleQuoteCount % 2 !== 0) {
-    fixedText += "'"
-  }
-
-  // 修复双引号
-  const doubleQuoteCount = (fixedText.match(/"/g) || []).length
-  if (doubleQuoteCount % 2 !== 0) {
-    fixedText += '"'
-  }
-
-  return fixedText
-}
-
 // 预处理Markdown文本，修复流式传输问题
 const preprocessMarkdown = (text) => {
-  const backtick3 = '```'
-  const pipe = '|'
+  if (!text) return ''
 
-  // 首先检测并修复截断内容
-  let processedText = text
-  if (detectTruncatedContent(text)) {
-    processedText = fixTruncatedContent(text)
-  }
-
-  return processedText
-    // 修复标题格式 - 处理各种标题格式
-    .replace(/^(\s*)([一二三四五六七八九十]+)[、：:]\s*(.+?)$/gm, (_, indent, number, content) => {
-      const level = number.length
-      return `${indent}${'#'.repeat(level)} ${content.trim()}\n`
-    })
-    .replace(/^(\s*)(第[一二三四五六七八九十]+[章节标题])[:：]\s*(.+?)$/gm, (_, prefix, title, content) => {
-      return `${prefix}：${content}\n`
-    })
-    // 修复数字标题格式
-    .replace(/^(\s*)(\d+)\.[：:\s]*(.+?)$/gm, (_, indent, num, content) => {
-      return `${indent}${num}. ${content.trim()}\n`
-    })
-    // 修复混乱的标题分级
-    .replace(/^([#\s]*)([^#\s][^#\n]*?)$/gm, (match, prefix, content) => {
-      if (content.match(/^(一级|二级|三级|四级|五级|六级)标题[：:]/)) {
-        const levelMatch = content.match(/^(一级|二级|三级|四级|五级|六级)标题[：:]\s*(.+)$/)
-        if (levelMatch) {
-          const levelMap = {'一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6}
-          const level = levelMap[levelMatch[1][0]] || 1
-          return `${'#'.repeat(level)} ${levelMatch[2].trim()}\n`
-        }
-      }
-      return match
-    })
-    // 额外的SQL关键字修复（保留原有的作为后备）
-    .replace(/ELECT\s+/g, 'SELECT ')
-    .replace(/LECT\s+/g, 'SELECT ')
-    .replace(/ELECT/g, 'SELECT')
-    .replace(/INSERT\s+/g, 'INSERT ')
-    .replace(/UPDATE\s+/g, 'UPDATE ')
-    .replace(/DELETE\s+/g, 'DELETE ')
-    .replace(/FROM\s+/g, 'FROM ')
-    .replace(/WHERE\s+/g, 'WHERE ')
-    .replace(/INNER\s+JOIN/g, 'INNER JOIN')
-    .replace(/LEFT\s+JOIN/g, 'LEFT JOIN')
-    .replace(/RIGHT\s+JOIN/g, 'RIGHT JOIN')
-    .replace(/ORDER\s+BY/g, 'ORDER BY')
-    .replace(/GROUP\s+BY/g, 'GROUP BY')
-    .replace(/HAVING\s+/g, 'HAVING ')
-    .replace(/AND\s+/g, 'AND ')
-    .replace(/OR\s+/g, 'OR ')
-    .replace(/ON\s+/g, 'ON ')
-    .replace(/AS\s+/g, 'AS ')
-    // 修复JOIN语句后的空格问题
-    .replace(/JOIN(\w+)/g, 'JOIN $1')
-    .replace(/t_\w+/g, (match) => {
-      // 修复表名截断，如 t_dzzh → t_dzzh
-      if (match.startsWith('t_') && match.length <= 10) {
-        return match + '_device_detection_gis'
-      }
-      return match
-    })
-    // 修复混乱的列表格式
-    .replace(/^([•·▪▫–—])\s*(.+?)$/gm, '- $2')
-    .replace(/^[a-zA-Z]\)\s*(.+?)$/gm, (match, content) => `- ${content.trim()}`)
-    .replace(/^\d+\)\s*(.+?)$/gm, (match, content) => `- ${content.trim()}`)
-    // 修复换行后的列表项
-    .replace(/([^-])\n([•·▪▫–—])\s*/g, '$1\n- ')
-    // 修复任务列表格式
-    .replace(/\[([ x])\]\s*(.+?)$/gm, (match, check, content) => {
-      const isChecked = check === 'x' ? 'x' : ' '
-      return `[${isChecked}] ${content.trim()}`
-    })
-    // 修复代码块格式 - 更加智能的处理
-    .replace(/```(\s*[a-zA-Z0-9]+)?\s*([^\n]*?)\n/g, (match, lang, firstLine) => {
-      const cleanLang = lang ? lang.trim() : ''
-      // 如果第一行看起来像代码内容，添加换行
-      if (firstLine && !firstLine.includes('```')) {
-        return `${backtick3}${cleanLang}\n${firstLine}\n`
-      }
-      return `${backtick3}${cleanLang}\n`
-    })
-    // 修复不完整的代码块结尾
-    .replace(/([^\n])\n*```$/gm, '$1\n```')
-    // 修复SQL关键字和变量之间的空格问题
-    .replace(/(\w+)(\n+[A-Z_]+)/g, '$1 $2')
-    // 修复变量名和运算符之间的空格
-    .replace(/([a-zA-Z_])([<>=!])/g, '$1 $2')
-    .replace(/([<>=!])([a-zA-Z_])/g, '$1 $2')
-    // 修复数字和关键字之间的空格
-    .replace(/(\d+)([A-Za-z_]+)/g, '$1 $2')
-    // 修复表格格式 - 增强版本
-    .replace(/\|([^|\n]+)\|/g, (match, content, offset, string) => {
-      const nextLineIndex = string.indexOf('\n', offset)
-      if (nextLineIndex === -1) return match
-
-      const currentLine = string.substring(offset, nextLineIndex)
-      const hasSeparator = currentLine.includes('---') || currentLine.includes('===')
-
-      // 如果当前行是表头且下一行没有分隔符，添加分隔符
-      if (!hasSeparator && offset > 0 && string[offset - 1] === '\n') {
-        const columnCount = (match.match(/\|/g) || []).length - 1
-        const separator = '\n' + Array(columnCount).fill('---').join('|') + '|\n'
-        return match + separator
-      }
-
-      return match
-    })
-    // 修复破碎的表格行
-    .replace(/([^|])\s*\|\s*([^|])/g, '$1 | $2')
-    .replace(/\|\s*$/gm, ' |')
-    .replace(/^\s*\|/gm, '| ')
-    // 修复段落分隔
-    .replace(/([。！？])\s*([一二三四五六七八九十]+)[、：:]/g, '$1\n\n$2：')
-    .replace(/([。！？])\s*(第[一二三四五六七八九十]+[章节标题])/g, '$1\n\n$2')
-    // 标准化标题格式
-    .replace(/^(#{1,6})\s*/gm, '$1 ')
-    // 修复多余的分隔符
-    .replace(/---+\s*\|\s*---+/g, '---|---')
-    // 修复多余的空格和换行
+  // 只做必要的清理，不破坏正常的 Markdown 语法
+  return text
+    // 修复多余的连续换行（保留最多2个）
     .replace(/\n{3,}/g, '\n\n')
+    // 移除行尾多余空格
     .replace(/[ \t]+$/gm, '')
-    // 清理行首行尾空白
-    .replace(/^\s+|\s+$/gm, '')
+    // 修复代码块的不完整结束标记
+    .replace(/([^\n])\n*```$/gm, '$1\n```')
 }
 
 // 增强的文本渲染，处理基本的格式
@@ -2503,15 +2136,21 @@ onUnmounted(() => {
   font-size: 14px;
 }
 
-/* 代码块容器 */
+/* 代码块容器 - 现代化设计 */
 .code-block-wrapper {
-  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  background: #282c34;
   border-radius: 12px;
   margin: 16px 0;
   overflow: hidden;
   position: relative;
-  border: 1px solid #475569;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  border: 1px solid #3e4451;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+}
+
+.code-block-wrapper:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  transform: translateY(-2px);
 }
 
 .markdown-content pre {
@@ -2530,18 +2169,19 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  background: rgba(0, 0, 0, 0.2);
-  border-bottom: 1px solid #475569;
-  min-height: 44px;
+  padding: 10px 16px;
+  background: rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid #3e4451;
+  min-height: 40px;
+  backdrop-filter: blur(10px);
 }
 
 .code-language {
   font-size: 12px;
   font-weight: 600;
-  color: #94a3b8;
+  color: #abb2bf;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2551,8 +2191,20 @@ onUnmounted(() => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #10b981;
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+  background: #98c379;
+  box-shadow: 0 0 10px rgba(152, 195, 121, 0.5);
+  animation: pulseDot 2s ease-in-out infinite;
+}
+
+@keyframes pulseDot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.15);
+  }
 }
 
 .code-actions {
@@ -2561,10 +2213,10 @@ onUnmounted(() => {
 }
 
 .copy-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #94a3b8;
-  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #abb2bf;
+  padding: 5px 12px;
   border-radius: 6px;
   font-size: 12px;
   cursor: pointer;
@@ -2577,290 +2229,17 @@ onUnmounted(() => {
 
 .copy-btn:hover {
   background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: #e2e8f0;
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
   transform: translateY(-1px);
 }
 
 .copy-btn.copied {
-  background: #10b981;
-  border-color: #10b981;
+  background: #98c379;
+  border-color: #98c379;
   color: white;
 }
 
-/* 代码内容区域 */
-.markdown-content pre code {
-  display: block;
-  padding: 20px;
-  background: transparent;
-  color: #e2e8f0;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 14px;
-  line-height: 1.6;
-  overflow-x: auto;
-  border-radius: 0;
-  white-space: pre;
-  word-wrap: normal;
-}
-
-/* 内联代码 */
-.markdown-content :not(pre) > code {
-  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
-  border: 1px solid #cbd5e1;
-  padding: 3px 6px;
-  border-radius: 6px;
-  font-size: 13px;
-  color: #1e293b;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-weight: 500;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-/* SQL语法高亮 */
-.sql-keyword {
-  color: #f472b6;
-  font-weight: 600;
-  text-shadow: 0 0 8px rgba(244, 114, 182, 0.3);
-}
-
-.sql-function {
-  color: #60a5fa;
-  font-weight: 500;
-}
-
-.sql-string {
-  color: #34d399;
-  font-style: italic;
-}
-
-.sql-number {
-  color: #fbbf24;
-  font-weight: 500;
-}
-
-.sql-operator {
-  color: #a78bfa;
-  font-weight: 600;
-}
-
-.sql-comment {
-  color: #64748b;
-  font-style: italic;
-  opacity: 0.8;
-}
-
-.sql-type {
-  color: #fb923c;
-  font-weight: 500;
-}
-
-/* JavaScript语法高亮 */
-.js-keyword {
-  color: #c084fc;
-  font-weight: 600;
-  text-shadow: 0 0 8px rgba(192, 132, 252, 0.3);
-}
-
-.js-function {
-  color: #60a5fa;
-  font-weight: 500;
-}
-
-.js-string {
-  color: #34d399;
-  font-style: italic;
-}
-
-.js-number {
-  color: #fbbf24;
-  font-weight: 500;
-}
-
-.js-comment {
-  color: #64748b;
-  font-style: italic;
-  opacity: 0.8;
-}
-
-.js-regexp {
-  color: #f87171;
-  font-style: italic;
-}
-
-/* Python语法高亮 */
-.python-keyword {
-  color: #c084fc;
-  font-weight: 600;
-  text-shadow: 0 0 8px rgba(192, 132, 252, 0.3);
-}
-
-.python-function {
-  color: #60a5fa;
-  font-weight: 500;
-}
-
-.python-string {
-  color: #34d399;
-  font-style: italic;
-}
-
-.python-number {
-  color: #fbbf24;
-  font-weight: 500;
-}
-
-.python-comment {
-  color: #64748b;
-  font-style: italic;
-  opacity: 0.8;
-}
-
-.python-builtin {
-  color: #fb923c;
-  font-weight: 500;
-}
-
-/* Java语法高亮 */
-.java-keyword {
-  color: #c084fc;
-  font-weight: 600;
-  text-shadow: 0 0 8px rgba(192, 132, 252, 0.3);
-}
-
-.java-annotation {
-  color: #f472b6;
-  font-weight: 500;
-}
-
-.java-string {
-  color: #34d399;
-  font-style: italic;
-}
-
-.java-number {
-  color: #fbbf24;
-  font-weight: 500;
-}
-
-.java-comment {
-  color: #64748b;
-  font-style: italic;
-  opacity: 0.8;
-}
-
-.java-type {
-  color: #60a5fa;
-  font-weight: 500;
-}
-
-/* CSS语法高亮 */
-.css-selector {
-  color: #f472b6;
-  font-weight: 600;
-}
-
-.css-property {
-  color: #60a5fa;
-  font-weight: 500;
-}
-
-.css-value {
-  color: #34d399;
-  font-style: italic;
-}
-
-.css-unit {
-  color: #fbbf24;
-  font-weight: 500;
-}
-
-.css-important {
-  color: #f87171;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-/* 通用语法高亮 */
-.syntax-bracket {
-  color: #94a3b8;
-  font-weight: 600;
-}
-
-.syntax-punctuation {
-  color: #64748b;
-}
-
-.syntax-variable {
-  color: #38bdf8;
-  font-weight: 500;
-}
-
-.syntax-class {
-  color: #fb923c;
-  font-weight: 500;
-}
-
-.syntax-method {
-  color: #60a5fa;
-  font-weight: 500;
-}
-
-/* 代码块动画效果 */
-.code-block-wrapper {
-  animation: codeBlockFadeIn 0.4s ease-out;
-}
-
-@keyframes codeBlockFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* 代码块内容增强效果 */
-.markdown-content pre code {
-  position: relative;
-  z-index: 1;
-}
-
-.markdown-content pre code::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.02) 0%, transparent 100%);
-  z-index: -1;
-  pointer-events: none;
-}
-
-/* 代码块头部增强 */
-.code-block-header {
-  backdrop-filter: blur(8px);
-}
-
-/* 语言指示点动画 */
-.code-language-dot {
-  animation: pulseDot 2s ease-in-out infinite;
-}
-
-@keyframes pulseDot {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.7;
-    transform: scale(1.1);
-  }
-}
-
-/* 复制按钮动画 */
 .copy-animation {
   animation: copySuccess 0.3s ease-out;
 }
@@ -2877,30 +2256,142 @@ onUnmounted(() => {
   }
 }
 
+/* 代码内容区域 */
+.markdown-content pre code {
+  display: block;
+  padding: 20px;
+  background: transparent;
+  color: #abb2bf;
+  font-family: 'Consolas', 'Monaco', 'Courier New', 'Fira Code', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-x: auto;
+  border-radius: 0;
+  white-space: pre;
+  word-wrap: normal;
+  tab-size: 4;
+}
+
+/* highlight.js 主题适配 */
+.markdown-content pre code .hljs-comment,
+.markdown-content pre code .hljs-quote {
+  color: #5c6370;
+  font-style: italic;
+}
+
+.markdown-content pre code .hljs-keyword,
+.markdown-content pre code .hljs-selector-tag,
+.markdown-content pre code .hljs-literal,
+.markdown-content pre code .hljs-section,
+.markdown-content pre code .hljs-link {
+  color: #c678dd;
+  font-weight: 600;
+}
+
+.markdown-content pre code .hljs-function .hljs-keyword {
+  color: #c678dd;
+}
+
+.markdown-content pre code .hljs-subst {
+  color: #e06c75;
+}
+
+.markdown-content pre code .hljs-string,
+.markdown-content pre code .hljs-title,
+.markdown-content pre code .hljs-name,
+.markdown-content pre code .hljs-type,
+.markdown-content pre code .hljs-attribute,
+.markdown-content pre code .hljs-symbol,
+.markdown-content pre code .hljs-bullet,
+.markdown-content pre code .hljs-addition,
+.markdown-content pre code .hljs-variable,
+.markdown-content pre code .hljs-template-tag,
+.markdown-content pre code .hljs-template-variable {
+  color: #98c379;
+}
+
+.markdown-content pre code .hljs-number,
+.markdown-content pre code .hljs-selector-attr,
+.markdown-content pre code .hljs-selector-pseudo {
+  color: #d19a66;
+}
+
+.markdown-content pre code .hljs-built_in,
+.markdown-content pre code .hljs-builtin-name,
+.markdown-content pre code .hljs-class .hljs-title {
+  color: #e6c07b;
+}
+
+.markdown-content pre code .hljs-attr,
+.markdown-content pre code .hljs-variable,
+.markdown-content pre code .hljs-template-variable,
+.markdown-content pre code .hljs-class .hljs-title,
+.markdown-content pre code .hljs-type {
+  color: #e6c07b;
+}
+
+.markdown-content pre code .hljs-selector-class,
+.markdown-content pre code .hljs-selector-id {
+  color: #e6c07b;
+}
+
+.markdown-content pre code .hljs-meta,
+.markdown-content pre code .hljs-meta-keyword {
+  color: #61afef;
+}
+
+.markdown-content pre code .hljs-meta-string {
+  color: #98c379;
+}
+
+.markdown-content pre code .hljs-deletion {
+  color: #e06c75;
+}
+
+.markdown-content pre code .hljs-regexp {
+  color: #56b6c2;
+}
+
+.markdown-content pre code .hljs-emphasis {
+  font-style: italic;
+}
+
+.markdown-content pre code .hljs-strong {
+  font-weight: bold;
+}
+
 /* 代码块滚动条美化 */
 .markdown-content pre code::-webkit-scrollbar {
   height: 8px;
 }
 
 .markdown-content pre code::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.2);
   border-radius: 4px;
 }
 
 .markdown-content pre code::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.2);
   border-radius: 4px;
+  transition: background 0.2s ease;
 }
 
 .markdown-content pre code::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.3);
 }
 
-/* 代码块hover效果 */
-.code-block-wrapper:hover {
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
-  transform: translateY(-2px);
-  transition: all 0.2s ease;
+/* 内联代码样式 */
+.markdown-content :not(pre) > code {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  color: #92400e;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid #fbbf24;
+  box-shadow: 0 1px 3px rgba(251, 191, 36, 0.2);
+  font-family: 'Consolas', 'Monaco', 'Courier New', 'Fira Code', monospace;
+  white-space: nowrap;
 }
 
 /* 响应式设计 */

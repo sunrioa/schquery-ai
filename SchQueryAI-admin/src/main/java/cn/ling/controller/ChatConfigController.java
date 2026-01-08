@@ -33,6 +33,10 @@ public class ChatConfigController {
     private static final String KEY_REPETITION_PENALTY = "chat.default.repetition_penalty";
     private static final String KEY_MCP_SERVERS = "chat.default.mcpServers";
     private static final String KEY_MCP_MODE = "chat.default.mcpMode";
+    private static final String KEY_PROMPT_MERGE_MODE = "chat.default.promptMergeMode";
+    private static final String KEY_WEIGHT_USER = "chat.weight.user";
+    private static final String KEY_WEIGHT_KNOWLEDGE = "chat.weight.knowledge";
+    private static final String KEY_WEIGHT_MCP = "chat.weight.mcp";
 
     @Resource
     private SysConfigService sysConfigService;
@@ -53,6 +57,10 @@ public class ChatConfigController {
         dto.setRepetition_penalty(parseDouble(sysConfigService.getConfigValue(KEY_REPETITION_PENALTY), null));
         dto.setMcpServers(sysConfigService.getConfigValue(KEY_MCP_SERVERS));
         dto.setMcpMode(sysConfigService.getConfigValue(KEY_MCP_MODE));
+        dto.setPromptMergeMode(normalizePromptMergeMode(sysConfigService.getConfigValue(KEY_PROMPT_MERGE_MODE)));
+        dto.setWeightUser(parseDouble(sysConfigService.getConfigValue(KEY_WEIGHT_USER), 0.6));
+        dto.setWeightKnowledge(parseDouble(sysConfigService.getConfigValue(KEY_WEIGHT_KNOWLEDGE), 0.25));
+        dto.setWeightMcp(parseDouble(sysConfigService.getConfigValue(KEY_WEIGHT_MCP), 0.15));
         return Result.success(dto);
     }
 
@@ -75,6 +83,18 @@ public class ChatConfigController {
         upsert(KEY_REPETITION_PENALTY, "repetition_penalty", dto.getRepetition_penalty() == null ? null : String.valueOf(dto.getRepetition_penalty()), "默认对话参数");
         upsert(KEY_MCP_SERVERS, "MCP服务URL列表", trimToNull(dto.getMcpServers()), "MCP配置");
         upsert(KEY_MCP_MODE, "MCP检索策略", normalizeMcpMode(dto.getMcpMode()), "MCP配置");
+        if (dto.getPromptMergeMode() != null) {
+            upsert(KEY_PROMPT_MERGE_MODE, "提示词融合模式", normalizePromptMergeMode(dto.getPromptMergeMode()), "提示词融合策略");
+        }
+        if (dto.getWeightUser() != null) {
+            upsert(KEY_WEIGHT_USER, "用户提示词权重", String.valueOf(normalizeWeight(dto.getWeightUser(), 0.6)), "提示词融合策略");
+        }
+        if (dto.getWeightKnowledge() != null) {
+            upsert(KEY_WEIGHT_KNOWLEDGE, "知识库权重", String.valueOf(normalizeWeight(dto.getWeightKnowledge(), 0.25)), "提示词融合策略");
+        }
+        if (dto.getWeightMcp() != null) {
+            upsert(KEY_WEIGHT_MCP, "MCP权重", String.valueOf(normalizeWeight(dto.getWeightMcp(), 0.15)), "提示词融合策略");
+        }
 
         return Result.success("保存成功");
     }
@@ -125,5 +145,31 @@ public class ChatConfigController {
             default -> "fallback";
         };
     }
-}
 
+    private static String normalizePromptMergeMode(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return "user_first";
+        }
+        String normalized = raw.trim().toLowerCase();
+        return switch (normalized) {
+            case "user_first", "user", "userfirst" -> "user_first";
+            case "knowledge_first", "knowledge", "knowledgefirst" -> "knowledge_first";
+            case "balanced", "balance" -> "balanced";
+            case "layered", "layer" -> "layered";
+            default -> "user_first";
+        };
+    }
+
+    private static double normalizeWeight(Double raw, double def) {
+        if (raw == null || !Double.isFinite(raw)) {
+            return def;
+        }
+        if (raw < 0) {
+            return 0;
+        }
+        if (raw > 1) {
+            return 1;
+        }
+        return raw;
+    }
+}

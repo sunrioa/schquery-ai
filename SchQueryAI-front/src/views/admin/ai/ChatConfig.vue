@@ -232,6 +232,118 @@
                   <el-input v-model="currentPreset.remark" type="textarea" :rows="2" />
                 </el-form-item>
 
+                <div class="form-section-title">提示词融合策略</div>
+                <el-row :gutter="24">
+                  <el-col :span="12">
+                    <el-form-item>
+                      <template #label>
+                        <div class="form-label-container">
+                          <span>提示词融合模式</span>
+                          <el-tooltip content="为空则跟随全局配置" placement="top">
+                            <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                          </el-tooltip>
+                        </div>
+                      </template>
+                      <el-select
+                        v-model="currentPreset.promptMergeMode"
+                        clearable
+                        style="width: 100%"
+                        :placeholder="`跟随全局（当前：${defaultConfig?.promptMergeMode || 'user_first'}）`"
+                      >
+                        <el-option label="用户优先 (user_first)" value="user_first" />
+                        <el-option label="知识库优先 (knowledge_first)" value="knowledge_first" />
+                        <el-option label="平衡 (balanced)" value="balanced" />
+                        <el-option label="分层 (layered)" value="layered" />
+                      </el-select>
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+
+                <el-row v-if="currentPreset.promptMergeMode === 'balanced'" :gutter="24">
+                  <el-col :span="8">
+                    <el-form-item>
+                      <template #label>
+                        <div class="form-label-container">
+                          <span>用户权重</span>
+                          <el-tooltip content="仅 balanced 生效，范围 0~1（留空=跟随全局）" placement="top">
+                            <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                          </el-tooltip>
+                        </div>
+                      </template>
+                      <el-input-number
+                        v-model="currentPreset.weightUser"
+                        :min="0"
+                        :max="1"
+                        :step="0.01"
+                        controls-position="right"
+                        style="width: 100%"
+                      />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="8">
+                    <el-form-item>
+                      <template #label>
+                        <div class="form-label-container">
+                          <span>知识库权重</span>
+                          <el-tooltip content="仅 balanced 生效，范围 0~1（留空=跟随全局）" placement="top">
+                            <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                          </el-tooltip>
+                        </div>
+                      </template>
+                      <el-input-number
+                        v-model="currentPreset.weightKnowledge"
+                        :min="0"
+                        :max="1"
+                        :step="0.01"
+                        controls-position="right"
+                        style="width: 100%"
+                      />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="8">
+                    <el-form-item>
+                      <template #label>
+                        <div class="form-label-container">
+                          <span>MCP 权重</span>
+                          <el-tooltip content="仅 balanced 生效，范围 0~1（留空=跟随全局）" placement="top">
+                            <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                          </el-tooltip>
+                        </div>
+                      </template>
+                      <el-input-number
+                        v-model="currentPreset.weightMcp"
+                        :min="0"
+                        :max="1"
+                        :step="0.01"
+                        controls-position="right"
+                        style="width: 100%"
+                      />
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+
+                <el-alert
+                  v-if="currentPreset.promptMergeMode === 'balanced'"
+                  :type="presetWeightSumValid ? 'success' : 'warning'"
+                  show-icon
+                  :closable="false"
+                  :title="presetWeightAllNull
+                    ? `权重：跟随全局（用户 ${defaultConfig?.weightUser ?? '-'} / 知识库 ${defaultConfig?.weightKnowledge ?? '-'} / MCP ${defaultConfig?.weightMcp ?? '-'}）`
+                    : `权重总和：${presetWeightSumText}（需=1.00）`"
+                  description="balanced 模式会按权重比例分配各部分提示词长度；可全部留空跟随全局，也可自定义三项权重（总和需为 1.00）。"
+                  style="margin: 6px 0 12px;"
+                />
+
+                <el-button
+                  v-if="currentPreset.promptMergeMode === 'balanced' && !presetWeightAllNull"
+                  type="primary"
+                  link
+                  style="padding: 0; margin-top: -4px; margin-bottom: 8px;"
+                  @click="resetPresetMergeWeights"
+                >
+                  清空权重（跟随全局）
+                </el-button>
+
                 <div class="form-section-title">RAG 与 MCP 策略</div>
                 <el-row :gutter="24">
                   <el-col :span="12">
@@ -301,6 +413,168 @@
         </div>
       </el-tab-pane>
 
+      <el-tab-pane name="defaults">
+        <template #label>
+          <span class="tab-label"><el-icon><Setting /></el-icon>全局配置</span>
+        </template>
+        <div class="tab-content global-config" v-loading="defaultConfigLoading">
+          <div class="global-config-inner">
+            <el-alert
+              type="info"
+              show-icon
+              :closable="false"
+              title="提示词融合策略与 MCP 默认配置"
+              description="这里的配置会写入 sys_config，影响全局默认行为（对话预设未指定时也会生效）。"
+              style="margin-bottom: 16px;"
+            />
+
+            <el-form :model="defaultConfig" label-position="top" class="custom-form">
+              <el-row :gutter="24">
+                <el-col :span="12">
+                  <el-form-item>
+                    <template #label>
+                      <div class="form-label-container">
+                        <span>提示词融合模式</span>
+                        <el-tooltip content="user_first/knowledge_first/balanced/layered" placement="top">
+                          <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                        </el-tooltip>
+                      </div>
+                    </template>
+                    <el-select v-model="defaultConfig.promptMergeMode" style="width: 100%">
+                      <el-option label="用户优先 (user_first)" value="user_first" />
+                      <el-option label="知识库优先 (knowledge_first)" value="knowledge_first" />
+                      <el-option label="平衡 (balanced)" value="balanced" />
+                      <el-option label="分层 (layered)" value="layered" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item>
+                    <template #label>
+                      <div class="form-label-container">
+                        <span>MCP 运行模式</span>
+                        <el-tooltip content="off/fallback/merge" placement="top">
+                          <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                        </el-tooltip>
+                      </div>
+                    </template>
+                    <el-select v-model="defaultConfig.mcpMode" style="width: 100%">
+                      <el-option label="关闭 (Off)" value="off" />
+                      <el-option label="降级 (Fallback)" value="fallback" />
+                      <el-option label="合并 (Merge)" value="merge" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <el-row :gutter="24">
+                <el-col :span="8">
+                  <el-form-item>
+                    <template #label>
+                      <div class="form-label-container">
+                        <span>用户权重</span>
+                        <el-tooltip content="仅 balanced 生效，范围 0~1" placement="top">
+                          <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                        </el-tooltip>
+                      </div>
+                    </template>
+                    <el-input-number
+                      v-model="defaultConfig.weightUser"
+                      :min="0"
+                      :max="1"
+                      :step="0.01"
+                      :disabled="defaultConfig.promptMergeMode !== 'balanced'"
+                      controls-position="right"
+                      style="width: 100%"
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item>
+                    <template #label>
+                      <div class="form-label-container">
+                        <span>知识库权重</span>
+                        <el-tooltip content="仅 balanced 生效，范围 0~1" placement="top">
+                          <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                        </el-tooltip>
+                      </div>
+                    </template>
+                    <el-input-number
+                      v-model="defaultConfig.weightKnowledge"
+                      :min="0"
+                      :max="1"
+                      :step="0.01"
+                      :disabled="defaultConfig.promptMergeMode !== 'balanced'"
+                      controls-position="right"
+                      style="width: 100%"
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item>
+                    <template #label>
+                      <div class="form-label-container">
+                        <span>MCP 权重</span>
+                        <el-tooltip content="仅 balanced 生效，范围 0~1" placement="top">
+                          <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                        </el-tooltip>
+                      </div>
+                    </template>
+                    <el-input-number
+                      v-model="defaultConfig.weightMcp"
+                      :min="0"
+                      :max="1"
+                      :step="0.01"
+                      :disabled="defaultConfig.promptMergeMode !== 'balanced'"
+                      controls-position="right"
+                      style="width: 100%"
+                    />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <el-alert
+                v-if="defaultConfig.promptMergeMode === 'balanced'"
+                :type="weightSumValid ? 'success' : 'warning'"
+                show-icon
+                :closable="false"
+                :title="`权重总和：${weightSumText}（需=1.00）`"
+                description="balanced 模式会按权重比例分配各部分提示词长度；为避免理解偏差，三项权重和需为 1.00。"
+                style="margin: 6px 0 12px;"
+              />
+
+              <el-form-item>
+                <template #label>
+                  <div class="form-label-container">
+                    <span>MCP 服务器</span>
+                    <el-tooltip content="多个地址用英文逗号分隔" placement="top">
+                      <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                    </el-tooltip>
+                  </div>
+                </template>
+                <el-input
+                  v-model="defaultConfig.mcpServers"
+                  type="textarea"
+                  :rows="3"
+                  placeholder="例如：http://localhost:8081/mcp,http://localhost:8082/mcp"
+                />
+              </el-form-item>
+
+              <div class="global-config-actions">
+                <el-button
+                  type="primary"
+                  :loading="defaultConfigSaving"
+                  :disabled="!defaultConfigLoaded || !weightSumValid"
+                  @click="saveDefaultConfig"
+                >
+                  保存全局配置
+                </el-button>
+              </div>
+            </el-form>
+          </div>
+        </div>
+      </el-tab-pane>
+
     </el-tabs>
   </div>
 </template>
@@ -315,10 +589,12 @@ import {
   Search,
   Star,
   User,
+  Setting,
   QuestionFilled
 } from '@element-plus/icons-vue'
 import { getChatModelList } from '../../../api/ai/chatModel'
 import { getDefaultChatPresetId, getChatPresetList, removeChatPreset, saveChatPreset, setDefaultChatPresetId } from '../../../api/ai/chatPreset'
+import { getChatDefaultConfig, saveChatDefaultConfig } from '../../../api/ai/chatConfig'
 import { getKnowledgeList } from '../../../api/ai/knowledge'
 import { refreshMcpClients } from '../../../api/ai/mcp'
 
@@ -327,6 +603,49 @@ const presetsLoading = ref(false)
 const presetSaving = ref(false)
 const refreshingMcp = ref(false)
 
+const defaultConfigLoading = ref(false)
+const defaultConfigLoaded = ref(false)
+const defaultConfigSaving = ref(false)
+const defaultConfig = ref({
+  model: '',
+  kid: '',
+  kName: '',
+  talkCount: 10,
+  max_tokens: 1024,
+  systemMessage: '',
+  temperature: 0.5,
+  top_p: 1,
+  presence_penalty: 0,
+  frequency_penalty: 0,
+  repetition_penalty: 1,
+  mcpServers: '',
+  mcpMode: 'fallback',
+  promptMergeMode: 'user_first',
+  weightUser: 0.6,
+  weightKnowledge: 0.25,
+  weightMcp: 0.15
+})
+
+const weightSum = computed(() => {
+  const u = Number(defaultConfig.value?.weightUser ?? 0)
+  const k = Number(defaultConfig.value?.weightKnowledge ?? 0)
+  const m = Number(defaultConfig.value?.weightMcp ?? 0)
+  if (!Number.isFinite(u) || !Number.isFinite(k) || !Number.isFinite(m)) return NaN
+  return u + k + m
+})
+
+const weightSumText = computed(() => {
+  const sum = weightSum.value
+  return Number.isFinite(sum) ? sum.toFixed(2) : '-'
+})
+
+const weightSumValid = computed(() => {
+  if (defaultConfig.value?.promptMergeMode !== 'balanced') return true
+  const sum = weightSum.value
+  if (!Number.isFinite(sum)) return false
+  return Math.abs(sum - 1) <= 0.01
+})
+
 const presetQuery = ref({
   presetName: ''
 })
@@ -334,6 +653,49 @@ const presetQuery = ref({
 const presets = ref([])
 const defaultPresetId = ref(null)
 const currentPreset = ref(null)
+
+const presetWeightAllNull = computed(() => {
+  const u = currentPreset.value?.weightUser
+  const k = currentPreset.value?.weightKnowledge
+  const m = currentPreset.value?.weightMcp
+  return u == null && k == null && m == null
+})
+
+const presetWeightSum = computed(() => {
+  const uRaw = currentPreset.value?.weightUser
+  const kRaw = currentPreset.value?.weightKnowledge
+  const mRaw = currentPreset.value?.weightMcp
+  if (uRaw == null || kRaw == null || mRaw == null) return NaN
+  const u = Number(uRaw)
+  const k = Number(kRaw)
+  const m = Number(mRaw)
+  if (!Number.isFinite(u) || !Number.isFinite(k) || !Number.isFinite(m)) return NaN
+  return u + k + m
+})
+
+const presetWeightSumText = computed(() => {
+  const sum = presetWeightSum.value
+  return Number.isFinite(sum) ? sum.toFixed(2) : '-'
+})
+
+const presetWeightSumValid = computed(() => {
+  if (currentPreset.value?.promptMergeMode !== 'balanced') return true
+  if (presetWeightAllNull.value) return true
+  const u = currentPreset.value?.weightUser
+  const k = currentPreset.value?.weightKnowledge
+  const m = currentPreset.value?.weightMcp
+  if (u == null || k == null || m == null) return false
+  const sum = presetWeightSum.value
+  if (!Number.isFinite(sum)) return false
+  return Math.abs(sum - 1) <= 0.01
+})
+
+const resetPresetMergeWeights = () => {
+  if (!currentPreset.value) return
+  currentPreset.value.weightUser = null
+  currentPreset.value.weightKnowledge = null
+  currentPreset.value.weightMcp = null
+}
 
 const presetEnabledSwitch = computed({
   get: () => Number(currentPreset.value?.status) === 1,
@@ -416,7 +778,11 @@ const createPreset = () => {
     status: 1,
     kid: '',
     mcpMode: 'fallback',
-    mcpServers: ''
+    mcpServers: '',
+    promptMergeMode: null,
+    weightUser: null,
+    weightKnowledge: null,
+    weightMcp: null
   }
 }
 
@@ -428,6 +794,17 @@ const savePreset = async () => {
   }
   if (!currentPreset.value.model || !currentPreset.value.model.trim()) {
     ElMessage.error('模型不能为空')
+    return
+  }
+  if (currentPreset.value.promptMergeMode === 'balanced' && !presetWeightSumValid.value) {
+    const u = currentPreset.value.weightUser
+    const k = currentPreset.value.weightKnowledge
+    const m = currentPreset.value.weightMcp
+    if (u == null || k == null || m == null) {
+      ElMessage.error('balanced 模式下如需覆盖权重，请同时设置 用户/知识库/MCP 三项权重，或全部留空以跟随全局。')
+      return
+    }
+    ElMessage.error(`balanced 模式下权重和需为 1.00（当前：${presetWeightSumText.value}）`)
     return
   }
 
@@ -498,8 +875,41 @@ const refreshMcp = async () => {
   }
 }
 
+const loadDefaultConfig = async () => {
+  defaultConfigLoading.value = true
+  try {
+    const res = await getChatDefaultConfig()
+    const cfg = res?.data || {}
+    defaultConfig.value = { ...defaultConfig.value, ...cfg }
+    defaultConfigLoaded.value = true
+  } catch (e) {
+    defaultConfigLoaded.value = false
+    ElMessage.error('加载全局配置失败，请稍后重试')
+  } finally {
+    defaultConfigLoading.value = false
+  }
+}
+
+const saveDefaultConfig = async () => {
+  if (!defaultConfigLoaded.value) {
+    ElMessage.error('全局配置尚未加载成功，无法保存')
+    return
+  }
+  if (!weightSumValid.value) {
+    ElMessage.error(`balanced 模式下权重和需为 1.00（当前：${weightSumText.value}）`)
+    return
+  }
+  defaultConfigSaving.value = true
+  try {
+    await saveChatDefaultConfig(defaultConfig.value)
+    ElMessage.success('保存成功')
+  } finally {
+    defaultConfigSaving.value = false
+  }
+}
+
 onMounted(async () => {
-  await Promise.all([loadChatModelOptions(), loadKnowledgeOptions()])
+  await Promise.all([loadChatModelOptions(), loadKnowledgeOptions(), loadDefaultConfig()])
   await Promise.all([loadDefaultPreset(), loadPresets()])
 })
 </script>
@@ -552,6 +962,16 @@ onMounted(async () => {
   border: 1px solid var(--app-border);
   border-radius: 0 0 8px 8px;
   min-height: 600px;
+}
+
+.global-config-inner {
+  padding: 20px;
+}
+
+.global-config-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
 }
 
 /* 预设管理布局 */

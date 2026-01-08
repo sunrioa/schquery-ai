@@ -73,6 +73,26 @@ public class ChatPreset {
      */
     private String mcpServers;
 
+    /**
+     * 提示词融合模式：user_first/knowledge_first/balanced/layered（为空则使用全局默认）
+     */
+    private String promptMergeMode;
+
+    /**
+     * 用户提示词权重（0-1，为空则使用全局默认）
+     */
+    private Double weightUser;
+
+    /**
+     * 知识库权重（0-1，为空则使用全局默认）
+     */
+    private Double weightKnowledge;
+
+    /**
+     * MCP权重（0-1，为空则使用全局默认）
+     */
+    private Double weightMcp;
+
     private String remark;
 
     /**
@@ -84,4 +104,3 @@ public class ChatPreset {
 
     private LocalDateTime updateTime;
 }
-

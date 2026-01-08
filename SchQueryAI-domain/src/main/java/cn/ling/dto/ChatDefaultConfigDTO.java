@@ -58,5 +58,24 @@ public class ChatDefaultConfigDTO {
      * MCP 检索策略：off / fallback / merge
      */
     private String mcpMode;
-}
 
+    /**
+     * 提示词融合模式：user_first / knowledge_first / balanced / layered
+     */
+    private String promptMergeMode;
+
+    /**
+     * 平衡模式下：用户提示词权重（0.0-1.0）
+     */
+    private Double weightUser;
+
+    /**
+     * 平衡模式下：知识库内容权重（0.0-1.0）
+     */
+    private Double weightKnowledge;
+
+    /**
+     * 平衡模式下：MCP内容权重（0.0-1.0）
+     */
+    private Double weightMcp;
+}

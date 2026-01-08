@@ -87,6 +87,27 @@ public class ChatPresetController {
         if (preset.getStatus() == null) {
             preset.setStatus(1);
         }
+        preset.setPromptMergeMode(normalizePromptMergeModeOrNull(preset.getPromptMergeMode()));
+        preset.setWeightUser(normalizeNullableWeight(preset.getWeightUser()));
+        preset.setWeightKnowledge(normalizeNullableWeight(preset.getWeightKnowledge()));
+        preset.setWeightMcp(normalizeNullableWeight(preset.getWeightMcp()));
+
+        if ("balanced".equals(preset.getPromptMergeMode())) {
+            Double u = preset.getWeightUser();
+            Double k = preset.getWeightKnowledge();
+            Double m = preset.getWeightMcp();
+            boolean allNull = u == null && k == null && m == null;
+            boolean anyNonNull = u != null || k != null || m != null;
+            if (anyNonNull && (u == null || k == null || m == null)) {
+                return Result.error(400, "balanced 模式下如需覆盖权重，请同时设置 用户/知识库/MCP 三项权重，或全部留空以跟随全局。");
+            }
+            if (!allNull) {
+                double sum = u + k + m;
+                if (!Double.isFinite(sum) || Math.abs(sum - 1.0) > 0.01) {
+                    return Result.error(400, "balanced 模式下三项权重之和需为 1.00（允许误差 ±0.01）。");
+                }
+            }
+        }
 
         boolean ok = preset.getId() == null ? chatPresetService.save(preset) : chatPresetService.updateById(preset);
         return ok ? Result.success("保存成功") : Result.error("保存失败");
@@ -136,5 +157,31 @@ public class ChatPresetController {
             return null;
         }
     }
-}
 
+    private static String normalizePromptMergeModeOrNull(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        String normalized = raw.trim().toLowerCase();
+        return switch (normalized) {
+            case "user_first", "user", "userfirst" -> "user_first";
+            case "knowledge_first", "knowledge", "knowledgefirst" -> "knowledge_first";
+            case "balanced", "balance" -> "balanced";
+            case "layered", "layer" -> "layered";
+            default -> null;
+        };
+    }
+
+    private static Double normalizeNullableWeight(Double raw) {
+        if (raw == null || !Double.isFinite(raw)) {
+            return null;
+        }
+        if (raw < 0) {
+            return 0.0;
+        }
+        if (raw > 1) {
+            return 1.0;
+        }
+        return raw;
+    }
+}

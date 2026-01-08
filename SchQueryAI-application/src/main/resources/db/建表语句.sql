@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS `sys_config` (
                                            `config_key` VARCHAR(100) NOT NULL COMMENT '配置键',
                                            `config_name` VARCHAR(200) NULL COMMENT '配置名称',
                                            `config_value` TEXT NULL COMMENT '配置值',
+                                           `config_type` CHAR(1) NULL DEFAULT 'N' COMMENT '系统内置（Y是 N否）',
                                            `remark` VARCHAR(500) NULL COMMENT '备注',
                                            `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态：1-启用 0-禁用',
                                            `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

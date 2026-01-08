@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
  * 知识库 RAG 顾问（单 collection + knowledge_id 过滤）
  * - 从预设中读取知识库ID（ChatPreset.kid），并按 knowledge_id 过滤检索
  * - 将检索片段注入到 system message，供模型回答时引用
+ * - 使用 PromptMergeStrategy 合理融合用户提示词和知识库内容
  */
 @Slf4j
 @Component
@@ -60,6 +61,13 @@ public class KnowledgeRagAdvisor implements BaseAdvisor {
 
         // 从 ChatContext 获取预设配置
         ChatPreset preset = ChatContext.getPreset();
+
+        // 无论知识库是否命中，都要把用户系统提示词写入 context，避免后续顾问丢失
+        String userSystemMessage = (preset != null && StringUtils.hasText(preset.getSystemMessage()))
+                ? preset.getSystemMessage().trim()
+                : null;
+        chatClientRequest.context().put("userSystemMessage", userSystemMessage);
+
         Long knowledgeId = null;
 
         // 优先使用预设中的 kid
@@ -83,8 +91,13 @@ public class KnowledgeRagAdvisor implements BaseAdvisor {
         }
 
         if (knowledgeId == null) {
+            chatClientRequest.context().put("knowledgeHit", false);
+            chatClientRequest.context().remove("knowledgePrompt");
+            chatClientRequest.context().remove("knowledgeContent");
             return chatClientRequest;
         }
+
+        chatClientRequest.context().put("knowledgeId", knowledgeId);
 
         KnowledgeInfo knowledgeInfo = null;
         try {
@@ -118,28 +131,39 @@ public class KnowledgeRagAdvisor implements BaseAdvisor {
 
             docs = applyRerankIfEnabled(docs, knowledgeInfo, userInput, topK);
 
-            String context = buildKnowledgeContext(docs);
-            if (!StringUtils.hasText(context)) {
+            String knowledgeContent = buildKnowledgeContext(docs);
+            if (!StringUtils.hasText(knowledgeContent)) {
                 chatClientRequest.context().put("knowledgeHit", false);
-                chatClientRequest.context().put("knowledgeId", knowledgeId);
+                chatClientRequest.context().remove("knowledgePrompt");
+                chatClientRequest.context().remove("knowledgeContent");
                 return chatClientRequest;
             }
 
             chatClientRequest.context().put("knowledgeHit", true);
             chatClientRequest.context().put("knowledgeId", knowledgeId);
 
-            String injected = buildKnowledgeSystemPrompt(knowledgeInfo) + "\n\n" + "### 知识库检索内容\n" + context;
-            ChatClientRequest mutated = chatClientRequest.mutate()
-                    .prompt(chatClientRequest.prompt().augmentSystemMessage(injected))
-                    .build();
-            return mutated;
+            // ✨ 新增：保存知识库内容到 context，供 McpRagAdvisor 使用
+            String knowledgePrompt = getKnowledgePrompt(knowledgeInfo);
+            chatClientRequest.context().put("knowledgePrompt", knowledgePrompt);
+            chatClientRequest.context().put("knowledgeContent", knowledgeContent);
+
+            // userSystemMessage 已在前面写入 context
+            // 暂时不在这里注入，等待 McpRagAdvisor 执行后统一融合
+            return chatClientRequest;
+
         } catch (Exception e) {
             log.warn("知识库RAG检索失败，将跳过本次检索: {}", e.getMessage());
+            chatClientRequest.context().put("knowledgeHit", false);
+            chatClientRequest.context().remove("knowledgePrompt");
+            chatClientRequest.context().remove("knowledgeContent");
             return chatClientRequest;
         }
     }
 
     private static String buildKnowledgeContext(List<Document> docs) {
+        if (docs == null || docs.isEmpty()) {
+            return "";
+        }
         List<String> lines = docs.stream()
                 .map(d -> StringUtils.hasText(d.getText()) ? d.getText().trim() : "")
                 .filter(StringUtils::hasText)
@@ -153,6 +177,13 @@ public class KnowledgeRagAdvisor implements BaseAdvisor {
             sb.append("【片段").append(i + 1).append("】").append(lines.get(i)).append("\n");
         }
         return sb.toString().trim();
+    }
+
+    private static String getKnowledgePrompt(KnowledgeInfo knowledgeInfo) {
+        if (knowledgeInfo == null || !StringUtils.hasText(knowledgeInfo.getSystemPrompt())) {
+            return "优先使用知识库检索内容回答用户问题。";
+        }
+        return knowledgeInfo.getSystemPrompt().trim();
     }
 
     private static int resolveTopK(KnowledgeInfo knowledgeInfo, int defaultTopK) {
@@ -232,13 +263,6 @@ public class KnowledgeRagAdvisor implements BaseAdvisor {
             log.debug("rerank执行失败，将使用向量检索结果: {}", e.getMessage());
             return docs;
         }
-    }
-
-    private static String buildKnowledgeSystemPrompt(KnowledgeInfo knowledgeInfo) {
-        if (knowledgeInfo == null || !StringUtils.hasText(knowledgeInfo.getSystemPrompt())) {
-            return "### 知识库提示\n优先使用【知识库检索内容】回答用户问题。";
-        }
-        return "### 知识库提示\n" + knowledgeInfo.getSystemPrompt().trim();
     }
 
     @Override

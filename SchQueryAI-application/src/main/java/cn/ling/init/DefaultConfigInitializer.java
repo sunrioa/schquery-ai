@@ -17,6 +17,10 @@ public class DefaultConfigInitializer implements ApplicationRunner {
 
     private static final String KEY_MCP_MODE = "chat.default.mcpMode";
     private static final String KEY_MCP_SERVERS = "chat.default.mcpServers";
+    private static final String KEY_PROMPT_MERGE_MODE = "chat.default.promptMergeMode";
+    private static final String KEY_WEIGHT_USER = "chat.weight.user";
+    private static final String KEY_WEIGHT_KNOWLEDGE = "chat.weight.knowledge";
+    private static final String KEY_WEIGHT_MCP = "chat.weight.mcp";
 
     private final KnowledgeInfoService knowledgeInfoService;
     private final SysConfigService sysConfigService;
@@ -41,8 +45,12 @@ public class DefaultConfigInitializer implements ApplicationRunner {
             ensureConfigIfMissing(KEY_MCP_MODE, "MCP检索策略", "fallback", "MCP配置");
             // 对齐 rin-ai 默认 MCP Server（ruoyi-mcp-server / rin-mcp-server）
             ensureConfigIfMissing(KEY_MCP_SERVERS, "MCP服务URL列表", "http://127.0.0.1:8081", "MCP配置");
+            ensureConfigIfMissing(KEY_PROMPT_MERGE_MODE, "提示词融合模式", "user_first", "提示词融合策略");
+            ensureConfigIfMissing(KEY_WEIGHT_USER, "用户提示词权重", "0.6", "提示词融合策略");
+            ensureConfigIfMissing(KEY_WEIGHT_KNOWLEDGE, "知识库权重", "0.25", "提示词融合策略");
+            ensureConfigIfMissing(KEY_WEIGHT_MCP, "MCP权重", "0.15", "提示词融合策略");
         } catch (Exception e) {
-            log.warn("初始化默认MCP配置失败：{}", e.getMessage());
+            log.warn("初始化默认AI配置失败：{}", e.getMessage());
         }
     }
 

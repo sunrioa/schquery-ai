@@ -540,7 +540,7 @@ const getMarkdownParser = () => {
           <div class="code-block-header">
             <div class="code-language">${displayLang}</div>
             <div class="code-actions">
-              <button type="button" class="copy-btn" onclick="copyCode(this, '${copyPayload}')" aria-label="复制代码">
+              <button type="button" class="copy-btn" data-copy="${copyPayload}" onclick="copyCode(this)" aria-label="复制代码">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
@@ -588,7 +588,7 @@ const getMarkdownParser = () => {
         return `<div class="md-table-card">
           <div class="md-table-card-header">
             <div class="md-table-card-title">表格</div>
-            <button type="button" class="md-table-copy-btn" onclick="copyTable(this, '${copyPayload}')" aria-label="复制表格">
+            <button type="button" class="md-table-copy-btn" data-copy="${copyPayload}" onclick="copyTable(this)" aria-label="复制表格">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                 <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
@@ -604,6 +604,32 @@ const getMarkdownParser = () => {
             </div>
           </div>
         </div>`
+      },
+      list: function(token) {
+        const ordered = !!token?.ordered
+        const start = Number(token?.start || 0)
+        const tag = ordered ? 'ol' : 'ul'
+
+        const items = Array.isArray(token?.items) ? token.items : []
+        const body = items.map((item) => this.listitem(item)).join('')
+
+        const startAttr = ordered && start && start !== 1 ? ` start="${start}"` : ''
+        const isTaskList = items.some((item) => !!item?.task)
+        const classAttr = isTaskList ? ' class="md-task-list"' : ''
+
+        return `<${tag}${classAttr}${startAttr}>\n${body}</${tag}>\n`
+      },
+      listitem: function(token) {
+        const contentHtml = String(this.parser.parse(token?.tokens || [], !!token?.loose)).trimEnd()
+
+        if (token?.task) {
+          const checked = !!token?.checked
+          const checkedAttr = checked ? ' checked=""' : ''
+          const checkbox = `<input class="md-task-checkbox"${checkedAttr} disabled="" type="checkbox">`
+          return `<li class="md-task-item${checked ? ' is-checked' : ''}">${checkbox}<div class="md-task-content">${contentHtml}</div></li>\n`
+        }
+
+        return `<li>${contentHtml}</li>\n`
       }
     }
   })
@@ -1839,7 +1865,7 @@ const loadUserInfo = async () => {
 
 // 全局复制代码函数
 window.copyCode = async function(button, code) {
-  let decodedCode = code
+  let decodedCode = code ?? button?.dataset?.copy ?? ''
   try {
     // 优先尝试 decodeURIComponent（新版本使用 encodeURIComponent 传参）
     try {
@@ -1918,7 +1944,7 @@ window.copyCode = async function(button, code) {
 
 // 表格复制（保持按钮宽度，避免布局跳动）
 window.copyTable = async function(button, text) {
-  let decodedText = text
+  let decodedText = text ?? button?.dataset?.copy ?? ''
   try {
     try {
       decodedText = decodeURIComponent(decodedText)
@@ -3184,6 +3210,11 @@ onUnmounted(() => {
   word-break: break-word;
   font-family: inherit;
   white-space: normal;
+  --md-task-check-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3 3 7-7' fill='none' stroke='%23111827' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+:global(html.dark) .markdown-content {
+  --md-task-check-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5l3 3 7-7' fill='none' stroke='%23E2E8F0' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
 /* Markdown 子元素需要使用 :deep 才能在 v-html 中生效（scoped 样式） */
@@ -3732,14 +3763,60 @@ onUnmounted(() => {
 }
 
 /* 任务列表（GFM） */
-.markdown-content :deep(li.task-list-item) {
+.markdown-content :deep(ul.md-task-list),
+.markdown-content :deep(ol.md-task-list) {
+  padding-left: 0;
+  margin: 14px 0;
   list-style: none;
 }
 
-.markdown-content :deep(li > input[type="checkbox"]) {
-  margin: 0 8px 0 2px;
-  vertical-align: middle;
-  accent-color: var(--app-primary);
+.markdown-content :deep(.md-task-item) {
+  list-style: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.markdown-content :deep(.md-task-checkbox) {
+  margin: 2px 0 0;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--app-border);
+  border-radius: 5px;
+  background: var(--app-surface);
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-block;
+}
+
+.markdown-content :deep(.md-task-checkbox:checked) {
+  background-image: var(--md-task-check-icon);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 14px 14px;
+}
+
+.markdown-content :deep(.md-task-checkbox:disabled) {
+  opacity: 1;
+  cursor: default;
+}
+
+.markdown-content :deep(.md-task-content) {
+  min-width: 0;
+}
+
+.markdown-content :deep(.md-task-content > p) {
+  margin: 0;
+}
+
+.markdown-content :deep(.md-task-item.is-checked .md-task-content) {
+  color: var(--app-muted);
+  opacity: 0.75;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: rgba(148, 163, 184, 0.9);
 }
 
 /* 脚注（简单支持） */
@@ -3788,12 +3865,22 @@ onUnmounted(() => {
 
 /* 现代化引用块样式 */
 .markdown-content :deep(blockquote) {
-  margin: 14px 0;
-  padding: 12px 14px;
-  border-left: 4px solid rgba(var(--app-primary-rgb), 0.45);
-  background: rgba(var(--app-primary-rgb), 0.06);
+  margin: 12px 0;
+  padding: 0 0 0 14px;
+  border-left: 4px solid rgba(var(--app-primary-rgb), 0.22);
+  background: transparent;
   color: inherit;
-  border-radius: 12px;
+  border-radius: 0;
+}
+
+.markdown-content :deep(blockquote blockquote) {
+  margin: 10px 0 0;
+  padding-left: 14px;
+  border-left-color: rgba(var(--app-primary-rgb), 0.16);
+}
+
+.markdown-content :deep(blockquote p) {
+  margin: 8px 0;
 }
 
 .markdown-content :deep(blockquote > :first-child) {

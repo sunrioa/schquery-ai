@@ -35,6 +35,12 @@ import java.util.stream.Collectors;
 @Component
 public class KnowledgeRagAdvisor implements BaseAdvisor {
 
+    /**
+     * Embedding 查询最大长度（字符）。
+     * 过长的用户输入可能导致 embeddings 接口超时/断连（尤其是长 Markdown 请求）。
+     */
+    private static final int MAX_EMBEDDING_QUERY_CHARS = 800;
+
     private final VectorStore qdrantVectorStore;
     private final SearchRequest baseSearchRequest;
     private final KnowledgeInfoService knowledgeInfoService;
@@ -63,10 +69,15 @@ public class KnowledgeRagAdvisor implements BaseAdvisor {
         ChatPreset preset = ChatContext.getPreset();
 
         // 无论知识库是否命中，都要把用户系统提示词写入 context，避免后续顾问丢失
+        // 注意：Spring AI 会对 context 执行 Map.copyOf，context 不允许包含 null value
         String userSystemMessage = (preset != null && StringUtils.hasText(preset.getSystemMessage()))
                 ? preset.getSystemMessage().trim()
                 : null;
-        chatClientRequest.context().put("userSystemMessage", userSystemMessage);
+        if (StringUtils.hasText(userSystemMessage)) {
+            chatClientRequest.context().put("userSystemMessage", userSystemMessage);
+        } else {
+            chatClientRequest.context().remove("userSystemMessage");
+        }
 
         Long knowledgeId = null;
 
@@ -113,8 +124,9 @@ public class KnowledgeRagAdvisor implements BaseAdvisor {
                     ? knowledgeInfo.getEmbeddingModelName().trim()
                     : null;
 
+            String queryForEmbedding = normalizeQueryForEmbedding(userInput);
             SearchRequest request = SearchRequest.from(baseSearchRequest)
-                    .query(userInput)
+                    .query(queryForEmbedding)
                     .topK(candidateCount)
                     .filterExpression("WHERE knowledge_id == " + knowledgeId)
                     .build();
@@ -123,7 +135,7 @@ public class KnowledgeRagAdvisor implements BaseAdvisor {
             if (docs == null || docs.isEmpty()) {
                 // 兼容历史数据：旧数据未写入 knowledge_id 元数据时，先做一次无过滤检索兜底
                 SearchRequest fallback = SearchRequest.from(baseSearchRequest)
-                        .query(userInput)
+                        .query(queryForEmbedding)
                         .topK(topK)
                         .build();
                 docs = EmbeddingModelContext.withModel(embeddingModelName, () -> qdrantVectorStore.similaritySearch(fallback));
@@ -184,6 +196,17 @@ public class KnowledgeRagAdvisor implements BaseAdvisor {
             return "优先使用知识库检索内容回答用户问题。";
         }
         return knowledgeInfo.getSystemPrompt().trim();
+    }
+
+    private static String normalizeQueryForEmbedding(String userInput) {
+        if (!StringUtils.hasText(userInput)) {
+            return "";
+        }
+        String normalized = userInput.replaceAll("\\s+", " ").trim();
+        if (normalized.length() <= MAX_EMBEDDING_QUERY_CHARS) {
+            return normalized;
+        }
+        return normalized.substring(0, MAX_EMBEDDING_QUERY_CHARS);
     }
 
     private static int resolveTopK(KnowledgeInfo knowledgeInfo, int defaultTopK) {

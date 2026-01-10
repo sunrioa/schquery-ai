@@ -178,7 +178,7 @@
                   <div v-if="streamingMessageIds.has(message.id)" class="streaming-text" v-text="message.content"></div>
                   <div v-else class="markdown-content"
                        :key="`md-${message.id}-${message.renderVersion || 0}`"
-                       v-html="renderMarkdown(message.content)"></div>
+                       v-html="renderMarkdown(message.content, message.id)"></div>
                 </div>
                 <div class="message-time">{{ formatTime(message.createdAt) }}</div>
               </div>
@@ -240,10 +240,10 @@
                 type="primary"
                 @click="sendMessage"
                 :disabled="!userMessage.trim() || isTyping"
-                :loading="isTyping"
                 class="send-btn"
             >
-              <el-icon><Upload /></el-icon>
+              <el-icon v-if="isTyping" class="send-icon is-loading"><Loading /></el-icon>
+              <el-icon v-else class="send-icon"><Upload /></el-icon>
             </el-button>
           </div>
         </el-footer>
@@ -277,13 +277,13 @@
  import { ref, onMounted, onUnmounted, nextTick, watch, getCurrentInstance } from 'vue'
  import { useRouter } from 'vue-router'
  import { ElMessage, ElMessageBox, ElEmpty, ElAvatar, ElDropdown, ElDropdownMenu, ElDropdownItem, ElButton, ElInput, ElDialog, ElForm, ElFormItem, ElIcon } from 'element-plus'
- import { Plus, Setting, Edit, Delete, Service, Upload, Microphone, SwitchButton, User, Lock, ArrowDown, ArrowLeft, Moon, Sunny, ChatDotRound, Tools } from '@element-plus/icons-vue'
+ import { Plus, Setting, Edit, Delete, Service, Upload, Loading, Microphone, SwitchButton, User, Lock, ArrowDown, ArrowLeft, Moon, Sunny, ChatDotRound, Tools } from '@element-plus/icons-vue'
  import { chatApi } from '../api/chat'
  import { userApi } from '../api/user'
 import { getChatPresetList, getDefaultChatPresetId } from '../api/ai/chatPreset'
 import { useUserStore } from '../stores/userStore'
 import { getAIAvatar } from '../utils/avatarUtils'
-import { marked } from 'marked'
+import { Marked } from 'marked'
 import {
   isAdmin,
   isWorker,
@@ -292,7 +292,6 @@ import {
  } from '../utils/auth'
  import { applyTheme, isDarkTheme } from '../utils/theme'
  import hljs from 'highlight.js'
- import 'highlight.js/styles/atom-one-dark.css' // 更现代的深色主题
 
 // 路由实例和用户store
 const router = useRouter()
@@ -437,7 +436,6 @@ const cleanAIResponse = (text) => {
       .replace(/\n{3,}/g, '\n\n') // 最多保留2个连续换行
       .replace(/[ \t]+$/gm, '') // 移除行尾空白
       .replace(/\r+/g, '') // 移除回车符
-      .replace(/[ \t]+/g, ' ') // 合并多个空格和制表符
       .trim() // 去除首尾空白
 
   return cleaned
@@ -495,70 +493,344 @@ const isSQLCode = (code) => {
   return sqlKeywords.some(keyword => upperCode.includes(keyword))
 }
 
+let markdownParser = null
+
+const sanitizeLinkHref = (href) => {
+  if (!href) return '#'
+  try {
+    const url = new URL(href, window.location.origin)
+    const protocol = (url.protocol || '').toLowerCase()
+    if (protocol === 'http:' || protocol === 'https:' || protocol === 'mailto:' || protocol === 'tel:') {
+      return href
+    }
+    return '#'
+  } catch (e) {
+    return href.startsWith('#') ? href : '#'
+  }
+}
+
+const sanitizeImageSrc = (src) => {
+  const safe = sanitizeLinkHref(src)
+  return safe === '#' ? '' : safe
+}
+
+const getMarkdownParser = () => {
+  if (markdownParser) return markdownParser
+
+  markdownParser = new Marked({
+    gfm: true,
+    breaks: true,
+    renderer: {
+      code: (token) => {
+        const code = token?.text ?? ''
+        const langHint = token?.lang ?? undefined
+        const detectedLang = detectLanguage(code, langHint)
+        const cleanLang = (detectedLang || 'text').toLowerCase().replace(/[^a-z0-9]/g, '')
+        const displayLang = escapeHtml(detectedLang || 'text')
+        const copyPayload = encodeURIComponent(code)
+
+        let highlightedCode = ''
+        try {
+          highlightedCode = highlightCode(code, langHint)
+        } catch (e) {
+          highlightedCode = escapeHtml(code)
+        }
+
+        return `<div class="code-block-wrapper" data-language="${cleanLang}">
+          <div class="code-block-header">
+            <div class="code-language">${displayLang}</div>
+            <div class="code-actions">
+              <button type="button" class="copy-btn" onclick="copyCode(this, '${copyPayload}')" aria-label="复制代码">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <pre class="code-block ${cleanLang ? `language-${cleanLang}` : ''}"><code class="code-content hljs ${cleanLang ? `language-${cleanLang}` : ''}">${highlightedCode}</code></pre>
+        </div>`
+      },
+      link: (token) => {
+        const href = sanitizeLinkHref(token?.href)
+        const safeHref = escapeHtml(href)
+        const text = escapeHtml(token?.text ?? '')
+        const title = token?.title ? ` title="${escapeHtml(token.title)}"` : ''
+        return `<a href="${safeHref}"${title} target="_blank" rel="noopener noreferrer nofollow">${text}</a>`
+      },
+      image: (token) => {
+        const src = sanitizeImageSrc(token?.href)
+        const alt = escapeHtml(token?.text ?? '')
+        const title = token?.title ? ` title="${escapeHtml(token.title)}"` : ''
+        if (!src) return alt ? `<span class="md-image-alt">${alt}</span>` : ''
+        return `<img src="${escapeHtml(src)}" alt="${alt}"${title} loading="lazy" decoding="async" />`
+      },
+      html: (token) => escapeHtml(token?.text ?? ''),
+      table: function(token) {
+        const headerCells = (token?.header || []).map((cell) => {
+          const align = cell?.align || 'left'
+          const html = this.parser.parseInline(cell?.tokens || [])
+          return `<th style="text-align:${align};">${html}</th>`
+        }).join('')
+
+        const bodyRows = (token?.rows || []).map((row) => {
+          const cells = (row || []).map((cell) => {
+            const align = cell?.align || 'left'
+            const html = this.parser.parseInline(cell?.tokens || [])
+            return `<td style="text-align:${align};">${html}</td>`
+          }).join('')
+          return `<tr>${cells}</tr>`
+        }).join('')
+
+        const raw = token?.raw || ''
+        const copyPayload = encodeURIComponent(raw)
+
+        return `<div class="md-table-card">
+          <div class="md-table-card-header">
+            <div class="md-table-card-title">表格</div>
+            <button type="button" class="md-table-copy-btn" onclick="copyTable(this, '${copyPayload}')" aria-label="复制表格">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="md-table-card-body">
+            <div class="md-table-scroll">
+              <table>
+                <thead><tr>${headerCells}</tr></thead>
+                <tbody>${bodyRows}</tbody>
+              </table>
+            </div>
+          </div>
+        </div>`
+      }
+    }
+  })
+
+  return markdownParser
+}
+
+const encodeDomIdPart = (value) => {
+  if (value === null || value === undefined) return '0'
+  return encodeURIComponent(String(value)).replace(/%/g, '_')
+}
+
+const extractFootnoteDefinitions = (markdown) => {
+  const footnotes = new Map()
+  if (!markdown) return { markdown: '', footnotes }
+
+  const lines = String(markdown).split('\n')
+  const remaining = []
+  let inFence = false
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+    const trimmed = line.trim()
+
+    if (trimmed.startsWith('```')) {
+      inFence = !inFence
+      remaining.push(line)
+      i += 1
+      continue
+    }
+
+    if (!inFence) {
+      const match = line.match(/^\[\^([^\]]+)\]:\s*(.*)$/)
+      if (match) {
+        const id = (match[1] || '').trim()
+        if (!id) {
+          i += 1
+          continue
+        }
+
+        const contentLines = []
+        const firstLine = (match[2] || '').trimEnd()
+        if (firstLine) contentLines.push(firstLine)
+
+        i += 1
+        while (i < lines.length) {
+          const next = lines[i]
+          const nextTrimmed = next.trim()
+
+          if (nextTrimmed.startsWith('```')) break
+          if (nextTrimmed === '') {
+            contentLines.push('')
+            i += 1
+            continue
+          }
+
+          const continuation = next.match(/^(\t| {2,4})(.*)$/)
+          if (!continuation) break
+          contentLines.push(continuation[2] || '')
+          i += 1
+        }
+
+        const content = contentLines.join('\n').trim()
+        const prev = footnotes.get(id)
+        footnotes.set(id, prev ? `${prev}\n\n${content}` : content)
+        continue
+      }
+    }
+
+    remaining.push(line)
+    i += 1
+  }
+
+  return { markdown: remaining.join('\n'), footnotes }
+}
+
+const prepareFootnotes = (markdown, messageId) => {
+  const { markdown: withoutDefs, footnotes } = extractFootnoteDefinitions(markdown)
+  if (!footnotes || footnotes.size === 0) {
+    return { markdown: withoutDefs, footnoteData: null }
+  }
+
+  const namespace = encodeDomIdPart(messageId)
+  const refs = []
+  const order = []
+  const idToNumber = new Map()
+  const idToRefCount = new Map()
+  const idToFirstRefDomId = new Map()
+  const idToAnchor = new Map()
+
+  const ensureNumber = (id) => {
+    if (idToNumber.has(id)) return idToNumber.get(id)
+    const number = order.length + 1
+    idToNumber.set(id, number)
+    order.push(id)
+    return number
+  }
+
+  const ensureAnchor = (id) => {
+    if (idToAnchor.has(id)) return idToAnchor.get(id)
+    const anchor = encodeDomIdPart(id)
+    idToAnchor.set(id, anchor)
+    return anchor
+  }
+
+  const replaceRefsInText = (text) => {
+    const inlineCodeRe = /`[^`]*`/g
+    let result = ''
+    let lastIndex = 0
+    let match
+
+    while ((match = inlineCodeRe.exec(text)) !== null) {
+      const before = text.slice(lastIndex, match.index)
+      result += before.replace(/\[\^([^\]]+)\]/g, (m, rawId) => {
+        const id = (rawId || '').trim()
+        if (!id) return m
+
+        const number = ensureNumber(id)
+        const anchor = ensureAnchor(id)
+        const count = (idToRefCount.get(id) || 0) + 1
+        idToRefCount.set(id, count)
+
+        const placeholder = `@@FNREF${refs.length}@@`
+        const fnDomId = `fn-${namespace}-${anchor}`
+        const refDomId = `fnref-${namespace}-${anchor}-${count}`
+        if (!idToFirstRefDomId.has(id)) idToFirstRefDomId.set(id, refDomId)
+
+        refs.push({ placeholder, number, fnDomId, refDomId })
+        return placeholder
+      })
+
+      result += match[0]
+      lastIndex = match.index + match[0].length
+    }
+
+    const tail = text.slice(lastIndex)
+    result += tail.replace(/\[\^([^\]]+)\]/g, (m, rawId) => {
+      const id = (rawId || '').trim()
+      if (!id) return m
+
+      const number = ensureNumber(id)
+      const anchor = ensureAnchor(id)
+      const count = (idToRefCount.get(id) || 0) + 1
+      idToRefCount.set(id, count)
+
+      const placeholder = `@@FNREF${refs.length}@@`
+      const fnDomId = `fn-${namespace}-${anchor}`
+      const refDomId = `fnref-${namespace}-${anchor}-${count}`
+      if (!idToFirstRefDomId.has(id)) idToFirstRefDomId.set(id, refDomId)
+
+      refs.push({ placeholder, number, fnDomId, refDomId })
+      return placeholder
+    })
+
+    return result
+  }
+
+  const lines = String(withoutDefs).split('\n')
+  const outLines = []
+  let inFence = false
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (trimmed.startsWith('```')) {
+      inFence = !inFence
+      outLines.push(line)
+      continue
+    }
+    outLines.push(inFence ? line : replaceRefsInText(line))
+  }
+
+  // 未被引用的脚注也展示出来（按定义顺序追加编号）
+  for (const id of footnotes.keys()) {
+    ensureNumber(id)
+  }
+
+  const items = order.map((id) => {
+    const number = idToNumber.get(id)
+    const anchor = ensureAnchor(id)
+    const fnDomId = `fn-${namespace}-${anchor}`
+    const firstRefDomId = idToFirstRefDomId.get(id) || null
+    const content = footnotes.get(id) || ''
+    return { id, number, fnDomId, firstRefDomId, content }
+  })
+
+  return {
+    markdown: outLines.join('\n'),
+    footnoteData: { refs, items }
+  }
+}
+
 // 改进的Markdown渲染方法
-const renderMarkdown = (text) => {
+const renderMarkdown = (text, messageId) => {
   if (!text) return ''
 
   try {
-    // 基本文本清理
-    let processedText = text.trim()
+    let processedText = preprocessMarkdown(text)
+    if (!processedText) return ''
 
-    // 简单检查：如果文本很短且没有明显Markdown特征，直接返回纯文本
-    if (processedText.length < 50 &&
-        !processedText.includes('```') &&
-        !processedText.includes('#') &&
-        !processedText.includes('**') &&
-        !processedText.includes('* ') &&
-        !processedText.includes('|')) {
-      return `<div class="plain-text">${escapeHtml(processedText)}</div>`
+    const parser = getMarkdownParser()
+
+    const { markdown, footnoteData } = prepareFootnotes(processedText, messageId)
+    let html = parser.parse(markdown)
+
+    if (footnoteData && footnoteData.refs && footnoteData.refs.length > 0) {
+      html = html.replace(/@@FNREF(\d+)@@/g, (m, idx) => {
+        const ref = footnoteData.refs[Number(idx)]
+        if (!ref) return ''
+        return `<sup class="footnote-ref"><a href="#${ref.fnDomId}" id="${ref.refDomId}">${ref.number}</a></sup>`
+      })
     }
 
-    // 预处理文本
-    processedText = preprocessMarkdown(processedText)
+    if (footnoteData && footnoteData.items && footnoteData.items.length > 0) {
+      const footnotesHtml = footnoteData.items.map((item) => {
+        const contentHtml = item.content ? parser.parse(item.content) : '<p>（无脚注内容）</p>'
+        const backRef = item.firstRefDomId
+          ? `<a class="footnote-backref" href="#${item.firstRefDomId}" aria-label="返回引用">↩</a>`
+          : ''
+        return `<li id="${item.fnDomId}"><div class="footnote-content">${contentHtml}</div>${backRef}</li>`
+      }).join('')
 
-    marked.setOptions({
-      breaks: true,
-      gfm: true,
-      headerIds: false, // 禁用header id避免冲突
-      mangle: false,  // 禁用email mangling
-      sanitize: false, // 允许HTML
-      highlight: (code, lang) => {
-        try {
-          const highlightedCode = highlightCode(code, lang)
-          const detectedLang = detectLanguage(code, lang)
-          const cleanLang = detectedLang.toLowerCase().replace(/[^a-z0-9]/g, '')
-          const displayLang = detectedLang || 'text'
-          const escapedCode = escapeHtml(code).replace(/"/g, '&quot;')
+      html += `<section class="footnotes"><hr><ol>${footnotesHtml}</ol></section>`
+    }
 
-          return `<div class="code-block-wrapper" data-language="${cleanLang}" data-code="${escapedCode}">
-            <div class="code-block-header">
-              <div class="code-language">
-                <span class="code-language-dot"></span>
-                ${displayLang}
-              </div>
-              <div class="code-actions">
-                <button class="copy-btn" onclick="copyCode(this, '${escapedCode}')">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                  </svg>
-                  <span>复制</span>
-                </button>
-              </div>
-            </div>
-            <pre class="code-block ${cleanLang ? `language-${cleanLang}` : ''}"><code class="code-content">${highlightedCode}</code></pre>
-          </div>`
-        } catch (e) {
-          return `<pre><code>${escapeHtml(code)}</code></pre>`
-        }
-      }
-    })
-
-    const result = marked.parse(processedText)
-    return result
+    return html
   } catch (error) {
     console.error('Markdown rendering error:', error)
-    // 如果Markdown解析失败，返回安全的HTML文本
     return `<div class="plain-text">${escapeHtml(text)}</div>`
   }
 }
@@ -568,13 +840,22 @@ const preprocessMarkdown = (text) => {
   if (!text) return ''
 
   // 只做必要的清理，不破坏正常的 Markdown 语法
-  return text
+  let processed = text
+    .replace(/\r+/g, '')
     // 修复多余的连续换行（保留最多2个）
     .replace(/\n{3,}/g, '\n\n')
     // 移除行尾多余空格
     .replace(/[ \t]+$/gm, '')
     // 修复代码块的不完整结束标记
     .replace(/([^\n])\n*```$/gm, '$1\n```')
+
+  // 若出现未闭合的 fenced code block，自动补齐结束符，避免后续内容全部被当作代码
+  const fences = processed.match(/```/g)
+  if (fences && fences.length % 2 === 1) {
+    processed = processed + '\n```'
+  }
+
+  return processed.trim()
 }
 
 // 增强的文本渲染，处理基本的格式
@@ -730,26 +1011,29 @@ const sendMessage = async () => {
 
   if (!checkToken()) return
 
+  const baseId = Date.now()
   const messageContent = userMessage.value.trim()
   userMessage.value = ''
 
   // 添加用户消息
   const userMessageObj = {
-    id: Date.now(),
+    id: baseId,
     content: messageContent,
     messageType: 0,
     createdAt: new Date().toISOString()
   }
   messages.value.push(userMessageObj)
 
-  // 创建AI消息对象，提前定义以便在catch块中访问
+  // 创建AI消息对象，提前定义以便在catch/finally块中访问
   const aiMessageObj = {
-    id: Date.now() + 1,
+    id: baseId + 1,
     content: '',
     messageType: 1,
     createdAt: new Date().toISOString(),
     renderVersion: ++renderVersion // 添加版本号字段
   }
+  // 注意：messages 数组中存的是响应式代理，直接改 aiMessageObj 不会触发视图更新
+  let aiMessageRef = null
 
   // 显示输入状态
   isTyping.value = true
@@ -776,13 +1060,12 @@ const sendMessage = async () => {
     let aiMessageText = ''
 
     isTyping.value = false
-    const aiMessageObj = {
-      id: Date.now() + 1,
-      content: '',
-      messageType: 1,
-      createdAt: new Date().toISOString()
-    }
     messages.value.push(aiMessageObj)
+    aiMessageRef = messages.value[messages.value.length - 1]
+    streamingMessageIds.value.add(aiMessageObj.id)
+
+    // SSE 缓冲区：按事件（\n\n）解析，保留换行以支持 Markdown
+    let buffer = ''
 
     // 读取流式数据
     let isReading = true
@@ -794,20 +1077,28 @@ const sendMessage = async () => {
         break
       }
 
-      let chunk = decoder.decode(value)
-      // 移除所有的data:前缀，包括全局匹配
-      chunk = chunk.replace(/^data:\s*/gm, '')
-      // 保留换行符以支持Markdown格式，只清理多余的空白字符
-      const cleanChunk = chunk.replace(/\r+/g, '').replace(/[ \t]+/g, ' ').trim()
+      buffer += decoder.decode(value, { stream: true })
+      buffer = buffer.replace(/\r+/g, '')
 
-      if (cleanChunk) {
-        aiMessageText += cleanChunk
+      const events = buffer.split('\n\n')
+      buffer = events.pop() || ''
+
+      for (const evt of events) {
+        const lines = evt.split('\n')
+        const dataLines = lines
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.slice(5).replace(/^ /, ''))
+
+        const eventData = dataLines.length ? dataLines.join('\n') : evt
+        if (!eventData) continue
+        if (eventData.trim() === '[DONE]') continue
+
+        aiMessageText += eventData
       }
 
-      const aiMsgIndex = messages.value.findIndex(msg => msg.id === aiMessageObj.id)
-      if (aiMsgIndex > -1) {
-        // 在流式传输过程中也更新内容，但保持流式标记
-        messages.value[aiMsgIndex].content = aiMessageText
+      // 在流式传输过程中更新内容（保持流式标记，先不做 Markdown 渲染）
+      if (aiMessageRef) {
+        aiMessageRef.content = aiMessageText
       }
 
       nextTick(() => {
@@ -818,23 +1109,32 @@ const sendMessage = async () => {
     }
 
     // 流式数据读取完成后，处理最终内容
-    const finalMsgIndex = messages.value.findIndex(msg => msg.id === aiMessageObj.id)
-    if (finalMsgIndex > -1) {
-      // 清理最终收集到的完整内容
-      const cleanedContent = cleanAIResponse(aiMessageText)
-
-      console.log('流式完成，内容长度:', cleanedContent.length)
-
-      // 移除流式传输标记，切换到Markdown渲染
-      streamingMessageIds.value.delete(aiMessageObj.id)
-
-      // 最终更新内容（触发Markdown渲染）
-      messages.value[finalMsgIndex].content = cleanedContent
-      messages.value[finalMsgIndex].renderVersion = ++renderVersion
-
-      // 等待Vue更新完成
-      await nextTick()
+    // 解析可能残留的最后一个事件（无 \n\n 结尾的情况）
+    if (buffer && buffer.trim()) {
+      const lines = buffer.split('\n')
+      const dataLines = lines
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).replace(/^ /, ''))
+      const eventData = dataLines.length ? dataLines.join('\n') : buffer
+      if (eventData && eventData.trim() !== '[DONE]') {
+        aiMessageText += eventData
+      }
     }
+
+    const cleanedContent = cleanAIResponse(aiMessageText)
+    console.log('流式完成，内容长度:', cleanedContent.length)
+
+    streamingMessageIds.value.delete(aiMessageObj.id)
+    if (aiMessageRef) {
+      aiMessageRef.content = cleanedContent
+      aiMessageRef.renderVersion = ++renderVersion
+    } else {
+      aiMessageObj.content = cleanedContent
+      aiMessageObj.renderVersion = ++renderVersion
+    }
+
+    // 等待Vue更新完成
+    await nextTick()
 
     await loadSessions()
   } catch (error) {
@@ -1539,9 +1839,17 @@ const loadUserInfo = async () => {
 
 // 全局复制代码函数
 window.copyCode = async function(button, code) {
+  let decodedCode = code
   try {
-    // 解码HTML实体
-    const decodedCode = code
+    // 优先尝试 decodeURIComponent（新版本使用 encodeURIComponent 传参）
+    try {
+      decodedCode = decodeURIComponent(decodedCode)
+    } catch (e) {
+      // ignore
+    }
+
+    // 解码HTML实体（兼容旧版本）
+    decodedCode = decodedCode
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
       .replace(/&amp;/g, '&')
@@ -1559,7 +1867,6 @@ window.copyCode = async function(button, code) {
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="20 6 9 17 4 12"></polyline>
       </svg>
-      <span>已复制</span>
     `
 
     // 按钮动画
@@ -1576,13 +1883,7 @@ window.copyCode = async function(button, code) {
 
     // 降级方案：创建临时textarea
     const textArea = document.createElement('textarea')
-    textArea.value = code
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&#x2F;/g, '/')
+    textArea.value = decodedCode
 
     textArea.style.position = 'fixed'
     textArea.style.left = '-999999px'
@@ -1601,7 +1902,6 @@ window.copyCode = async function(button, code) {
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="20 6 9 17 4 12"></polyline>
         </svg>
-        <span>已复制</span>
       `
 
       setTimeout(() => {
@@ -1610,6 +1910,52 @@ window.copyCode = async function(button, code) {
       }, 2000)
     } catch (fallbackErr) {
       console.error('降级复制也失败:', fallbackErr)
+    }
+
+    document.body.removeChild(textArea)
+  }
+}
+
+// 表格复制（保持按钮宽度，避免布局跳动）
+window.copyTable = async function(button, text) {
+  let decodedText = text
+  try {
+    try {
+      decodedText = decodeURIComponent(decodedText)
+    } catch (e) {
+      // ignore
+    }
+
+    await navigator.clipboard.writeText(decodedText)
+
+    const originalHTML = button.innerHTML
+    button.classList.add('copied')
+    button.innerHTML = `
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+    `
+
+    setTimeout(() => {
+      button.classList.remove('copied')
+      button.innerHTML = originalHTML
+    }, 1600)
+  } catch (err) {
+    console.error('复制表格失败:', err)
+
+    const textArea = document.createElement('textarea')
+    textArea.value = decodedText
+    textArea.style.position = 'fixed'
+    textArea.style.left = '-999999px'
+    textArea.style.top = '-999999px'
+    document.body.appendChild(textArea)
+    textArea.focus()
+    textArea.select()
+
+    try {
+      document.execCommand('copy')
+    } catch (fallbackErr) {
+      console.error('降级复制表格也失败:', fallbackErr)
     }
 
     document.body.removeChild(textArea)
@@ -1937,7 +2283,7 @@ onUnmounted(() => {
   display: flex;
   margin-bottom: 16px;
   align-items: flex-start;
-  max-width: 75%;
+  max-width: 100%;
 }
 
 .user-message {
@@ -1987,7 +2333,8 @@ onUnmounted(() => {
 
 /* 消息气泡 - 现代化样式 */
 .message-content {
-  max-width: 75%;
+  max-width: 78ch;
+  min-width: 0;
   padding: 10px 14px;
   position: relative;
   line-height: 1.6;
@@ -2004,6 +2351,7 @@ onUnmounted(() => {
 .user-message .message-content {
   margin-right: 12px;
   margin-left: auto;
+  max-width: 56ch;
   background: var(--app-primary);
   color: white;
   border-top-right-radius: 2px;
@@ -2024,6 +2372,8 @@ onUnmounted(() => {
 .ai-message .message-content {
   margin-left: 12px;
   margin-right: auto;
+  max-width: 78ch;
+  padding: 12px 16px;
   background-color: var(--app-surface);
   color: var(--app-text);
   border-top-left-radius: 2px;
@@ -2153,7 +2503,7 @@ onUnmounted(() => {
   transform: translateY(-2px);
 }
 
-.markdown-content pre {
+.markdown-content .code-block-wrapper pre {
   background: transparent;
   border-radius: 0;
   padding: 0;
@@ -2162,6 +2512,10 @@ onUnmounted(() => {
   position: relative;
   border: none;
   box-shadow: none;
+}
+
+.markdown-content .code-block-wrapper pre::before {
+  content: none;
 }
 
 /* 代码块头部 */
@@ -2257,7 +2611,7 @@ onUnmounted(() => {
 }
 
 /* 代码内容区域 */
-.markdown-content pre code {
+.markdown-content .code-block-wrapper pre code {
   display: block;
   padding: 20px;
   background: transparent;
@@ -2759,6 +3113,19 @@ onUnmounted(() => {
   transform: translateY(-50%);
 }
 
+.send-btn .send-icon.is-loading {
+  animation: send-spin 1.2s linear infinite;
+}
+
+@keyframes send-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* 输入状态指示器 */
 .typing-indicator {
   display: flex;
@@ -2810,11 +3177,233 @@ onUnmounted(() => {
 
 /* 基础文本样式 */
 .markdown-content {
-  line-height: 1.7;
+  line-height: 1.75;
   color: inherit;
   font-size: 15px;
-  word-wrap: break-word;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   font-family: inherit;
+  white-space: normal;
+}
+
+/* Markdown 子元素需要使用 :deep 才能在 v-html 中生效（scoped 样式） */
+.markdown-content :deep(p) {
+  margin: 12px 0;
+  line-height: 1.75;
+}
+
+.markdown-content :deep(h1),
+.markdown-content :deep(h2),
+.markdown-content :deep(h3),
+.markdown-content :deep(h4),
+.markdown-content :deep(h5),
+.markdown-content :deep(h6) {
+  margin: 18px 0 10px;
+  font-weight: 700;
+  line-height: 1.25;
+  scroll-margin-top: 16px;
+}
+
+.markdown-content :deep(h1) {
+  font-size: 22px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.markdown-content :deep(h2) {
+  font-size: 18px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(var(--app-primary-rgb), 0.12);
+}
+
+.markdown-content :deep(h3) {
+  font-size: 16px;
+}
+
+.markdown-content :deep(h4) {
+  font-size: 15px;
+}
+
+.markdown-content :deep(h5) {
+  font-size: 14px;
+}
+
+.markdown-content :deep(h6) {
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.markdown-content :deep(img) {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 12px 0;
+  border-radius: 12px;
+  border: 1px solid var(--app-border);
+  box-shadow: var(--app-shadow-xs);
+}
+
+.markdown-content :deep(.md-image-alt) {
+  color: var(--app-muted);
+  font-size: 13px;
+}
+
+.markdown-content :deep(.code-block-wrapper) {
+  margin: 14px 0;
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow-xs);
+}
+
+.markdown-content :deep(.code-block-header) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--app-surface-2);
+  border-bottom: 1px solid var(--app-border);
+}
+
+.markdown-content :deep(.code-language) {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--app-muted);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.markdown-content :deep(.code-actions) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.markdown-content :deep(.copy-btn) {
+  appearance: none;
+  border: 1px solid var(--app-border);
+  background: transparent;
+  color: var(--app-muted);
+  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.markdown-content :deep(.copy-btn:hover) {
+  background: rgba(var(--app-primary-rgb), 0.08);
+  color: var(--app-primary);
+  border-color: rgba(var(--app-primary-rgb), 0.35);
+}
+
+.markdown-content :deep(.copy-btn.copied) {
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.markdown-content :deep(pre.code-block) {
+  margin: 0;
+  background: transparent;
+  border: none;
+  overflow: auto;
+}
+
+.markdown-content :deep(.code-content) {
+  display: block;
+  padding: 14px 16px;
+  overflow-x: auto;
+  line-height: 1.7;
+  font-size: 13px;
+  color: inherit;
+  background: transparent;
+  border: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  white-space: pre;
+  word-wrap: normal;
+  tab-size: 4;
+}
+
+.markdown-content :deep(.hljs) {
+  background: transparent;
+}
+
+.markdown-content :deep(:not(pre) > code) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.92em;
+  padding: 0.16em 0.38em;
+  border-radius: 8px;
+  border: 1px solid var(--app-border);
+  background: var(--app-surface-2);
+}
+
+.markdown-content :deep(.hljs-comment),
+.markdown-content :deep(.hljs-quote) {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.markdown-content :deep(.hljs-keyword),
+.markdown-content :deep(.hljs-selector-tag),
+.markdown-content :deep(.hljs-literal) {
+  color: #7c3aed;
+  font-weight: 650;
+}
+
+.markdown-content :deep(.hljs-string),
+.markdown-content :deep(.hljs-title),
+.markdown-content :deep(.hljs-name),
+.markdown-content :deep(.hljs-type),
+.markdown-content :deep(.hljs-attribute) {
+  color: #0f766e;
+}
+
+.markdown-content :deep(.hljs-number),
+.markdown-content :deep(.hljs-symbol),
+.markdown-content :deep(.hljs-bullet) {
+  color: #b45309;
+}
+
+.markdown-content :deep(.hljs-built_in),
+.markdown-content :deep(.hljs-class .hljs-title) {
+  color: #1d4ed8;
+}
+
+:global(html.dark) .markdown-content :deep(.hljs-comment),
+:global(html.dark) .markdown-content :deep(.hljs-quote) {
+  color: #94a3b8;
+}
+
+:global(html.dark) .markdown-content :deep(.hljs-keyword),
+:global(html.dark) .markdown-content :deep(.hljs-selector-tag),
+:global(html.dark) .markdown-content :deep(.hljs-literal) {
+  color: #c4b5fd;
+}
+
+:global(html.dark) .markdown-content :deep(.hljs-string),
+:global(html.dark) .markdown-content :deep(.hljs-title),
+:global(html.dark) .markdown-content :deep(.hljs-name),
+:global(html.dark) .markdown-content :deep(.hljs-type),
+:global(html.dark) .markdown-content :deep(.hljs-attribute) {
+  color: #5eead4;
+}
+
+:global(html.dark) .markdown-content :deep(.hljs-number),
+:global(html.dark) .markdown-content :deep(.hljs-symbol),
+:global(html.dark) .markdown-content :deep(.hljs-bullet) {
+  color: #fbbf24;
+}
+
+:global(html.dark) .markdown-content :deep(.hljs-built_in),
+:global(html.dark) .markdown-content :deep(.hljs-class .hljs-title) {
+  color: #93c5fd;
 }
 
 .markdown-content p {
@@ -2973,182 +3562,278 @@ onUnmounted(() => {
   font-weight: bold;
 }
 
-/* 现代化表格样式 */
-.markdown-content table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  margin: 24px 0;
-  font-size: 14px;
-  background: var(--app-surface);
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: var(--app-shadow-xs);
+/* 现代化表格样式（卡片） */
+.markdown-content :deep(.md-table-card) {
+  margin: 18px 0;
   border: 1px solid var(--app-border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow-xs);
 }
 
-.markdown-content th,
-.markdown-content td {
-  padding: 16px;
-  text-align: left;
-  line-height: 1.5;
+.markdown-content :deep(.md-table-card-header) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--app-surface-2);
   border-bottom: 1px solid var(--app-border);
 }
 
-.markdown-content th {
-  background: var(--app-surface-2);
+.markdown-content :deep(.md-table-card-title) {
+  font-size: 14px;
   font-weight: 700;
   color: var(--app-text);
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border-bottom: 2px solid var(--app-border);
 }
 
-.markdown-content tr:last-child td {
+.markdown-content :deep(.md-table-copy-btn) {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--app-border);
+  background: transparent;
+  color: var(--app-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.markdown-content :deep(.md-table-copy-btn:hover) {
+  color: var(--app-primary);
+  border-color: rgba(var(--app-primary-rgb), 0.35);
+  background: rgba(var(--app-primary-rgb), 0.08);
+}
+
+.markdown-content :deep(.md-table-copy-btn.copied) {
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.markdown-content :deep(.md-table-card-body) {
+  background: var(--app-surface);
+}
+
+.markdown-content :deep(.md-table-scroll) {
+  overflow-x: auto;
+}
+
+.markdown-content :deep(.md-table-card table) {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.markdown-content :deep(.md-table-card th),
+.markdown-content :deep(.md-table-card td) {
+  padding: 14px 16px;
+  line-height: 1.55;
+  border-bottom: 1px solid var(--app-border);
+  border-right: 1px solid rgba(var(--app-primary-rgb), 0.08);
+  white-space: normal;
+  word-break: break-word;
+}
+
+.markdown-content :deep(.md-table-card th) {
+  background: rgba(var(--app-primary-rgb), 0.04);
+  font-weight: 800;
+  color: var(--app-text);
+}
+
+.markdown-content :deep(.md-table-card th:last-child),
+.markdown-content :deep(.md-table-card td:last-child) {
+  border-right: none;
+}
+
+.markdown-content :deep(.md-table-card tr:last-child td) {
   border-bottom: none;
 }
 
-.markdown-content tr:nth-child(even) {
+.markdown-content :deep(.md-table-card tbody tr:nth-child(even)) {
   background-color: rgba(var(--app-primary-rgb), 0.03);
 }
 
-.markdown-content tr:hover {
+.markdown-content :deep(.md-table-card tbody tr:hover) {
   background-color: rgba(var(--app-primary-rgb), 0.06);
   transition: background-color 0.2s ease;
 }
 
 /* 现代化列表样式 */
-.markdown-content ul,
-.markdown-content ol {
-  margin: 16px 0;
-  padding-left: 0;
+.markdown-content :deep(ul),
+.markdown-content :deep(ol) {
+  margin: 14px 0;
+  padding-left: 26px;
+  list-style-position: outside;
 }
 
-.markdown-content ul {
-  list-style: none;
-}
-
-.markdown-content ul li {
-  position: relative;
-  padding: 8px 0 8px 28px;
+.markdown-content :deep(li) {
+  margin: 6px 0;
   line-height: 1.7;
-  margin: 4px 0;
 }
 
-.markdown-content ul li::before {
-  content: '•';
-  position: absolute;
-  left: 8px;
-  color: var(--app-primary);
-  font-size: 18px;
-  font-weight: bold;
-  top: 8px;
-}
-
-.markdown-content ol {
-  padding-left: 24px;
-}
-
-.markdown-content ol li {
-  padding: 8px 0 8px 8px;
-  line-height: 1.7;
-  margin: 4px 0;
-  position: relative;
-}
-
-.markdown-content ol li::marker {
-  color: var(--app-primary);
-  font-weight: 600;
-}
-
-/* 嵌套列表 */
-.markdown-content ul ul,
-.markdown-content ol ol,
-.markdown-content ul ol,
-.markdown-content ol ul {
-  margin: 8px 0;
-}
-
-.markdown-content ul ul li::before {
-  color: #10b981;
-  font-size: 14px;
-}
-
-/* 现代化引用块样式 */
-.markdown-content blockquote {
-  margin: 24px 0;
-  padding: 20px 24px;
-  border-left: 5px solid;
-  border-image: linear-gradient(135deg, var(--app-primary) 0%, var(--app-primary-hover) 100%) 1;
-  background: linear-gradient(135deg, rgba(var(--app-primary-rgb), 0.1) 0%, rgba(var(--app-primary-rgb), 0.06) 100%);
-  color: inherit;
-  font-style: normal;
-  border-radius: 0 12px 12px 0;
-  box-shadow: 0 4px 12px rgba(var(--app-primary-rgb), 0.1);
-  position: relative;
-}
-
-.markdown-content blockquote p {
+/* 避免列表项内部 <p> 产生过大间距 */
+.markdown-content :deep(li > p) {
   margin: 0;
 }
 
-.markdown-content blockquote::before {
-  content: '"';
-  position: absolute;
-  top: 8px;
-  left: 12px;
-  font-size: 48px;
+/* 嵌套列表缩进 & 间距 */
+.markdown-content :deep(li > ul),
+.markdown-content :deep(li > ol) {
+  margin: 10px 0 0;
+  padding-left: 20px;
+}
+
+/* 无序列表层级 */
+.markdown-content :deep(ul) {
+  list-style-type: disc;
+}
+
+.markdown-content :deep(ul ul) {
+  list-style-type: circle;
+}
+
+.markdown-content :deep(ul ul ul) {
+  list-style-type: square;
+}
+
+/* 有序列表层级 */
+.markdown-content :deep(ol) {
+  list-style-type: decimal;
+}
+
+/* 有序列表嵌套：1 / a / i */
+.markdown-content :deep(ol ol) {
+  list-style-type: lower-alpha;
+}
+
+.markdown-content :deep(ol ol ol) {
+  list-style-type: lower-roman;
+}
+
+/* marker 颜色（区分层级） */
+.markdown-content :deep(ul li::marker),
+.markdown-content :deep(ol li::marker) {
   color: var(--app-primary);
-  opacity: 0.2;
-  font-family: Georgia, serif;
+  font-weight: 700;
+}
+
+.markdown-content :deep(ul ul li::marker),
+.markdown-content :deep(ol ol li::marker) {
+  color: #10b981;
+}
+
+.markdown-content :deep(ul ul ul li::marker),
+.markdown-content :deep(ol ol ol li::marker) {
+  color: #f59e0b;
+}
+
+/* 任务列表（GFM） */
+.markdown-content :deep(li.task-list-item) {
+  list-style: none;
+}
+
+.markdown-content :deep(li > input[type="checkbox"]) {
+  margin: 0 8px 0 2px;
+  vertical-align: middle;
+  accent-color: var(--app-primary);
+}
+
+/* 脚注（简单支持） */
+.markdown-content :deep(.footnote-ref) {
+  font-size: 0.85em;
+  vertical-align: super;
+  line-height: 0;
+}
+
+.markdown-content :deep(.footnote-ref a) {
+  text-decoration: none;
+  border-bottom: none;
+  padding: 0 2px;
+}
+
+.markdown-content :deep(.footnotes) {
+  margin-top: 18px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--app-border);
+  font-size: 13px;
+  opacity: 0.95;
+}
+
+.markdown-content :deep(.footnotes hr) {
+  display: none;
+}
+
+.markdown-content :deep(.footnotes ol) {
+  margin: 8px 0 0;
+  padding-left: 22px;
+}
+
+.markdown-content :deep(.footnotes li) {
+  margin: 6px 0;
+}
+
+.markdown-content :deep(.footnote-content p) {
+  margin: 8px 0;
+}
+
+.markdown-content :deep(.footnote-backref) {
+  margin-left: 8px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+/* 现代化引用块样式 */
+.markdown-content :deep(blockquote) {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border-left: 4px solid rgba(var(--app-primary-rgb), 0.45);
+  background: rgba(var(--app-primary-rgb), 0.06);
+  color: inherit;
+  border-radius: 12px;
+}
+
+.markdown-content :deep(blockquote > :first-child) {
+  margin-top: 0;
+}
+
+.markdown-content :deep(blockquote > :last-child) {
+  margin-bottom: 0;
 }
 
 /* 链接样式 */
-.markdown-content a {
+.markdown-content :deep(a) {
   color: var(--app-primary);
-  text-decoration: none;
-  font-weight: 500;
-  border-bottom: 1px solid transparent;
-  transition: all 0.2s ease;
-  position: relative;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  font-weight: 550;
+  transition: color 0.15s ease;
 }
 
-.markdown-content a:hover {
+.markdown-content :deep(a:hover) {
   color: var(--app-primary-hover);
-  border-bottom-color: var(--app-primary-hover);
-}
-
-.markdown-content a::after {
-  content: '↗';
-  font-size: 12px;
-  margin-left: 4px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.markdown-content a:hover::after {
-  opacity: 1;
 }
 
 /* 粗体和斜体 */
-.markdown-content strong {
+.markdown-content :deep(strong) {
   color: inherit;
   font-weight: 700;
 }
 
-.markdown-content em {
+.markdown-content :deep(em) {
   color: inherit;
   font-style: italic;
 }
 
 /* 水平分割线 */
-.markdown-content hr {
+.markdown-content :deep(hr) {
   border: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--app-border), transparent);
-  margin: 32px 0;
-  border-radius: 2px;
+  border-top: 1px solid var(--app-border);
+  margin: 20px 0;
 }
 
 /* 纯文本样式 */
@@ -3170,11 +3855,11 @@ onUnmounted(() => {
 }
 
 /* 段落间距优化 */
-.markdown-content p:first-child {
+.markdown-content :deep(p:first-child) {
   margin-top: 0;
 }
 
-.markdown-content p:last-child {
+.markdown-content :deep(p:last-child) {
   margin-bottom: 0;
 }
 
@@ -3220,7 +3905,7 @@ onUnmounted(() => {
   }
 
   .message-content {
-    max-width: 75%;
+    max-width: 90%;
   }
 }
 
@@ -3280,7 +3965,7 @@ onUnmounted(() => {
   }
 
   .message-content {
-    max-width: 85%;
+    max-width: 92%;
     padding: 12px 16px;
   }
 

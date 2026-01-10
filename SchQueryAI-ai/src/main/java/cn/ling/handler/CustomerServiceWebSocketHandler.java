@@ -65,6 +65,17 @@ public class CustomerServiceWebSocketHandler extends TextWebSocketHandler {
         try {
             String payload = message.getPayload();
             log.info("收到WebSocket原始消息: {}", payload);
+
+            // 兼容前端心跳：可能发送纯文本 ping 或 {type:"ping"}
+            if (payload != null && payload.trim().equalsIgnoreCase("ping")) {
+                Map<String, Object> pong = new HashMap<>();
+                pong.put("type", "pong");
+                pong.put("timestamp", System.currentTimeMillis());
+                synchronized (session) {
+                    session.sendMessage(new TextMessage(JSON.toJSONString(pong)));
+                }
+                return;
+            }
             
             Map<String, Object> msgData = JSON.parseObject(payload, Map.class);
             log.info("解析后的消息对象: {}", msgData);
@@ -79,6 +90,16 @@ public class CustomerServiceWebSocketHandler extends TextWebSocketHandler {
             String topic = convertToString(msgData.get("topic")); // 咨询主题
 
             log.info("收到消息 - 类型: {}, 来自: {} ({}), 用户名: {}, 主题: {}, 内容: {}", messageType, fromUserId, fromType, userName, topic, content);
+
+            if ("ping".equalsIgnoreCase(messageType)) {
+                Map<String, Object> pong = new HashMap<>();
+                pong.put("type", "pong");
+                pong.put("timestamp", System.currentTimeMillis());
+                synchronized (session) {
+                    session.sendMessage(new TextMessage(JSON.toJSONString(pong)));
+                }
+                return;
+            }
 
             if ("user_message".equals(messageType)) {
                 // 用户发送消息给管理员

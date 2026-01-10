@@ -65,6 +65,9 @@ public class IntentRecognizerAdvisor implements BaseAdvisor {
         try {
             // 2. 使用IntentRecognizerRpc识别用户意图
             String intent = recognizeIntent(userInput);
+            if (intent == null || intent.isBlank()) {
+                intent = "UNKNOWN";
+            }
             log.info("意图识别完成，识别结果: {}, 用户输入: {}", intent, userInput);
 
             // 3. 将识别结果存入请求上下文，供后续处理使用

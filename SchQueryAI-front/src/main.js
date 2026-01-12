@@ -29,6 +29,22 @@ window.addEventListener(
   true
 )
 
+window.addEventListener(
+  'unhandledrejection',
+  (event) => {
+    const reason = event?.reason
+    const message = reason?.message || String(reason || '')
+    if (
+      message.includes('ResizeObserver loop limit exceeded') ||
+      message.includes('ResizeObserver loop completed with undelivered notifications')
+    ) {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }
+  },
+  true
+)
+
 const app = createApp(App)
 
 // 注册所有图标

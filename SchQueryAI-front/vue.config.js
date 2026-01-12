@@ -8,6 +8,15 @@ module.exports = defineConfig({
         client: {
             webSocketURL: {
                 pathname: '/ws-hmr'
+            },
+            // 避免 ResizeObserver 警告被 webpack-dev-server overlay 当成致命错误遮罩页面
+            overlay: {
+                runtimeErrors: (error) => {
+                    const message = error && error.message ? String(error.message) : ''
+                    if (message.includes('ResizeObserver loop limit exceeded')) return false
+                    if (message.includes('ResizeObserver loop completed with undelivered notifications')) return false
+                    return true
+                }
             }
         },
         webSocketServer: {

@@ -400,6 +400,24 @@ const loadFragments = async () => {
   }
 }
 
+const refreshDocInfoIfOpen = async () => {
+  if (!docVisible.value) return
+  if (!docInfo.value?.documentId) return
+  if (!currentDocId.value || docInfo.value.documentId !== currentDocId.value) return
+
+  const baseline = docInfo.value?.content || ''
+  const shouldUpdateDocContent = docContent.value === baseline
+  try {
+    const res = await getKnowledgeAttachInfo(currentDocId.value)
+    docInfo.value = res?.data || null
+    if (shouldUpdateDocContent) {
+      docContent.value = docInfo.value?.content || ''
+    }
+  } catch {
+    // 错误提示已由请求拦截器统一处理，避免未捕获 Promise 导致 dev overlay
+  }
+}
+
 const fragEditVisible = ref(false)
 const fragSaving = ref(false)
 const fragEditor = ref({ id: null, content: '' })
@@ -417,10 +435,15 @@ const saveFragment = async () => {
   }
   fragSaving.value = true
   try {
-    await updateKnowledgeFragmentContent({ id: fragEditor.value.id, content: fragEditor.value.content })
-    ElMessage.success('保存成功')
-    fragEditVisible.value = false
-    loadFragments()
+    try {
+      await updateKnowledgeFragmentContent({ id: fragEditor.value.id, content: fragEditor.value.content })
+      ElMessage.success('保存成功')
+      fragEditVisible.value = false
+      await loadFragments()
+      await refreshDocInfoIfOpen()
+    } catch {
+      // 错误提示已由请求拦截器统一处理，避免未捕获 Promise 导致 dev overlay
+    }
   } finally {
     fragSaving.value = false
   }

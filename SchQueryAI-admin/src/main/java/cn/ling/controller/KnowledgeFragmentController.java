@@ -3,7 +3,9 @@ package cn.ling.controller;
 import cn.ling.Result;
 import cn.ling.embedding.EmbeddingModelContext;
 import cn.ling.domain.pojo.DocumentChunks;
+import cn.ling.domain.pojo.Documents;
 import cn.ling.service.DocumentChunksService;
+import cn.ling.service.DocumentsService;
 import cn.ling.service.KnowledgeInfoService;
 import jakarta.annotation.Resource;
 import lombok.Data;
@@ -19,9 +21,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 知识库片段管理（基于 document_chunks）
@@ -35,6 +39,9 @@ public class KnowledgeFragmentController {
 
     @Resource
     private KnowledgeInfoService knowledgeInfoService;
+
+    @Resource
+    private DocumentsService documentsService;
 
     @Resource(name = "qdrantVectorStore")
     private VectorStore qdrantVectorStore;
@@ -96,6 +103,9 @@ public class KnowledgeFragmentController {
             chunk.setChunkContent(req.getContent());
             chunk.setChunkLength(req.getContent().length());
             documentChunksService.updateById(chunk);
+
+            // 3) 同步更新 documents.content，避免“片段已改但详情仍显示旧内容/重建覆盖片段修改”
+            syncDocumentContentFromChunks(chunk.getDocumentId());
             return Result.success("更新成功");
         } catch (Exception e) {
             return Result.error("更新失败：" + e.getMessage());
@@ -124,7 +134,15 @@ public class KnowledgeFragmentController {
         }
 
         boolean ok = documentChunksService.removeById(id);
-        return ok ? Result.success("删除成功") : Result.error("删除失败");
+        if (!ok) {
+            return Result.error("删除失败");
+        }
+
+        try {
+            syncDocumentContentFromChunks(chunk.getDocumentId());
+        } catch (Exception ignored) {
+        }
+        return Result.success("删除成功");
     }
 
     @Data
@@ -185,6 +203,70 @@ public class KnowledgeFragmentController {
         }
 
         return op.build();
+    }
+
+    private void syncDocumentContentFromChunks(Long documentId) {
+        if (documentId == null) {
+            return;
+        }
+
+        Documents documents = documentsService.getById(documentId);
+        if (documents == null) {
+            return;
+        }
+
+        List<String> chunkContents = documentChunksService.lambdaQuery()
+                .select(DocumentChunks::getChunkIndex, DocumentChunks::getChunkContent)
+                .eq(DocumentChunks::getDocumentId, documentId)
+                .orderByAsc(DocumentChunks::getChunkIndex)
+                .list()
+                .stream()
+                .map(DocumentChunks::getChunkContent)
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toList());
+
+        if (chunkContents.isEmpty()) {
+            return;
+        }
+
+        String merged = mergeChunkContents(chunkContents);
+        if (!StringUtils.hasText(merged)) {
+            return;
+        }
+
+        documents.setContent(merged);
+        documents.setUpdateTime(LocalDateTime.now());
+        documentsService.updateById(documents);
+    }
+
+    private static String mergeChunkContents(List<String> chunkContents) {
+        String merged = null;
+        for (String chunk : chunkContents) {
+            if (!StringUtils.hasText(chunk)) {
+                continue;
+            }
+            if (merged == null) {
+                merged = chunk;
+                continue;
+            }
+
+            int overlap = findOverlapSuffixPrefix(merged, chunk, 2000);
+            merged = overlap > 0 ? (merged + chunk.substring(overlap)) : (merged + chunk);
+        }
+        return merged == null ? "" : merged;
+    }
+
+    private static int findOverlapSuffixPrefix(String left, String right, int maxOverlap) {
+        if (!StringUtils.hasText(left) || !StringUtils.hasText(right)) {
+            return 0;
+        }
+        int max = Math.min(Math.min(left.length(), right.length()), Math.max(0, maxOverlap));
+        for (int len = max; len > 0; len--) {
+            if (left.regionMatches(left.length() - len, right, 0, len)) {
+                return len;
+            }
+        }
+        return 0;
     }
 
     private Map<String, Object> sanitizeQdrantMetadata(Map<String, Object> metadata) {

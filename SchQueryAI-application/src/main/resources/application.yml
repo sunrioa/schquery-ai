@@ -102,4 +102,12 @@ parameters:
   funasr:                              # FunASR详细配置节点
     subprotocol: "funasr-ws"           # WebSocket子协议名称（1.0+版本使用）
 
+# MinIO配置
+minio:
+  endpoint: http://localhost:6000
+  accessKey: ${ACCESS_KEY}
+  secretKey: ${SECRET_KEY}
+  region: us-east-1
+  bucket: files
+
 #debug: true

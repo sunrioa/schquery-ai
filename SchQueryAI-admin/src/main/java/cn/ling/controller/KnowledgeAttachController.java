@@ -16,7 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
-import org.springframework.ai.vectorstore.filter.FilterExpressionTextParser;
+import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.http.MediaType;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -152,11 +152,13 @@ public class KnowledgeAttachController {
                 }
                 chunk.setMetadata(metadata);
 
+                Map<String, Object> qdrantMetadata = sanitizeQdrantMetadata(metadata);
+
                 pointIds.add(chunk.getQdrantPointId());
                 qdrantDocs.add(Document.builder()
                         .id(chunk.getQdrantPointId())
                         .text(text)
-                        .metadata(metadata)
+                        .metadata(qdrantMetadata)
                         .build());
             }
 
@@ -274,9 +276,7 @@ public class KnowledgeAttachController {
             if (!pointIds.isEmpty()) {
                 qdrantVectorStore.delete(pointIds);
             } else {
-                FilterExpressionTextParser parser = new FilterExpressionTextParser();
-                Filter.Expression filterExpression = parser.parse("WHERE knowledge_id == " + knowledgeId + " AND document_id == " + documents.getId());
-                qdrantVectorStore.delete(filterExpression);
+                deleteVectorsByFilter(knowledgeId, documents.getId());
             }
 
             // 3) 删除旧分块
@@ -328,9 +328,7 @@ public class KnowledgeAttachController {
             if (!pointIds.isEmpty()) {
                 qdrantVectorStore.delete(pointIds);
             } else {
-                FilterExpressionTextParser parser = new FilterExpressionTextParser();
-                Filter.Expression filterExpression = parser.parse("WHERE document_id == " + id);
-                qdrantVectorStore.delete(filterExpression);
+                deleteVectorsByFilter(documents.getKnowledgeId(), id);
             }
 
             // 2) 删除分块与文档（DB）
@@ -349,6 +347,84 @@ public class KnowledgeAttachController {
     public static class RebuildRequest {
         private Long docId;
         private String content;
+    }
+
+    private void deleteVectorsByFilter(Long knowledgeId, Long documentId) {
+        if (documentId == null) {
+            return;
+        }
+
+        Exception numericError = null;
+        try {
+            qdrantVectorStore.delete(buildFilterExpression(knowledgeId, documentId, true));
+        } catch (Exception e) {
+            numericError = e;
+        }
+
+        try {
+            qdrantVectorStore.delete(buildFilterExpression(knowledgeId, documentId, false));
+        } catch (Exception e) {
+            if (numericError != null) {
+                numericError.addSuppressed(e);
+                throw new RuntimeException(numericError);
+            }
+            throw e;
+        }
+    }
+
+    private Filter.Expression buildFilterExpression(Long knowledgeId, Long documentId, boolean preferNumeric) {
+        FilterExpressionBuilder builder = new FilterExpressionBuilder();
+
+        Object knowledgeIdValue = preferNumeric ? sanitizeQdrantValue(knowledgeId) : (knowledgeId == null ? null : String.valueOf(knowledgeId));
+        Object documentIdValue = preferNumeric ? sanitizeQdrantValue(documentId) : String.valueOf(documentId);
+
+        if (knowledgeIdValue != null) {
+            return builder.and(
+                    builder.eq("knowledge_id", knowledgeIdValue),
+                    builder.eq("document_id", documentIdValue)
+            ).build();
+        }
+        return builder.eq("document_id", documentIdValue).build();
+    }
+
+    private Map<String, Object> sanitizeQdrantMetadata(Map<String, Object> metadata) {
+        if (metadata == null || metadata.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Object> sanitized = new HashMap<>();
+        for (Map.Entry<String, Object> entry : metadata.entrySet()) {
+            String key = entry.getKey();
+            if (!StringUtils.hasText(key)) {
+                continue;
+            }
+            Object value = sanitizeQdrantValue(entry.getValue());
+            if (value != null) {
+                sanitized.put(key, value);
+            }
+        }
+        return sanitized;
+    }
+
+    private Object sanitizeQdrantValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String || value instanceof Integer || value instanceof Double || value instanceof Float || value instanceof Boolean) {
+            return value;
+        }
+        if (value instanceof Long longValue) {
+            if (longValue <= Integer.MAX_VALUE && longValue >= Integer.MIN_VALUE) {
+                return longValue.intValue();
+            }
+            return longValue.toString();
+        }
+        if (value instanceof Short shortValue) {
+            return shortValue.intValue();
+        }
+        if (value instanceof Byte byteValue) {
+            return byteValue.intValue();
+        }
+        return value.toString();
     }
 
     private String resolveEmbeddingModelName(Long knowledgeId) {

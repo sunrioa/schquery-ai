@@ -502,14 +502,23 @@ const save = async () => {
 }
 
 const removeRow = async (row) => {
-  await ElMessageBox.confirm(`确认删除知识库「${row.kname}」？该操作将同时删除其文档与向量数据。`, '提示', {
-    confirmButtonText: '删除',
-    cancelButtonText: '取消',
-    type: 'warning'
-  })
-  await removeKnowledge(row.id)
-  ElMessage.success('删除成功')
-  loadList()
+  try {
+    await ElMessageBox.confirm(`确认删除知识库「${row.kname}」？该操作将同时删除其文档与向量数据。`, '提示', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+
+  try {
+    await removeKnowledge(row.id)
+    ElMessage.success('删除成功')
+    loadList()
+  } catch {
+    // 错误提示已由请求拦截器统一处理，避免未捕获 Promise 导致 dev overlay
+  }
 }
 
 const goDetail = (row) => {
@@ -607,7 +616,8 @@ onMounted(() => {
 }
 
 .pagination-container {
-  margin-top: 24px;
+  margin-top: 0;
+  padding: 12px 16px 16px;
   display: flex;
   justify-content: flex-end;
 }

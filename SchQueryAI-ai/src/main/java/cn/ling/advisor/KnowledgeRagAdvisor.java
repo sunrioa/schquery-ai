@@ -133,6 +133,16 @@ public class KnowledgeRagAdvisor implements BaseAdvisor {
 
             List<Document> docs = EmbeddingModelContext.withModel(embeddingModelName, () -> qdrantVectorStore.similaritySearch(request));
             if (docs == null || docs.isEmpty()) {
+                // 兼容：部分数据将 knowledge_id 写为字符串（如 metadata 中 Long 转换为 String）
+                SearchRequest stringFilter = SearchRequest.from(baseSearchRequest)
+                        .query(queryForEmbedding)
+                        .topK(candidateCount)
+                        .filterExpression("WHERE knowledge_id == '" + knowledgeId + "'")
+                        .build();
+                docs = EmbeddingModelContext.withModel(embeddingModelName, () -> qdrantVectorStore.similaritySearch(stringFilter));
+            }
+
+            if (docs == null || docs.isEmpty()) {
                 // 兼容历史数据：旧数据未写入 knowledge_id 元数据时，先做一次无过滤检索兜底
                 SearchRequest fallback = SearchRequest.from(baseSearchRequest)
                         .query(queryForEmbedding)

@@ -126,9 +126,10 @@
             </template>
           </el-table-column>
           <el-table-column prop="chunkLength" label="长度" width="90" align="center" />
-          <el-table-column label="操作" width="120" align="center" fixed="right">
+          <el-table-column label="操作" width="160" align="center" fixed="right">
             <template #default="{ row }">
               <el-button size="small" @click="openFragEdit(row)">编辑</el-button>
+              <el-button size="small" type="danger" @click="removeFragment(row)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -164,6 +165,7 @@ import {
   reindexKnowledgeAttach,
   rebuildKnowledgeAttach,
   removeKnowledgeAttach,
+  removeKnowledgeFragment,
   updateKnowledgeFragmentContent,
   uploadKnowledgeAttach
 } from '../../../api/ai/knowledge'
@@ -302,18 +304,26 @@ const rebuild = async () => {
     ElMessage.error('内容不能为空')
     return
   }
-  await ElMessageBox.confirm('确认重建该文档索引？将删除旧向量与分块并重新生成。', '提示', {
-    confirmButtonText: '重建',
-    cancelButtonText: '取消',
-    type: 'warning'
-  })
+  try {
+    await ElMessageBox.confirm('确认重建该文档索引？将删除旧向量与分块并重新生成。', '提示', {
+      confirmButtonText: '重建',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
 
   rebuilding.value = true
   try {
-    await rebuildKnowledgeAttach({ docId: docInfo.value.documentId, content: docContent.value })
-    ElMessage.success('重建成功')
-    docVisible.value = false
-    loadDocs()
+    try {
+      await rebuildKnowledgeAttach({ docId: docInfo.value.documentId, content: docContent.value })
+      ElMessage.success('重建成功')
+      docVisible.value = false
+      loadDocs()
+    } catch {
+      // 错误提示已由请求拦截器统一处理，避免未捕获 Promise 导致 dev overlay
+    }
   } finally {
     rebuilding.value = false
   }
@@ -322,16 +332,24 @@ const rebuild = async () => {
 // 重索引
 const reindexingId = ref(null)
 const reindex = async (row) => {
-  await ElMessageBox.confirm('确认重索引？将基于当前片段内容重算向量（不重新切分）。', '提示', {
-    confirmButtonText: '重索引',
-    cancelButtonText: '取消',
-    type: 'warning'
-  })
+  try {
+    await ElMessageBox.confirm('确认重索引？将基于当前片段内容重算向量（不重新切分）。', '提示', {
+      confirmButtonText: '重索引',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
   reindexingId.value = row.id
   try {
-    await reindexKnowledgeAttach(row.id)
-    ElMessage.success('重索引完成')
-    loadDocs()
+    try {
+      await reindexKnowledgeAttach(row.id)
+      ElMessage.success('重索引完成')
+      loadDocs()
+    } catch {
+      // 错误提示已由请求拦截器统一处理，避免未捕获 Promise 导致 dev overlay
+    }
   } finally {
     reindexingId.value = null
   }
@@ -339,14 +357,23 @@ const reindex = async (row) => {
 
 // 删除
 const removeDoc = async (row) => {
-  await ElMessageBox.confirm(`确认删除文档「${row.title || row.id}」？将同时删除其向量数据。`, '提示', {
-    confirmButtonText: '删除',
-    cancelButtonText: '取消',
-    type: 'warning'
-  })
-  await removeKnowledgeAttach(row.id)
-  ElMessage.success('删除成功')
-  loadDocs()
+  try {
+    await ElMessageBox.confirm(`确认删除文档「${row.title || row.id}」？将同时删除其向量数据。`, '提示', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+
+  try {
+    await removeKnowledgeAttach(row.id)
+    ElMessage.success('删除成功')
+    loadDocs()
+  } catch {
+    // 错误提示已由请求拦截器统一处理，避免未捕获 Promise 导致 dev overlay
+  }
 }
 
 // 片段
@@ -396,6 +423,27 @@ const saveFragment = async () => {
     loadFragments()
   } finally {
     fragSaving.value = false
+  }
+}
+
+const removeFragment = async (row) => {
+  if (!row?.id) return
+  try {
+    await ElMessageBox.confirm(`确认删除该片段（#${row.chunkIndex ?? '-'}，ID：${row.id}）？将同时删除其向量数据。`, '提示', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+
+  try {
+    await removeKnowledgeFragment(row.id)
+    ElMessage.success('删除成功')
+    loadFragments()
+  } catch {
+    // 错误提示已由请求拦截器统一处理，避免未捕获 Promise 导致 dev overlay
   }
 }
 

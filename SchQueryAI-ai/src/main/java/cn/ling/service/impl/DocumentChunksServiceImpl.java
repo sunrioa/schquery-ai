@@ -90,6 +90,8 @@ public class DocumentChunksServiceImpl extends ServiceImpl<DocumentChunksMapper,
                 baseMetadata.putIfAbsent("knowledge_id", knowledgeId);
             }
 
+            Map<String, Object> baseMetadataForQdrant = sanitizeQdrantMetadata(baseMetadata);
+
             // 3. 构建待写入Qdrant的Document与DB分块实体（元数据必须逐块拷贝，避免被覆盖）
             AtomicInteger chunkIndex = new AtomicInteger(1);
             List<Document> qdrantDocuments = new ArrayList<>(chunkTexts.size());
@@ -104,11 +106,14 @@ public class DocumentChunksServiceImpl extends ServiceImpl<DocumentChunksMapper,
                 Map<String, Object> chunkMetadata = new HashMap<>(baseMetadata);
                 chunkMetadata.put("chunk_index", index);
 
+                Map<String, Object> chunkMetadataForQdrant = new HashMap<>(baseMetadataForQdrant);
+                chunkMetadataForQdrant.put("chunk_index", index);
+
                 String pointId = UUID.randomUUID().toString();
                 Document qdrantDocument = Document.builder()
                         .id(pointId)
                         .text(chunkText)
-                        .metadata(chunkMetadata)
+                        .metadata(chunkMetadataForQdrant)
                         .build();
                 qdrantDocuments.add(qdrantDocument);
 
@@ -153,6 +158,94 @@ public class DocumentChunksServiceImpl extends ServiceImpl<DocumentChunksMapper,
             log.error("文档分块处理过程中发生异常 - 文档ID: {}, 错误信息: {}", id, e.getMessage(), e);
             throw new RuntimeException("文档分块处理失败：" + e.getMessage(), e);
         }
+    }
+
+    /**
+     * QdrantVectorStore 的 payload 不支持 Long 等部分 Java 类型，需要在入库前做一次安全转换。
+     * <p>
+     * 目标：保证 payload 只包含 QdrantValueFactory 支持的类型（如 String/Integer/Double/Boolean/List/Map）。
+     */
+    private static Map<String, Object> sanitizeQdrantMetadata(Map<String, Object> metadata) {
+        Map<String, Object> sanitized = new HashMap<>();
+        if (metadata == null || metadata.isEmpty()) {
+            return sanitized;
+        }
+        for (Map.Entry<String, Object> entry : metadata.entrySet()) {
+            String key = entry.getKey();
+            if (!StringUtils.hasText(key)) {
+                continue;
+            }
+            Object value = sanitizeQdrantValue(entry.getValue());
+            if (value != null) {
+                sanitized.put(key, value);
+            }
+        }
+        return sanitized;
+    }
+
+    private static Object sanitizeQdrantValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String || value instanceof Boolean || value instanceof Integer || value instanceof Double) {
+            return value;
+        }
+        if (value instanceof Float f) {
+            return f.doubleValue();
+        }
+        if (value instanceof Short s) {
+            return s.intValue();
+        }
+        if (value instanceof Byte b) {
+            return b.intValue();
+        }
+        if (value instanceof Long l) {
+            if (l >= Integer.MIN_VALUE && l <= Integer.MAX_VALUE) {
+                return l.intValue();
+            }
+            // 超出 int 范围时使用字符串，避免精度丢失和类型不支持
+            return String.valueOf(l);
+        }
+        if (value instanceof Enum<?> e) {
+            return e.name();
+        }
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> nested = new HashMap<>();
+            for (Map.Entry<?, ?> e : map.entrySet()) {
+                String nestedKey = e.getKey() == null ? null : String.valueOf(e.getKey());
+                if (!StringUtils.hasText(nestedKey)) {
+                    continue;
+                }
+                Object nestedValue = sanitizeQdrantValue(e.getValue());
+                if (nestedValue != null) {
+                    nested.put(nestedKey, nestedValue);
+                }
+            }
+            return nested;
+        }
+        if (value instanceof Iterable<?> iterable) {
+            List<Object> list = new ArrayList<>();
+            for (Object item : iterable) {
+                Object safe = sanitizeQdrantValue(item);
+                if (safe != null) {
+                    list.add(safe);
+                }
+            }
+            return list;
+        }
+        if (value instanceof Object[] arr) {
+            List<Object> list = new ArrayList<>(arr.length);
+            for (Object item : arr) {
+                Object safe = sanitizeQdrantValue(item);
+                if (safe != null) {
+                    list.add(safe);
+                }
+            }
+            return list;
+        }
+
+        // 兜底：转成字符串，避免抛出 Unsupported value type
+        return String.valueOf(value);
     }
 
     private TextSplitterUtils resolveTextSplitter(Long knowledgeId) {
@@ -214,5 +307,4 @@ public class DocumentChunksServiceImpl extends ServiceImpl<DocumentChunksMapper,
         }
     }
 }
-
 

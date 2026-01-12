@@ -61,3 +61,7 @@ export function getKnowledgeFragmentList(docId) {
 export function updateKnowledgeFragmentContent(data) {
   return request.post('/knowledge/fragment/updateContent', data)
 }
+
+export function removeKnowledgeFragment(id) {
+  return request.post(`/knowledge/fragment/remove/${id}`)
+}

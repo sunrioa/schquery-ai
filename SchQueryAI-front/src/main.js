@@ -13,6 +13,22 @@ import { initTheme } from './utils/theme'
 
 initTheme()
 
+// 避免 Element Plus / 浏览器 ResizeObserver 警告在开发环境被 overlay 当成致命错误遮罩页面
+// 参考报错：ResizeObserver loop completed with undelivered notifications.
+window.addEventListener(
+  'error',
+  (event) => {
+    const message = event?.message || ''
+    if (
+      message.includes('ResizeObserver loop limit exceeded') ||
+      message.includes('ResizeObserver loop completed with undelivered notifications')
+    ) {
+      event.stopImmediatePropagation()
+    }
+  },
+  true
+)
+
 const app = createApp(App)
 
 // 注册所有图标

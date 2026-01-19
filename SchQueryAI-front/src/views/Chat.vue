@@ -2,7 +2,7 @@
   <div class="chat-container">
     <el-container>
       <!-- 会话列表侧边栏 -->
-      <el-aside width="300px" class="session-sidebar">
+      <el-aside width="300px" class="session-sidebar" :class="{ show: mobileSidebarVisible }">
         <div class="session-header">
           <h3>聊天会话</h3>
           <el-button
@@ -52,11 +52,25 @@
         </div>
       </el-aside>
 
+      <div
+        v-if="isMobile && mobileSidebarVisible"
+        class="mobile-sidebar-mask"
+        @click="mobileSidebarVisible = false"
+      />
+
       <!-- 聊天主区域 -->
       <el-container class="chat-main">
         <el-header class="chat-header">
           <div class="page-header chat-page-header">
             <div class="header-left">
+              <el-button
+                class="back-btn mobile-only"
+                circle
+                :title="mobileSidebarVisible ? '关闭会话列表' : '打开会话列表'"
+                @click="toggleMobileSidebar"
+              >
+                <el-icon class="back-icon"><Menu /></el-icon>
+              </el-button>
               <div class="title">
                 <h2>{{ currentSession ? (currentSession.sessionName || '未命名会话') : 'SchQueryAI 智能聊天' }}</h2>
                 <p class="sub">{{ currentSession ? '左侧切换/管理会话，底部输入框发送消息' : '选择左侧会话开始聊天' }}</p>
@@ -260,7 +274,7 @@
 import { ref, onMounted, onUnmounted, nextTick, watch, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElEmpty, ElAvatar, ElDropdown, ElDropdownMenu, ElDropdownItem, ElButton, ElInput, ElDialog, ElForm, ElFormItem, ElIcon } from 'element-plus'
-import { Plus, Setting, Edit, Delete, Service, Upload, Loading, Microphone, SwitchButton, User, Lock, ArrowDown, ArrowLeft, Moon, Sunny, ChatDotRound, Tools } from '@element-plus/icons-vue'
+import { Plus, Setting, Edit, Delete, Service, Upload, Loading, Microphone, SwitchButton, User, Lock, ArrowDown, ArrowLeft, Moon, Sunny, ChatDotRound, Tools, Menu } from '@element-plus/icons-vue'
 import { chatApi } from '../api/chat'
 import { userApi } from '../api/user'
 import WeatherBadge from '../components/WeatherBadge.vue'
@@ -317,6 +331,21 @@ const realTimeTranscript = ref('')
 const streamingSessionToken = ref('') // 流式识别会话令牌
 let renderVersion = 0 // 渲染版本号，用于强制重新渲染
 const streamingMessageIds = ref(new Set()) // 用于标记正在流式传输的消息ID
+
+const isMobile = ref(false)
+const mobileSidebarVisible = ref(false)
+
+const updateIsMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+  if (!isMobile.value) {
+    mobileSidebarVisible.value = false
+  }
+}
+
+const toggleMobileSidebar = () => {
+  if (!isMobile.value) return
+  mobileSidebarVisible.value = !mobileSidebarVisible.value
+}
 
 // 黑夜模式状态
 const isDarkMode = ref(isDarkTheme())
@@ -907,6 +936,9 @@ const loadSessions = async () => {
       sessions.value = response.data || []
       console.log('Sessions loaded:', sessions.value)
     }
+    if (isMobile.value && !currentSessionId.value) {
+      mobileSidebarVisible.value = true
+    }
   } catch (error) {
     handleApiError(error, '加载会话列表失败')
   } finally {
@@ -935,6 +967,9 @@ const createNewSession = async () => {
 const selectSession = async (session) => {
   currentSession.value = session
   currentSessionId.value = session.id
+  if (isMobile.value) {
+    mobileSidebarVisible.value = false
+  }
   await loadMessages(session.id)
 }
 
@@ -1924,6 +1959,8 @@ window.copyTable = async function(button, text) {
 
 // 挂载时加载
 onMounted(() => {
+  updateIsMobile()
+  window.addEventListener('resize', updateIsMobile)
   if (checkToken()) {
     loadSessions()
     loadUserInfo()
@@ -1933,6 +1970,7 @@ onMounted(() => {
 // 组件卸载时清理资源
 onUnmounted(() => {
   cleanupRecording()
+  window.removeEventListener('resize', updateIsMobile)
 
   console.log('Component unmounted, cleanup completed')
 })
@@ -1942,6 +1980,7 @@ onUnmounted(() => {
 /* 全局基础样式 */
 .chat-container {
   height: 100vh;
+  height: 100dvh;
   background-color: var(--app-bg);
   overflow: hidden;
   color: var(--app-text);
@@ -2068,6 +2107,7 @@ onUnmounted(() => {
 /* 聊天主区域 - 核心布局控制 */
 .chat-main {
   height: 100vh;
+  height: 100dvh;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -2164,6 +2204,18 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.mobile-only {
+  display: none !important;
+}
+
+.mobile-sidebar-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 9;
 }
 
 
@@ -3928,13 +3980,23 @@ onUnmounted(() => {
   .session-sidebar {
     position: absolute;
     z-index: 10;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: min(86vw, 320px) !important;
     height: 100vh;
+    height: 100dvh;
     transform: translateX(-100%);
     transition: transform 0.3s ease;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
   }
 
   .session-sidebar.show {
     transform: translateX(0);
+  }
+
+  .mobile-only {
+    display: inline-flex !important;
   }
 
   .chat-header {
@@ -3950,10 +4012,32 @@ onUnmounted(() => {
 
   .chat-page-header .header-left {
     gap: 6px;
+    align-items: center;
+  }
+
+  .chat-page-header {
+    align-items: center;
+  }
+
+  .chat-page-header .title h2 {
+    margin: 0;
+  }
+
+  .chat-page-header .sub {
+    display: none;
+  }
+
+  .username {
+    display: none;
+  }
+
+  .user-dropdown {
+    padding: 6px 8px;
   }
 
   .chat-content {
     max-height: calc(100vh - 64px - 80px); /* 移动端输入区略窄 */
+    max-height: calc(100dvh - 64px - 80px);
   }
 
   .chat-messages {

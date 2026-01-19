@@ -493,5 +493,11 @@ onMounted(async () => {
   .weather-desc {
     display: none;
   }
+  .weather-sep:last-of-type {
+    display: none;
+  }
+  .weather-badge {
+    padding: 6px 8px;
+  }
 }
 </style>

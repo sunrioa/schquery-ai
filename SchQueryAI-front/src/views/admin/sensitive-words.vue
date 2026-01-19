@@ -11,7 +11,7 @@
           v-model="filters.word"
           placeholder="搜索敏感词"
           clearable
-          style="width: 220px"
+          class="filter-input"
           @keyup.enter="handleSearch"
           @clear="handleSearch"
         >
@@ -20,7 +20,7 @@
           </template>
         </el-input>
 
-        <el-select v-model="filters.status" placeholder="状态" clearable style="width: 120px" @change="handleSearch">
+        <el-select v-model="filters.status" placeholder="状态" clearable class="filter-select" @change="handleSearch">
           <el-option label="全部" :value="undefined" />
           <el-option label="启用" :value="1" />
           <el-option label="禁用" :value="0" />
@@ -53,34 +53,36 @@
     </el-row>
 
     <el-card class="table-card" shadow="never" v-loading="loading">
-      <el-table :data="list" stripe style="width: 100%">
-        <el-table-column type="index" label="序号" width="60" align="center" />
-        <el-table-column prop="id" label="ID" width="90" align="center" />
-        <el-table-column prop="word" label="敏感词" min-width="220" show-overflow-tooltip />
-        <el-table-column prop="status" label="状态" width="160" align="center">
-          <template #default="{ row }">
-            <div class="status-cell">
-              <el-tag :type="Number(row.status) === 1 ? 'success' : 'info'" size="small">
-                {{ Number(row.status) === 1 ? '启用' : '禁用' }}
-              </el-tag>
-              <el-switch
-                :model-value="Number(row.status) === 1"
-                :disabled="statusUpdatingId === row.id"
-                @change="(val) => updateStatus(row, val)"
-              />
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column prop="updateTime" label="更新时间" width="180" align="center">
-          <template #default="{ row }">{{ formatDate(row.updateTime || row.createTime) || '-' }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="200" align="center" fixed="right">
-          <template #default="{ row }">
-            <el-button size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="removeRow(row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div class="table-scroll">
+        <el-table :data="list" stripe style="width: 100%">
+          <el-table-column type="index" label="序号" width="60" align="center" />
+          <el-table-column prop="id" label="ID" width="90" align="center" />
+          <el-table-column prop="word" label="敏感词" min-width="220" show-overflow-tooltip />
+          <el-table-column prop="status" label="状态" width="160" align="center">
+            <template #default="{ row }">
+              <div class="status-cell">
+                <el-tag :type="Number(row.status) === 1 ? 'success' : 'info'" size="small">
+                  {{ Number(row.status) === 1 ? '启用' : '禁用' }}
+                </el-tag>
+                <el-switch
+                  :model-value="Number(row.status) === 1"
+                  :disabled="statusUpdatingId === row.id"
+                  @change="(val) => updateStatus(row, val)"
+                />
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column prop="updateTime" label="更新时间" width="180" align="center">
+            <template #default="{ row }">{{ formatDate(row.updateTime || row.createTime) || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="200" align="center" :fixed="isMobile ? undefined : 'right'">
+            <template #default="{ row }">
+              <el-button size="small" @click="openEdit(row)">编辑</el-button>
+              <el-button size="small" type="danger" @click="removeRow(row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
 
       <div class="pagination">
         <el-pagination
@@ -129,12 +131,17 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { useHttp } from '@/utils/http'
 
 const http = useHttp()
+
+const isMobile = ref(false)
+const updateIsMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -387,10 +394,35 @@ const formatDate = (date) => {
   return d.toLocaleString('zh-CN')
 }
 
-onMounted(() => reload())
+onMounted(() => {
+  updateIsMobile()
+  window.addEventListener('resize', updateIsMobile)
+  reload()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateIsMobile)
+})
 </script>
 
 <style scoped>
+.filter-input {
+  width: 220px;
+}
+
+.filter-select {
+  width: 120px;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll :deep(.el-table) {
+  min-width: 820px;
+}
+
 .stats-row {
   margin-bottom: 16px;
 }
@@ -410,5 +442,12 @@ onMounted(() => reload())
   font-size: 12px;
   color: var(--admin-muted, #6b7280);
   margin-top: 6px;
+}
+
+@media (max-width: 768px) {
+  .filter-input,
+  .filter-select {
+    width: 100%;
+  }
 }
 </style>

@@ -22,13 +22,13 @@
             v-model="query.kname"
             placeholder="搜索知识库名称..."
             clearable
-            style="width: 240px"
+            class="search-input"
             @keyup.enter="loadList"
             @clear="loadList"
           >
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
-          <el-select v-model="query.status" placeholder="状态筛选" clearable style="width: 140px" @change="loadList">
+          <el-select v-model="query.status" placeholder="状态筛选" clearable class="search-select" @change="loadList">
             <el-option label="全部状态" :value="undefined" />
             <el-option label="已启用" :value="1" />
             <el-option label="已停用" :value="0" />
@@ -38,7 +38,8 @@
     </el-card>
 
     <el-card class="table-card" shadow="never" v-loading="loading">
-      <el-table :data="list" stripe style="width: 100%" class="custom-table">
+      <div class="table-scroll">
+        <el-table :data="list" stripe style="width: 100%" class="custom-table">
         <el-table-column prop="id" label="ID" width="80" align="center" />
         <el-table-column prop="kname" label="知识库名称" min-width="180">
           <template #default="{ row }">
@@ -74,7 +75,7 @@
             <span class="time-text">{{ formatTime(row.updateTime) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220" align="center" fixed="right">
+        <el-table-column label="操作" width="220" align="center" :fixed="isMobile ? undefined : 'right'">
           <template #default="{ row }">
             <el-button type="primary" link @click="goDetail(row)">
               <el-icon><Document /></el-icon>管理文档
@@ -84,7 +85,8 @@
             <el-button type="danger" link @click="removeRow(row)">删除</el-button>
           </template>
         </el-table-column>
-      </el-table>
+        </el-table>
+      </div>
 
       <div class="pagination-container">
         <el-pagination
@@ -358,7 +360,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { Search, Plus, Refresh, Document, QuestionFilled } from '@element-plus/icons-vue'
@@ -366,6 +368,11 @@ import { getKnowledgeList, removeKnowledge, saveKnowledge } from '../../../api/a
 import { getChatModelList } from '../../../api/ai/chatModel'
 
 const router = useRouter()
+
+const isMobile = ref(false)
+const updateIsMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 
 const loading = ref(false)
 const saving = ref(false)
@@ -539,8 +546,14 @@ const formatTime = (timestamp) => {
 }
 
 onMounted(() => {
+  updateIsMobile()
+  window.addEventListener('resize', updateIsMobile)
   loadModelOptions()
   loadList()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateIsMobile)
 })
 </script>
 
@@ -585,6 +598,23 @@ onMounted(() => {
 .search-items {
   display: flex;
   gap: 12px;
+}
+
+.search-input {
+  width: 240px;
+}
+
+.search-select {
+  width: 140px;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll :deep(.el-table) {
+  min-width: 920px;
 }
 
 .table-card {
@@ -684,5 +714,40 @@ onMounted(() => {
 :deep(.knowledge-editor-dialog .el-dialog__footer) {
   border-top: 1px solid var(--app-border);
   padding: 16px 24px;
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-ops {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: flex-start;
+  }
+
+  .search-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .search-items {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-input,
+  .search-select {
+    width: 100%;
+  }
+
+  .pagination-container {
+    justify-content: center;
+    padding: 12px;
+  }
 }
 </style>

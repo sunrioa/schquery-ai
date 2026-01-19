@@ -253,3 +253,47 @@
   width: 100%;
   height: clamp(220px, 26vh, 360px);
 }
+
+/* ===== Mobile usability tweaks ===== */
+@media (max-width: 768px) {
+  /* Wide tables: allow horizontal scroll inside common table cards */
+  .admin-layout .table-card .el-card__body,
+  .admin-layout .logs-table-card .el-card__body,
+  .admin-layout .user-table-card .el-card__body {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .admin-layout .table-card .el-table,
+  .admin-layout .logs-table-card .el-table,
+  .admin-layout .user-table-card .el-table {
+    min-width: 720px;
+  }
+
+  /* Pagination: reduce controls on small screens */
+  .admin-layout .el-pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 8px;
+  }
+
+  .admin-layout .el-pagination__sizes,
+  .admin-layout .el-pagination__jump {
+    display: none;
+  }
+
+  /* Dialog: fit viewport */
+  .admin-layout .el-dialog {
+    width: calc(100vw - 24px) !important;
+    max-width: 720px !important;
+    margin: 12px auto !important;
+  }
+
+  .admin-layout .el-dialog__body {
+    padding: 16px !important;
+  }
+
+  .admin-layout .el-dialog__footer {
+    padding: 12px 16px 16px !important;
+  }
+}

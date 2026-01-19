@@ -14,7 +14,7 @@
           v-model="keyword"
           placeholder="搜索用户/消息"
           clearable
-          style="width: 220px"
+          class="filter-input"
           @keyup.enter="reload"
           @clear="reload"
         >
@@ -22,7 +22,7 @@
             <el-icon><Search /></el-icon>
           </template>
         </el-input>
-        <el-select v-model="statusFilter" placeholder="状态" clearable style="width: 140px" @change="noop">
+        <el-select v-model="statusFilter" placeholder="状态" clearable class="filter-select" @change="noop">
           <el-option label="全部" value="all" />
           <el-option label="进行中" value="active" />
           <el-option label="已完成" value="completed" />
@@ -62,39 +62,41 @@
     <el-row :gutter="12" class="workspace-row split-panels">
       <el-col :xs="24" :lg="10">
         <el-card class="table-card split-panel" shadow="never" v-loading="loading">
-          <el-table
-            :data="filteredSessions"
-            stripe
-            highlight-current-row
-            :row-class-name="rowClassName"
-            @row-click="selectSession"
-          >
-            <el-table-column prop="userName" label="用户" min-width="120" />
-            <el-table-column prop="topic" label="主题" width="120">
-              <template #default="{ row }">
-                <el-tag size="small" type="info">{{ formatTopic(row.topic) }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="status" label="状态" width="110" align="center">
-              <template #default="{ row }">
-                <el-tag size="small" :type="row.status === 'completed' ? 'success' : 'warning'">
-                  {{ row.status === 'completed' ? '已完成' : '处理中' }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="unreadCount" label="未读" width="90" align="center">
-              <template #default="{ row }">
-                <el-badge v-if="(row.unreadCount || 0) > 0" :value="row.unreadCount" :max="99" />
-                <span v-else>-</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="lastMessage" label="最后消息" min-width="220" show-overflow-tooltip />
-            <el-table-column label="操作" width="120" align="center" fixed="right">
-              <template #default="{ row }">
-                <el-button size="small" type="primary" @click.stop="openChat(row)">进入</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
+          <div class="table-scroll">
+            <el-table
+              :data="filteredSessions"
+              stripe
+              highlight-current-row
+              :row-class-name="rowClassName"
+              @row-click="selectSession"
+            >
+              <el-table-column prop="userName" label="用户" min-width="120" />
+              <el-table-column prop="topic" label="主题" width="120">
+                <template #default="{ row }">
+                  <el-tag size="small" type="info">{{ formatTopic(row.topic) }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="status" label="状态" width="110" align="center">
+                <template #default="{ row }">
+                  <el-tag size="small" :type="row.status === 'completed' ? 'success' : 'warning'">
+                    {{ row.status === 'completed' ? '已完成' : '处理中' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="unreadCount" label="未读" width="90" align="center">
+                <template #default="{ row }">
+                  <el-badge v-if="(row.unreadCount || 0) > 0" :value="row.unreadCount" :max="99" />
+                  <span v-else>-</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="lastMessage" label="最后消息" min-width="220" show-overflow-tooltip />
+              <el-table-column label="操作" width="120" align="center" :fixed="isMobile ? undefined : 'right'">
+                <template #default="{ row }">
+                  <el-button size="small" type="primary" @click.stop="openChat(row)">进入</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
         </el-card>
       </el-col>
 
@@ -156,6 +158,11 @@ import { useUserStore } from '../../stores/userStore'
 
 const router = useRouter()
 const userStore = useUserStore()
+
+const isMobile = ref(false)
+const updateIsMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 
 const loading = ref(false)
 const sessions = ref([])
@@ -355,6 +362,8 @@ const handleUserMarkedAdminRead = (event) => {
 }
 
 onMounted(async () => {
+  updateIsMobile()
+  window.addEventListener('resize', updateIsMobile)
   const token = localStorage.getItem('token')
   if (!token) {
     ElMessage.warning('请先登录')
@@ -374,6 +383,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', updateIsMobile)
   window.removeEventListener('refresh-customer-sessions', handleRefreshEvent)
   window.removeEventListener('new-customer-message', handleNewMessageEvent)
   window.removeEventListener('user-marked-admin-read', handleUserMarkedAdminRead)
@@ -381,6 +391,23 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.filter-input {
+  width: 220px;
+}
+
+.filter-select {
+  width: 140px;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll :deep(.el-table) {
+  min-width: 760px;
+}
+
 .stats-row {
   margin-bottom: 16px;
 }
@@ -474,5 +501,12 @@ onUnmounted(() => {
 
 [data-theme="dark"] .preview-msg.is-admin .bubble {
   background: rgba(96, 165, 250, 0.14);
+}
+
+@media (max-width: 768px) {
+  .filter-input,
+  .filter-select {
+    width: 100%;
+  }
 }
 </style>

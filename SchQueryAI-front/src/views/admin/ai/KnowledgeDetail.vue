@@ -16,36 +16,40 @@
     </div>
 
     <el-card class="table-card" shadow="never" v-loading="loading">
-      <el-table :data="docs" stripe style="width: 100%">
-        <el-table-column type="index" label="序号" width="60" align="center" />
-        <el-table-column prop="id" label="文档ID" width="100" align="center" />
-        <el-table-column prop="title" label="标题" min-width="220" />
-        <el-table-column prop="fileType" label="类型" width="90" align="center" />
-        <el-table-column prop="processStatus" label="状态" width="110" align="center">
-          <template #default="{ row }">
-            <el-tag :type="getProcessTag(row.processStatus)">
-              {{ getProcessText(row.processStatus) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="updateTime" label="更新时间" width="180" align="center">
-          <template #default="{ row }">{{ formatTime(row.updateTime) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="360" align="center" fixed="right">
-          <template #default="{ row }">
-            <el-button size="small" @click="openDocInfo(row)">详情/重建</el-button>
-            <el-button size="small" type="primary" @click="openFragments(row)">片段</el-button>
-            <el-button size="small" type="success" :loading="reindexingId === row.id" @click="reindex(row)">
-              重索引
-            </el-button>
-            <el-button size="small" type="danger" @click="removeDoc(row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div class="table-scroll">
+        <el-table :data="docs" stripe style="width: 100%">
+          <el-table-column type="index" label="序号" width="60" align="center" />
+          <el-table-column prop="id" label="文档ID" width="100" align="center" />
+          <el-table-column prop="title" label="标题" min-width="220" />
+          <el-table-column prop="fileType" label="类型" width="90" align="center" />
+          <el-table-column prop="processStatus" label="状态" width="110" align="center">
+            <template #default="{ row }">
+              <el-tag :type="getProcessTag(row.processStatus)">
+                {{ getProcessText(row.processStatus) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="updateTime" label="更新时间" width="180" align="center">
+            <template #default="{ row }">{{ formatTime(row.updateTime) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="360" align="center" :fixed="isMobile ? undefined : 'right'">
+            <template #default="{ row }">
+              <div class="op-actions">
+                <el-button size="small" @click="openDocInfo(row)">详情/重建</el-button>
+                <el-button size="small" type="primary" @click="openFragments(row)">片段</el-button>
+                <el-button size="small" type="success" :loading="reindexingId === row.id" @click="reindex(row)">
+                  重索引
+                </el-button>
+                <el-button size="small" type="danger" @click="removeDoc(row)">删除</el-button>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
     </el-card>
 
     <!-- 上传文档 -->
-    <el-dialog v-model="uploadVisible" title="上传文档" width="760px">
+    <el-dialog v-model="uploadVisible" title="上传文档" :width="isMobile ? '94vw' : '760px'">
       <el-form :model="uploadForm" label-width="90px">
         <el-form-item label="标题">
           <el-input v-model="uploadForm.title" placeholder="不填则默认使用文件名" />
@@ -86,12 +90,12 @@
     </el-dialog>
 
     <!-- 文档详情/重建 -->
-    <el-dialog v-model="docVisible" title="文档详情 / 重建索引" width="920px">
+    <el-dialog v-model="docVisible" title="文档详情 / 重建索引" :width="isMobile ? '94vw' : '920px'">
       <div v-loading="docLoading">
-        <el-descriptions v-if="docInfo" :column="2" border style="margin-bottom: 12px">
+        <el-descriptions v-if="docInfo" :column="isMobile ? 1 : 2" border style="margin-bottom: 12px">
           <el-descriptions-item label="文档ID">{{ docInfo.documentId }}</el-descriptions-item>
           <el-descriptions-item label="知识库ID">{{ docInfo.knowledgeId }}</el-descriptions-item>
-          <el-descriptions-item label="标题" :span="2">{{ docInfo.title }}</el-descriptions-item>
+          <el-descriptions-item label="标题" :span="isMobile ? 1 : 2">{{ docInfo.title }}</el-descriptions-item>
           <el-descriptions-item label="状态">
             <el-tag :type="getProcessTag(docInfo.processStatus)">
               {{ getProcessText(docInfo.processStatus) }}
@@ -115,9 +119,10 @@
     </el-dialog>
 
     <!-- 片段列表 -->
-    <el-drawer v-model="fragVisible" :title="fragTitle" size="60%">
+    <el-drawer v-model="fragVisible" :title="fragTitle" :size="isMobile ? '100%' : '60%'">
       <div v-loading="fragLoading" class="frag-body">
-        <el-table :data="fragments" stripe style="width: 100%">
+        <div class="table-scroll">
+          <el-table :data="fragments" stripe style="width: 100%">
           <el-table-column prop="chunkIndex" label="#" width="70" align="center" />
           <el-table-column prop="id" label="片段ID" width="90" align="center" />
           <el-table-column prop="chunkContent" label="内容" min-width="260">
@@ -126,17 +131,18 @@
             </template>
           </el-table-column>
           <el-table-column prop="chunkLength" label="长度" width="90" align="center" />
-          <el-table-column label="操作" width="160" align="center" fixed="right">
+          <el-table-column label="操作" width="160" align="center" :fixed="isMobile ? undefined : 'right'">
             <template #default="{ row }">
               <el-button size="small" @click="openFragEdit(row)">编辑</el-button>
               <el-button size="small" type="danger" @click="removeFragment(row)">删除</el-button>
             </template>
           </el-table-column>
-        </el-table>
+          </el-table>
+        </div>
       </div>
     </el-drawer>
 
-    <el-dialog v-model="fragEditVisible" title="编辑片段内容" width="900px">
+    <el-dialog v-model="fragEditVisible" title="编辑片段内容" :width="isMobile ? '94vw' : '900px'">
       <el-form label-width="90px">
         <el-form-item label="片段ID">
           <el-input v-model="fragEditor.id" disabled />
@@ -154,7 +160,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -172,6 +178,11 @@ import {
 
 const route = useRoute()
 const router = useRouter()
+
+const isMobile = ref(false)
+const updateIsMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 
 const knowledgeId = computed(() => route.params.id)
 const headerTitle = computed(() => {
@@ -209,6 +220,15 @@ watch(
   () => refreshAll(),
   { immediate: true }
 )
+
+onMounted(() => {
+  updateIsMobile()
+  window.addEventListener('resize', updateIsMobile)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateIsMobile)
+})
 
 const goBack = () => {
   router.push('/admin/ai/knowledge')
@@ -499,6 +519,22 @@ const formatTime = (timestamp) => {
 <style scoped>
 .frag-body {
   padding: 4px 0;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll :deep(.el-table) {
+  min-width: 760px;
+}
+
+.op-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
 }
 
 .frag-preview {

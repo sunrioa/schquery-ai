@@ -22,19 +22,19 @@
             v-model="query.modelName"
             placeholder="根据模型名称搜索..."
             clearable
-            style="width: 240px"
+            class="search-input"
             @keyup.enter="loadList"
             @clear="loadList"
           >
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
-          <el-select v-model="query.category" placeholder="模型分类" clearable style="width: 140px" @change="loadList">
+          <el-select v-model="query.category" placeholder="模型分类" clearable class="search-select" @change="loadList">
             <el-option label="Chat (对话)" value="chat" />
             <el-option label="Vector (向量)" value="vector" />
             <el-option label="Rerank (重排)" value="rerank" />
             <el-option label="Image (绘图)" value="image" />
           </el-select>
-          <el-select v-model="query.modelShow" placeholder="显示状态" clearable style="width: 120px" @change="loadList">
+          <el-select v-model="query.modelShow" placeholder="显示状态" clearable class="search-select-sm" @change="loadList">
             <el-option label="已启用" :value="1" />
             <el-option label="已隐藏" :value="0" />
           </el-select>
@@ -43,7 +43,8 @@
     </el-card>
 
     <el-card class="table-card" shadow="never" v-loading="loading">
-      <el-table :data="list" stripe style="width: 100%" class="custom-table">
+      <div class="table-scroll">
+        <el-table :data="list" stripe style="width: 100%" class="custom-table">
         <el-table-column prop="id" label="ID" width="80" align="center" />
         <el-table-column prop="category" label="分类" width="100" align="center">
           <template #default="{ row }">
@@ -76,14 +77,15 @@
             <span class="time-text">{{ formatTime(row.updateTime) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="160" align="center" fixed="right">
+        <el-table-column label="操作" width="160" align="center" :fixed="isMobile ? undefined : 'right'">
           <template #default="{ row }">
             <el-button type="primary" link @click="openEdit(row)">配置</el-button>
             <el-divider direction="vertical" />
             <el-button type="danger" link @click="removeRow(row)">移除</el-button>
           </template>
         </el-table-column>
-      </el-table>
+        </el-table>
+      </div>
 
       <div class="pagination-container">
         <el-pagination
@@ -297,10 +299,15 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus, Refresh, QuestionFilled } from '@element-plus/icons-vue'
 import { getChatModelList, removeChatModel, saveChatModel } from '../../../api/ai/chatModel'
+
+const isMobile = ref(false)
+const updateIsMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 
 const loading = ref(false)
 const saving = ref(false)
@@ -452,7 +459,15 @@ const formatTime = (timestamp) => {
   )}:${pad(date.getSeconds())}`
 }
 
-onMounted(() => loadList())
+onMounted(() => {
+  updateIsMobile()
+  window.addEventListener('resize', updateIsMobile)
+  loadList()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateIsMobile)
+})
 </script>
 
 <style scoped>
@@ -496,6 +511,27 @@ onMounted(() => loadList())
 .search-items {
   display: flex;
   gap: 12px;
+}
+
+.search-input {
+  width: 240px;
+}
+
+.search-select {
+  width: 140px;
+}
+
+.search-select-sm {
+  width: 120px;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll :deep(.el-table) {
+  min-width: 980px;
 }
 
 .table-card {
@@ -599,5 +635,41 @@ onMounted(() => loadList())
 :deep(.model-editor-dialog .el-dialog__footer) {
   border-top: 1px solid var(--app-border);
   padding: 16px 24px;
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-ops {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: flex-start;
+  }
+
+  .search-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .search-items {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-input,
+  .search-select,
+  .search-select-sm {
+    width: 100%;
+  }
+
+  .pagination-container {
+    justify-content: center;
+    margin-top: 16px;
+  }
 }
 </style>

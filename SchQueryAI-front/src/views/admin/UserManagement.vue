@@ -12,14 +12,14 @@
           v-model="searchKeyword"
           placeholder="搜索用户名/邮箱..."
           clearable
-          style="width: 180px"
+          class="search-input"
           @input="handleSearch"
         >
           <template #prefix>
             <el-icon><Search /></el-icon>
           </template>
         </el-input>
-        <el-select v-model="roleFilter" placeholder="筛选" style="width: 120px">
+        <el-select v-model="roleFilter" placeholder="筛选" class="filter-select">
           <el-option label="全部用户" value="all" />
           <el-option label="管理员" value="admin" />
           <el-option label="普通用户" value="user" />
@@ -33,88 +33,90 @@
     </div>
 
     <el-card class="table-card" shadow="never" v-loading="loading">
-      <el-table
-        :data="filteredUserList"
-        stripe
-        style="width: 100%"
-        :default-sort="{ prop: 'createTime', order: 'descending' }"
-        :row-class-name="tableRowClassName"
-      >
-        <el-table-column type="index" label="序号" width="60" align="center" />
+      <div class="table-scroll">
+        <el-table
+          :data="filteredUserList"
+          stripe
+          style="width: 100%"
+          :default-sort="{ prop: 'createTime', order: 'descending' }"
+          :row-class-name="tableRowClassName"
+        >
+          <el-table-column type="index" label="序号" width="60" align="center" />
 
-        <el-table-column prop="id" label="用户ID" width="80" align="center" />
+          <el-table-column prop="id" label="用户ID" width="80" align="center" />
 
-        <el-table-column prop="userName" label="用户名" width="150" align="center">
-          <template #default="{ row }">
-            <div class="user-info">
-              <el-avatar :size="32" :src="getAvatarUrl(row.avatar)" />
-              <span class="user-name">{{ row.userName }}</span>
-            </div>
-          </template>
-        </el-table-column>
+          <el-table-column prop="userName" label="用户名" width="150" align="center">
+            <template #default="{ row }">
+              <div class="user-info">
+                <el-avatar :size="32" :src="getAvatarUrl(row.avatar)" />
+                <span class="user-name">{{ row.userName }}</span>
+              </div>
+            </template>
+          </el-table-column>
 
-        <el-table-column prop="email" label="邮箱" width="200" align="center" />
+          <el-table-column prop="email" label="邮箱" width="200" align="center" />
 
-        <el-table-column prop="role" label="角色" width="100" align="center">
-          <template #default="{ row }">
-            <el-tag :type="getRoleType(row.role)">
-              {{ getRoleText(row.role) }}
-            </el-tag>
-          </template>
-        </el-table-column>
+          <el-table-column prop="role" label="角色" width="100" align="center">
+            <template #default="{ row }">
+              <el-tag :type="getRoleType(row.role)">
+                {{ getRoleText(row.role) }}
+              </el-tag>
+            </template>
+          </el-table-column>
 
-        <el-table-column prop="lastLoginIp" label="最后登录IP" width="150" align="center">
-          <template #default="{ row }">
-            <span v-if="row.lastLoginIp">{{ row.lastLoginIp }}</span>
-            <span v-else class="no-data">未登录</span>
-          </template>
-        </el-table-column>
+          <el-table-column prop="lastLoginIp" label="最后登录IP" width="150" align="center">
+            <template #default="{ row }">
+              <span v-if="row.lastLoginIp">{{ row.lastLoginIp }}</span>
+              <span v-else class="no-data">未登录</span>
+            </template>
+          </el-table-column>
 
-        <el-table-column prop="lastLoginLocation" label="登录地点" width="200" align="center">
-          <template #default="{ row }">
-            <div v-if="row.lastLoginLocation && row.lastLoginLocation !== '未知'" class="location-info">
-              <el-icon><Location /></el-icon>
-              <span>{{ row.lastLoginLocation }}</span>
-            </div>
-            <span v-else class="no-data">未知</span>
-          </template>
-        </el-table-column>
+          <el-table-column prop="lastLoginLocation" label="登录地点" width="200" align="center">
+            <template #default="{ row }">
+              <div v-if="row.lastLoginLocation && row.lastLoginLocation !== '未知'" class="location-info">
+                <el-icon><Location /></el-icon>
+                <span>{{ row.lastLoginLocation }}</span>
+              </div>
+              <span v-else class="no-data">未知</span>
+            </template>
+          </el-table-column>
 
-        <el-table-column prop="lastLoginTime" label="最后登录时间" width="180" align="center">
-          <template #default="{ row }">
-            <span v-if="row.lastLoginTime">{{ formatTime(row.lastLoginTime) }}</span>
-            <span v-else class="no-data">从未登录</span>
-          </template>
-        </el-table-column>
+          <el-table-column prop="lastLoginTime" label="最后登录时间" width="180" align="center">
+            <template #default="{ row }">
+              <span v-if="row.lastLoginTime">{{ formatTime(row.lastLoginTime) }}</span>
+              <span v-else class="no-data">从未登录</span>
+            </template>
+          </el-table-column>
 
-        <el-table-column prop="createTime" label="注册时间" width="180" align="center">
-          <template #default="{ row }">
-            {{ formatTime(row.createTime) }}
-          </template>
-        </el-table-column>
+          <el-table-column prop="createTime" label="注册时间" width="180" align="center">
+            <template #default="{ row }">
+              {{ formatTime(row.createTime) }}
+            </template>
+          </el-table-column>
 
-        <el-table-column prop="status" label="状态" width="100" align="center">
-          <template #default="{ row }">
-            <el-tag :type="row.status === 1 ? 'success' : 'danger'">
-              {{ row.status === 1 ? '正常' : '弃用' }}
-            </el-tag>
-          </template>
-        </el-table-column>
+          <el-table-column prop="status" label="状态" width="100" align="center">
+            <template #default="{ row }">
+              <el-tag :type="row.status === 1 ? 'success' : 'danger'">
+                {{ row.status === 1 ? '正常' : '弃用' }}
+              </el-tag>
+            </template>
+          </el-table-column>
 
-        <el-table-column label="操作" width="250" align="center" fixed="right">
-          <template #default="{ row }">
-            <el-button type="primary" size="small" @click="viewLoginHistory(row)">登录历史</el-button>
-            <el-button type="info" size="small" @click="viewUserDetail(row)">详情</el-button>
-            <el-button
-              :type="row.status === 0 ? 'success' : 'danger'"
-              size="small"
-              @click="handleToggleBlacklist(row)"
-            >
-              {{ row.status === 0 ? '解除拉黑' : '拉黑' }}
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+          <el-table-column label="操作" width="250" align="center" :fixed="isMobile ? undefined : 'right'">
+            <template #default="{ row }">
+              <el-button type="primary" size="small" @click="viewLoginHistory(row)">登录历史</el-button>
+              <el-button type="info" size="small" @click="viewUserDetail(row)">详情</el-button>
+              <el-button
+                :type="row.status === 0 ? 'success' : 'danger'"
+                size="small"
+                @click="handleToggleBlacklist(row)"
+              >
+                {{ row.status === 0 ? '解除拉黑' : '拉黑' }}
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
 
       <div class="pagination">
         <el-pagination
@@ -222,7 +224,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Refresh,
@@ -231,6 +233,11 @@ import {
 } from '@element-plus/icons-vue'
 import { userApi } from '../../api/user'
 import { getFullDeviceInfo } from '../../utils/browserUtils'
+
+const isMobile = ref(false)
+const updateIsMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 
 // 响应式数据
 const loading = ref(false)
@@ -508,11 +515,34 @@ const formatTime = (timestamp) => {
 
 // 页面加载时获取数据
 onMounted(() => {
+  updateIsMobile()
+  window.addEventListener('resize', updateIsMobile)
   fetchUserList()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateIsMobile)
 })
 </script>
 
 <style scoped>
+.search-input {
+  width: 180px;
+}
+
+.filter-select {
+  width: 120px;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll :deep(.el-table) {
+  min-width: 1040px;
+}
+
 .user-info {
   display: flex;
   align-items: center;
@@ -574,5 +604,12 @@ onMounted(() => {
 
 [data-theme="dark"] :deep(.el-table .disabled-row) {
   background-color: rgba(245, 108, 108, 0.1) !important;
+}
+
+@media (max-width: 768px) {
+  .search-input,
+  .filter-select {
+    width: 100%;
+  }
 }
 </style>

@@ -73,7 +73,12 @@
     </div>
 
     <div class="workspace">
-      <el-card class="sessions-card" shadow="never" v-loading="loading">
+      <el-card
+        class="sessions-card"
+        :class="{ 'is-mobile-drawer': isMobile, open: mobileSessionsVisible }"
+        shadow="never"
+        v-loading="loading"
+      >
         <div class="card-header">
           <div>
             <h3>客服会话</h3>
@@ -108,6 +113,12 @@
         </div>
       </el-card>
 
+      <div
+        v-if="isMobile && mobileSessionsVisible"
+        class="mobile-sessions-mask"
+        @click="mobileSessionsVisible = false"
+      />
+
       <el-card class="chat-card" shadow="never">
         <div v-if="!currentSession" class="empty-state">
           <el-empty description="选择一个会话开始处理" :image-size="120">
@@ -118,6 +129,17 @@
         <div v-else class="chat-wrapper">
           <div class="chat-header">
             <div class="header-info">
+              <el-button
+                v-if="isMobile"
+                class="session-toggle"
+                circle
+                plain
+                size="small"
+                :title="mobileSessionsVisible ? '关闭会话列表' : '打开会话列表'"
+                @click="toggleMobileSessions"
+              >
+                <el-icon><Menu /></el-icon>
+              </el-button>
               <h3>{{ currentSession.userName }}</h3>
               <span class="topic-tag">{{ formatTopic(currentSession.topic) }}</span>
               <span class="status-tag" :class="{ 'is-completed': currentSession.status === 'completed' }">
@@ -194,7 +216,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Upload, Moon, Position, ChatDotRound, CircleCheck } from '@element-plus/icons-vue'
+import { ArrowLeft, Upload, Moon, Position, ChatDotRound, CircleCheck, Menu } from '@element-plus/icons-vue'
 import { useUserStore } from '../../stores/userStore'
 import { userApi } from '../../api/user'
 
@@ -216,6 +238,21 @@ const webSocket = ref(null)
 const pendingCount = ref(0)
 const isDarkMode = ref(false)
 const userAvatarCache = ref({}) // 用户头像缓存 { userId: avatarBase64 }
+
+const isMobile = ref(false)
+const mobileSessionsVisible = ref(false)
+
+const updateIsMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+  if (!isMobile.value) {
+    mobileSessionsVisible.value = false
+  }
+}
+
+const toggleMobileSessions = () => {
+  if (!isMobile.value) return
+  mobileSessionsVisible.value = !mobileSessionsVisible.value
+}
 
 // 计算过滤后的会话
 const filteredSessions = computed(() => {
@@ -350,6 +387,9 @@ const selectSession = async (session) => {
   console.log('[AdminCustomerService] 会话 userId:', session.userId, 'avatar:', session.avatar)
 
   currentSession.value = session
+  if (isMobile.value) {
+    mobileSessionsVisible.value = false
+  }
   replyMessage.value = ''
 
   // 加载用户头像（如果尚未缓存）
@@ -558,6 +598,9 @@ const handleUserMarkedAdminRead = (event) => {
 }
 
 onMounted(async () => {
+  updateIsMobile()
+  window.addEventListener('resize', updateIsMobile)
+
   console.log('[AdminCustomerService] ========== 页面初始化 ==========')
   
   // 检查登录
@@ -590,6 +633,9 @@ onMounted(async () => {
   
   // 加载会话列表
   await loadSessions()
+  if (isMobile.value && !currentSession.value) {
+    mobileSessionsVisible.value = true
+  }
 
   // 监听刷新事件
   window.addEventListener('refresh-customer-sessions', handleRefreshEvent)
@@ -621,6 +667,7 @@ watch(
 
 // 清理
 onUnmounted(() => {
+  window.removeEventListener('resize', updateIsMobile)
   // 移除事件监听
   window.removeEventListener('refresh-customer-sessions', handleRefreshEvent)
   window.removeEventListener('select-customer-session', handleSelectSessionEvent)
@@ -1033,11 +1080,11 @@ const formatTopic = (topic) => {
 [data-theme="dark"] .metric-desc { color: #a3a3a3; }
 
 .workspace {
+  flex: 1;
   display: grid;
   grid-template-columns: 340px 1fr;
   gap: 12px;
   align-items: stretch;
-  height: var(--admin-pane-height);
   min-height: 0;
   overflow: hidden;
 }
@@ -1045,6 +1092,75 @@ const formatTopic = (topic) => {
 @media (max-width: 1200px) {
   .workspace {
     grid-template-columns: 1fr;
+    grid-template-rows: clamp(220px, 35dvh, 340px) 1fr;
+  }
+}
+
+.mobile-sessions-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  touch-action: none;
+  z-index: 109;
+}
+
+@media (max-width: 768px) {
+  .workspace {
+    grid-template-rows: 1fr;
+  }
+
+  .sessions-card.is-mobile-drawer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(86vw, 320px);
+    transform: translateX(-100%);
+    transition: transform 0.28s ease;
+    z-index: 110;
+    border-radius: 0 14px 14px 0;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+  }
+
+  .sessions-card.is-mobile-drawer.open {
+    transform: translateX(0);
+  }
+
+  .chat-header {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 12px;
+  }
+
+  .header-info {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .header-info h3 {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chat-header .header-actions {
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .metrics-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metric-card {
+    padding: 10px 10px;
+  }
+
+  .metric-desc {
+    display: none;
   }
 }
 
@@ -1104,6 +1220,8 @@ const formatTopic = (topic) => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding-right: 2px;
   padding-bottom: 8px;
 }
@@ -1294,7 +1412,7 @@ const formatTopic = (topic) => {
   color: #274e20;
 }
 
-.header-actions {
+.chat-header .header-actions {
   display: flex;
   gap: 8px;
 }
@@ -1303,6 +1421,8 @@ const formatTopic = (topic) => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 10px 14px;
   display: flex;
   flex-direction: column;
@@ -1391,6 +1511,7 @@ const formatTopic = (topic) => {
 
 .reply-area {
   padding: 8px 12px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom));
   border-top: 1px solid #e5e7eb;
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   flex-shrink: 0;

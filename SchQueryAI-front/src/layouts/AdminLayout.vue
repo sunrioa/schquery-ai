@@ -1,10 +1,10 @@
 <template>
   <div class="admin-layout">
       <el-container class="layout-container">
-      <el-aside :width="collapsed ? '64px' : '220px'" class="sidebar">
+      <el-aside :width="sidebarWidth" class="sidebar" :class="{ 'is-mobile': isMobile, open: mobileSidebarVisible }">
         <div class="sidebar-brand" @click="goHome">
           <div class="brand-icon">AI</div>
-          <div v-if="!collapsed" class="brand-text">
+          <div v-if="!menuCollapsed" class="brand-text">
             <p class="brand-name">SchQueryAI</p>
             <span class="brand-sub">Admin Console</span>
           </div>
@@ -14,7 +14,8 @@
           <el-menu
             class="sidebar-menu"
             :default-active="activeMenu"
-            :collapse="collapsed"
+            :collapse="menuCollapsed"
+            @select="handleMenuSelect"
             router
             background-color="transparent"
             :text-color="menuTextColor"
@@ -108,10 +109,21 @@
         </el-scrollbar>
       </el-aside>
 
+      <div
+        v-if="isMobile && mobileSidebarVisible"
+        class="mobile-sidebar-mask"
+        @click="mobileSidebarVisible = false"
+      />
+
       <el-container class="main">
         <el-header class="topbar">
           <div class="topbar-left">
-            <el-button text class="toolbar-icon" @click="toggleCollapse" :title="collapsed ? '展开侧栏' : '收起侧栏'">
+            <el-button
+              text
+              class="toolbar-icon"
+              @click="toggleSidebar"
+              :title="isMobile ? (mobileSidebarVisible ? '关闭菜单' : '打开菜单') : (collapsed ? '展开侧栏' : '收起侧栏')"
+            >
               <el-icon><Menu /></el-icon>
             </el-button>
             <el-button text class="toolbar-icon" @click="goChat" title="返回聊天">
@@ -148,7 +160,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { clearUserInfo, getCurrentUser } from '../utils/auth'
@@ -161,8 +173,14 @@ const collapsed = ref(false)
 const isDarkMode = ref(false)
 const currentUser = ref(getCurrentUser())
 
+const isMobile = ref(false)
+const mobileSidebarVisible = ref(false)
+
 const menuTextColor = computed(() => 'var(--app-muted)')
 const menuActiveTextColor = computed(() => 'var(--app-text)')
+
+const menuCollapsed = computed(() => (isMobile.value ? false : collapsed.value))
+const sidebarWidth = computed(() => (isMobile.value ? '220px' : (collapsed.value ? '64px' : '220px')))
 
 const activeMenu = computed(() => {
   const p = route.path || ''
@@ -183,8 +201,25 @@ const goProfile = () => {
   router.push('/profile')
 }
 
-const toggleCollapse = () => {
+const updateIsMobile = () => {
+  isMobile.value = window.innerWidth <= 768
+  if (!isMobile.value) {
+    mobileSidebarVisible.value = false
+  }
+}
+
+const toggleSidebar = () => {
+  if (isMobile.value) {
+    mobileSidebarVisible.value = !mobileSidebarVisible.value
+    return
+  }
   collapsed.value = !collapsed.value
+}
+
+const handleMenuSelect = () => {
+  if (isMobile.value) {
+    mobileSidebarVisible.value = false
+  }
 }
 
 const toggleDarkMode = () => {
@@ -201,12 +236,19 @@ const logout = () => {
 onMounted(() => {
   currentUser.value = getCurrentUser()
   isDarkMode.value = isDarkTheme()
+  updateIsMobile()
+  window.addEventListener('resize', updateIsMobile)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateIsMobile)
 })
 </script>
 
 <style scoped>
 .layout-container {
   height: 100vh;
+  height: 100dvh;
 }
 
 .sidebar {
@@ -214,6 +256,7 @@ onMounted(() => {
   border-right: 1px solid var(--app-border);
   overflow: hidden;
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
 }
@@ -331,5 +374,43 @@ onMounted(() => {
 .content {
   padding: 0;
   overflow: auto;
+}
+
+.mobile-sidebar-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 98;
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(86vw, 280px) !important;
+    transform: translateX(-100%);
+    transition: transform 0.28s ease;
+    z-index: 99;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .topbar {
+    padding: 0 10px;
+  }
+
+  .user-name {
+    display: none;
+  }
+
+  .content {
+    padding-bottom: 12px;
+  }
 }
 </style>

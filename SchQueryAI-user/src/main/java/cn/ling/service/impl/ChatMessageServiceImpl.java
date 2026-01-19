@@ -5,7 +5,6 @@ import cn.ling.context.ChatContext;
 import cn.ling.domain.dto.ChatMessageDTO;
 import cn.ling.domain.pojo.ChatMessage;
 import cn.ling.domain.pojo.ChatPreset;
-import cn.ling.domain.pojo.ChatSession;
 import cn.ling.domain.vo.ChatMessageVO;
 import cn.ling.exception.CustomException;
 import cn.ling.mapper.ChatMessageMapper;
@@ -261,15 +260,9 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
     }
 
     private ChatPreset resolveChatPreset(Long sessionId) {
-        if (sessionId == null) {
-            return null;
-        }
         try {
-            ChatSession session = chatSessionService.getById(sessionId);
-            Long presetId = session == null ? null : session.getPresetId();
-            if (presetId == null) {
-                presetId = parseLong(sysConfigService.getConfigValue(KEY_DEFAULT_PRESET_ID));
-            }
+            // Chat UI no longer supports per-session model switching: always follow the global default preset.
+            Long presetId = parseLong(sysConfigService.getConfigValue(KEY_DEFAULT_PRESET_ID));
             if (presetId == null) {
                 return null;
             }
@@ -388,7 +381,6 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
         }
     }
 }
-
 
 
 

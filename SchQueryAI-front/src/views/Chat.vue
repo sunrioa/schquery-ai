@@ -74,24 +74,7 @@
             </div>
 
             <div class="header-actions">
-              <el-select
-                v-if="currentSession"
-                v-model="currentPresetId"
-                size="small"
-                class="preset-select"
-                style="width: 220px"
-                :disabled="chatPresets.length === 0"
-                :loading="presetsLoading"
-                placeholder="选择对话预设"
-                @change="handlePresetChange"
-              >
-                <el-option
-                  v-for="p in chatPresets"
-                  :key="p.id"
-                  :label="`${p.presetName}${p.model ? ' · ' + p.model : ''}`"
-                  :value="p.id"
-                />
-              </el-select>
+              <WeatherBadge />
               <!-- 黑夜模式切换按钮 -->
               <el-button
                 @click="toggleDarkMode"
@@ -274,13 +257,13 @@
 </template>
 
 <script setup>
- import { ref, onMounted, onUnmounted, nextTick, watch, getCurrentInstance } from 'vue'
- import { useRouter } from 'vue-router'
- import { ElMessage, ElMessageBox, ElEmpty, ElAvatar, ElDropdown, ElDropdownMenu, ElDropdownItem, ElButton, ElInput, ElDialog, ElForm, ElFormItem, ElIcon } from 'element-plus'
- import { Plus, Setting, Edit, Delete, Service, Upload, Loading, Microphone, SwitchButton, User, Lock, ArrowDown, ArrowLeft, Moon, Sunny, ChatDotRound, Tools } from '@element-plus/icons-vue'
- import { chatApi } from '../api/chat'
- import { userApi } from '../api/user'
-import { getChatPresetList, getDefaultChatPresetId } from '../api/ai/chatPreset'
+import { ref, onMounted, onUnmounted, nextTick, watch, getCurrentInstance } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox, ElEmpty, ElAvatar, ElDropdown, ElDropdownMenu, ElDropdownItem, ElButton, ElInput, ElDialog, ElForm, ElFormItem, ElIcon } from 'element-plus'
+import { Plus, Setting, Edit, Delete, Service, Upload, Loading, Microphone, SwitchButton, User, Lock, ArrowDown, ArrowLeft, Moon, Sunny, ChatDotRound, Tools } from '@element-plus/icons-vue'
+import { chatApi } from '../api/chat'
+import { userApi } from '../api/user'
+import WeatherBadge from '../components/WeatherBadge.vue'
 import { useUserStore } from '../stores/userStore'
 import { getAIAvatar } from '../utils/avatarUtils'
 import { Marked } from 'marked'
@@ -288,10 +271,10 @@ import {
   isAdmin,
   isWorker,
   hasAnyRole,
-   getCurrentUser
- } from '../utils/auth'
- import { applyTheme, isDarkTheme } from '../utils/theme'
- import hljs from 'highlight.js'
+  getCurrentUser
+} from '../utils/auth'
+import { applyTheme, isDarkTheme } from '../utils/theme'
+import hljs from 'highlight.js'
 
 // 路由实例和用户store
 const router = useRouter()
@@ -306,10 +289,6 @@ const messages = ref([])
 const userMessage = ref('')
 const isTyping = ref(false)
 const sessionsLoading = ref(false)
-const chatPresets = ref([])
-const presetsLoading = ref(false)
-const defaultPresetId = ref(null)
-const currentPresetId = ref(null)
 const showRenameDialog = ref(false)
 const renameSessionName = ref('')
 const messagesContainer = ref(null)
@@ -917,50 +896,6 @@ watch(messages, (newMessages, oldMessages) => {
   })
 }, { deep: true, immediate: false })
 
-// 加载对话预设（角色）列表
-const loadChatPresets = async () => {
-  try {
-    presetsLoading.value = true
-    const res = await getChatPresetList({ pageNum: 1, pageSize: 200, status: 1 })
-    chatPresets.value = res?.data?.records || []
-  } catch (e) {
-    chatPresets.value = []
-  } finally {
-    presetsLoading.value = false
-  }
-}
-
-const loadDefaultPreset = async () => {
-  try {
-    const res = await getDefaultChatPresetId()
-    defaultPresetId.value = res?.data ?? null
-  } catch (e) {
-    defaultPresetId.value = null
-  }
-}
-
-const handlePresetChange = async (presetId) => {
-  if (!currentSessionId.value) return
-  try {
-    await chatApi.updateSession({
-      id: currentSessionId.value,
-      presetId: presetId
-    })
-
-    // 更新本地会话缓存
-    if (currentSession.value) {
-      currentSession.value.presetId = presetId
-    }
-    const idx = sessions.value.findIndex((s) => Number(s.id) === Number(currentSessionId.value))
-    if (idx >= 0) {
-      sessions.value[idx].presetId = presetId
-    }
-    ElMessage.success('已切换对话预设')
-  } catch (error) {
-    handleApiError(error, '切换对话预设失败')
-  }
-}
-
 // 加载会话列表
 const loadSessions = async () => {
   console.log('Loading sessions...')
@@ -1000,7 +935,6 @@ const createNewSession = async () => {
 const selectSession = async (session) => {
   currentSession.value = session
   currentSessionId.value = session.id
-  currentPresetId.value = session?.presetId ?? defaultPresetId.value ?? null
   await loadMessages(session.id)
 }
 
@@ -1991,8 +1925,6 @@ window.copyTable = async function(button, text) {
 // 挂载时加载
 onMounted(() => {
   if (checkToken()) {
-    loadDefaultPreset()
-    loadChatPresets()
     loadSessions()
     loadUserInfo()
   }
@@ -2232,10 +2164,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.preset-select :deep(.el-input__wrapper) {
-  border-radius: 999px;
 }
 
 

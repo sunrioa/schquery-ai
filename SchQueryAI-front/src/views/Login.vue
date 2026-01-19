@@ -8,7 +8,7 @@
         <div class="login-promo">
           <div class="promo-content">
             <h1 class="brand-name">SchQuery智招平台</h1>
-            <p class="brand-slogan">仲恺农业工程学院招生智能查询，一站式志愿决策助手</p>
+            <p class="brand-slogan">招生智能查询，一站式志愿决策助手</p>
             <div class="decor-pattern"></div>
           </div>
         </div>

@@ -350,7 +350,7 @@ const viewConversation = async (conversation) => {
         {
           id: 2,
           sender: 'ai',
-          content: '您好！欢迎咨询仲恺农业工程学院，请问您想了解哪个方面呢？',
+          content: '您好！欢迎咨询，请问您想了解哪个方面呢？',
           timestamp: new Date(Date.now() - 3500000).toISOString()
         },
         {

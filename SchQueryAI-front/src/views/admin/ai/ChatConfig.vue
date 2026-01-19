@@ -9,6 +9,9 @@
         <el-button type="primary" @click="createPreset">
           <el-icon><Plus /></el-icon>新建角色预设
         </el-button>
+        <el-button type="warning" plain @click="openDefaultDialog" :disabled="!presets.length">
+          <el-icon><Star /></el-icon>设置默认模型
+        </el-button>
         <el-button type="success" plain :loading="refreshingMcp" @click="refreshMcp">
           <el-icon><Connection /></el-icon>刷新 MCP
         </el-button>
@@ -406,6 +409,39 @@
         </div>
       </div>
     </div>
+
+    <el-dialog
+      v-model="defaultDialogVisible"
+      title="设置默认对话模型"
+      width="520px"
+      :close-on-click-modal="false"
+    >
+      <el-form label-position="top">
+        <el-form-item label="默认角色预设">
+          <el-select v-model="defaultCandidateId" filterable style="width: 100%" placeholder="请选择角色预设">
+            <el-option
+              v-for="p in presets"
+              :key="p.id"
+              :label="`${p.presetName}${p.model ? ' · ' + p.model : ''}`"
+              :value="p.id"
+              :disabled="Number(p.status) !== 1"
+            />
+          </el-select>
+          <div class="help-text">设置后，所有用户对话将统一使用该预设（需为启用状态）。</div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="defaultDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="settingDefault"
+          :disabled="!defaultCandidateId"
+          @click="confirmSetDefault"
+        >
+          设置默认
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -441,6 +477,9 @@ const presetQuery = ref({
 const presets = ref([])
 const defaultPresetId = ref(null)
 const currentPreset = ref(null)
+const defaultDialogVisible = ref(false)
+const defaultCandidateId = ref(null)
+const settingDefault = ref(false)
 
 const presetWeightAllNull = computed(() => {
   const u = currentPreset.value?.weightUser
@@ -650,6 +689,24 @@ const setAsDefault = async () => {
     await loadDefaultPreset()
   } finally {
     presetSaving.value = false
+  }
+}
+
+const openDefaultDialog = () => {
+  defaultCandidateId.value = defaultPresetId.value
+  defaultDialogVisible.value = true
+}
+
+const confirmSetDefault = async () => {
+  if (!defaultCandidateId.value) return
+  settingDefault.value = true
+  try {
+    await setDefaultChatPresetId(defaultCandidateId.value)
+    ElMessage.success('已设置为默认预设')
+    defaultDialogVisible.value = false
+    await loadDefaultPreset()
+  } finally {
+    settingDefault.value = false
   }
 }
 

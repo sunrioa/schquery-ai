@@ -143,6 +143,9 @@ public class ChatPresetController {
         if (preset == null) {
             return Result.error(404, "预设不存在");
         }
+        if (preset.getStatus() != null && preset.getStatus() == 0) {
+            return Result.error(400, "预设未启用，不能设为默认");
+        }
         sysConfigService.upsertConfig(KEY_DEFAULT_PRESET_ID, String.valueOf(id), "默认对话预设ID", "对话预设");
         return Result.success("设置成功");
     }

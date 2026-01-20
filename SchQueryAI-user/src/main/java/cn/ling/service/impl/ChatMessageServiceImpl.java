@@ -12,6 +12,7 @@ import cn.ling.service.ChatMessageService;
 import cn.ling.service.ChatPresetService;
 import cn.ling.service.ChatSessionService;
 import cn.ling.service.SysConfigService;
+import cn.ling.service.chat.DynamicChatClientService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -44,17 +45,16 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
     private static final String KEY_DEFAULT_PRESET_ID = "chat.preset.defaultId";
 
     /**
-     * AI聊天客户端
-     * 用于生成AI回复
+     * 系统配置（KV）
      */
-    @Resource(name="openAiChatClient")
-    private ChatClient openAiChatClient;
-
     @Resource
     private SysConfigService sysConfigService;
 
     @Resource
     private ChatPresetService chatPresetService;
+
+    @Resource
+    private DynamicChatClientService dynamicChatClientService;
 
     /**
      * 聊天会话服务
@@ -150,7 +150,14 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
             try {
                 // 使用流式生成AI回复
                 log.info("开始生成AI回复");
-                ChatClient.ChatClientRequestSpec promptSpec = openAiChatClient.prompt();
+                String modelName = resolveModelName(preset);
+                if (preset != null) {
+                    log.info("本次对话使用默认预设: presetId={}, presetName={}, model={}", preset.getId(), preset.getPresetName(), modelName);
+                } else {
+                    log.info("本次对话未命中默认预设，将使用默认模型配置: model={}", modelName);
+                }
+                ChatClient client = dynamicChatClientService.resolveClient(modelName);
+                ChatClient.ChatClientRequestSpec promptSpec = client.prompt();
                 OpenAiChatOptions dynamicOptions = buildChatOptions(preset);
                 if (dynamicOptions != null) {
                     promptSpec = promptSpec.options(dynamicOptions);
@@ -257,6 +264,14 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
             log.debug("读取默认对话参数失败，将使用模型默认配置: {}", e.getMessage());
             return null;
         }
+    }
+
+    private String resolveModelName(ChatPreset preset) {
+        String fromPreset = preset == null ? null : trimToNull(preset.getModel());
+        if (StringUtils.hasText(fromPreset)) {
+            return fromPreset;
+        }
+        return trimToNull(sysConfigService.getConfigValue(KEY_MODEL));
     }
 
     private ChatPreset resolveChatPreset(Long sessionId) {
@@ -381,6 +396,3 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
         }
     }
 }
-
-
-

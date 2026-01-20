@@ -95,7 +95,6 @@ const tooltipText = computed(() => {
   const updatedText = formatClock(info.value.updatedAt)
   const suffixParts = []
   if (updatedText) suffixParts.push(`更新于 ${updatedText}`)
-  if (info.value.isFallback) suffixParts.push('定位失败，已切换北京')
   const suffix = suffixParts.length ? `（${suffixParts.join('，')}）` : ''
 
   return `${tip}${suffix}`

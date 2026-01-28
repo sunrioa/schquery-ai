@@ -18,6 +18,7 @@ import UserManagement from '../views/admin/UserManagement.vue'
 import AdminDashboard from '../views/AdminDashboard.vue'
 import ChatConfig from '../views/admin/ai/ChatConfig.vue'
 import ChatModel from '../views/admin/ai/ChatModel.vue'
+import AsrModel from '../views/admin/ai/AsrModel.vue'
 import KnowledgeManage from '../views/admin/ai/KnowledgeManage.vue'
 import KnowledgeDetail from '../views/admin/ai/KnowledgeDetail.vue'
 import McpManage from '../views/admin/ai/McpManage.vue'
@@ -170,6 +171,12 @@ const routes = [
     path: '/admin/ai/chat-model',
     name: 'ChatModel',
     component: ChatModel,
+    meta: { requiresAuth: true, requiresRole: ['admin'], layout: 'admin' }
+  },
+  {
+    path: '/admin/ai/asr-model',
+    name: 'AsrModel',
+    component: AsrModel,
     meta: { requiresAuth: true, requiresRole: ['admin'], layout: 'admin' }
   },
   {

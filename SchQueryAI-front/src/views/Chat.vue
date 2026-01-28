@@ -198,50 +198,54 @@
 
         <el-footer class="chat-input" v-if="currentSession">
           <div class="input-container">
-            <!-- 录音按钮专用容器 -->
-            <div class="voice-btn-container">
-              <el-button
-                  :class="['voice-btn', { 'recording': isRecording, 'voice-loading': voiceLoading }]"
-                  @click="toggleRecording"
-                  :disabled="voiceLoading"
-                  :title="isRecording ? '点击停止录音' : '点击开始录音'"
-              >
-                <el-icon>
-                  <Microphone />
-                </el-icon>
-              </el-button>
-            </div>
-            <!-- 实时转录显示区域 - 放在输入框内部 -->
+            <!-- 实时转录显示区域 -->
             <div v-if="isRecording && realTimeTranscript" class="transcript-input-display">
               <div class="transcript-input-header">
                 <el-icon class="transcript-icon"><Microphone /></el-icon>
                 <span class="transcript-label">实时转录：</span>
               </div>
-              <div class="transcript-input-content">
+              <div class="transcript-input-content" ref="transcriptScrollRef">
                 {{ realTimeTranscript }}
               </div>
             </div>
 
-            <el-input
-                v-model="userMessage"
-                type="textarea"
-                :rows="2"
-                placeholder="输入您的消息..."
-                @keydown.enter.prevent="handleEnterKey"
-                :disabled="isTyping"
-                resize="none"
-                class="message-input"
-                :class="{ 'with-transcript': isRecording && realTimeTranscript }"
-            />
-            <el-button
-                type="primary"
-                @click="sendMessage"
-                :disabled="!userMessage.trim() || isTyping"
-                class="send-btn"
-            >
-              <el-icon v-if="isTyping" class="send-icon is-loading"><Loading /></el-icon>
-              <el-icon v-else class="send-icon"><Upload /></el-icon>
-            </el-button>
+            <div class="input-row">
+              <!-- 录音按钮专用容器 -->
+              <div class="voice-btn-container">
+                <el-button
+                    :class="['voice-btn', { 'recording': isRecording, 'voice-loading': voiceLoading }]"
+                    @click="toggleRecording"
+                    :disabled="voiceLoading"
+                    :title="isRecording ? '点击停止录音' : '点击开始录音'"
+                >
+                  <el-icon>
+                    <Microphone />
+                  </el-icon>
+                </el-button>
+              </div>
+
+              <el-input
+                  v-model="userMessage"
+                  type="textarea"
+                  :rows="2"
+                  placeholder="输入您的消息..."
+                  @keydown.enter.prevent="handleEnterKey"
+                  :readonly="isRecording"
+                  :disabled="isTyping"
+                  resize="none"
+                  class="message-input"
+                  ref="messageInputRef"
+              />
+              <el-button
+                  type="primary"
+                  @click="sendMessage"
+                  :disabled="!userMessage.trim() || isTyping"
+                  class="send-btn"
+              >
+                <el-icon v-if="isTyping" class="send-icon is-loading"><Loading /></el-icon>
+                <el-icon v-else class="send-icon"><Upload /></el-icon>
+              </el-button>
+            </div>
           </div>
         </el-footer>
       </el-container>
@@ -306,6 +310,8 @@ const sessionsLoading = ref(false)
 const showRenameDialog = ref(false)
 const renameSessionName = ref('')
 const messagesContainer = ref(null)
+const messageInputRef = ref(null)
+const transcriptScrollRef = ref(null)
 
 // 客服对话框相关状态
 const showCustomerServiceDialog = ref(false)
@@ -331,6 +337,91 @@ const realTimeTranscript = ref('')
 const streamingSessionToken = ref('') // 流式识别会话令牌
 let renderVersion = 0 // 渲染版本号，用于强制重新渲染
 const streamingMessageIds = ref(new Set()) // 用于标记正在流式传输的消息ID
+
+const transcriptBaseMessage = ref('')
+let transcriptUpdateTimer = null
+let transcriptPending = ''
+
+const buildMergedMessage = (baseText, transcriptText) => {
+  const base = (baseText || '').trimEnd()
+  const transcript = (transcriptText || '').trim()
+  if (!base) return transcript
+  if (!transcript) return base
+  return `${base}${base.endsWith(' ') ? '' : ' '}${transcript}`.replace(/\s{2,}/g, ' ')
+}
+
+const scrollTranscriptToBottom = () => {
+  nextTick(() => {
+    const el = transcriptScrollRef.value
+    if (el) {
+      el.scrollTop = el.scrollHeight
+    }
+  })
+}
+
+const syncInputCaretToEnd = () => {
+  nextTick(() => {
+    const inputEl = messageInputRef.value?.$el?.querySelector('textarea')
+    if (!inputEl) return
+    const length = inputEl.value.length
+    inputEl.setSelectionRange(length, length)
+    inputEl.scrollTop = inputEl.scrollHeight
+  })
+}
+
+const syncTranscriptToInput = (text) => {
+  if (!isRecording.value) return
+  const merged = buildMergedMessage(transcriptBaseMessage.value, text)
+  if (merged === userMessage.value) return
+  userMessage.value = merged
+  syncInputCaretToEnd()
+}
+
+const applyFinalTranscript = (text) => {
+  const merged = buildMergedMessage(transcriptBaseMessage.value, text)
+  if (!merged) return
+  userMessage.value = merged
+  syncInputCaretToEnd()
+}
+
+const scheduleTranscriptUpdate = (text) => {
+  const next = (text || '').trim()
+  if (!isRecording.value) return
+  if (!next || next === realTimeTranscript.value) return
+  transcriptPending = next
+  if (transcriptUpdateTimer) return
+  transcriptUpdateTimer = setTimeout(() => {
+    realTimeTranscript.value = transcriptPending
+    syncTranscriptToInput(transcriptPending)
+    scrollTranscriptToBottom()
+    transcriptUpdateTimer = null
+  }, 120)
+}
+
+const flushTranscriptUpdate = () => {
+  if (transcriptUpdateTimer) {
+    clearTimeout(transcriptUpdateTimer)
+    transcriptUpdateTimer = null
+  }
+  if (transcriptPending) {
+    realTimeTranscript.value = transcriptPending
+    syncTranscriptToInput(transcriptPending)
+    scrollTranscriptToBottom()
+    transcriptPending = ''
+  }
+}
+
+const resetTranscriptState = (preserveBase = false) => {
+  if (transcriptUpdateTimer) {
+    clearTimeout(transcriptUpdateTimer)
+    transcriptUpdateTimer = null
+  }
+  transcriptPending = ''
+  realTimeTranscript.value = ''
+  if (!preserveBase) {
+    transcriptBaseMessage.value = ''
+  }
+}
 
 const isMobile = ref(false)
 const mobileSidebarVisible = ref(false)
@@ -1372,6 +1463,8 @@ const startRecording = async () => {
   if (isRecording.value) return
 
   try {
+    transcriptBaseMessage.value = (userMessage.value || '').trimEnd()
+
     // 1. 启动流式识别会话
     const sessionId = currentSessionId.value || 'session_' + Date.now()
     const response = await fetch('/api/user/streaming/start', {
@@ -1446,7 +1539,7 @@ const startWebAudioRecording = async (stream) => {
 
   // 重置状态
   chunkBuffer.value = new Int16Array(0)
-  realTimeTranscript.value = ''
+  resetTranscriptState(true)
   const actualSampleRate = audioContext.value.sampleRate
 
   // 音频处理回调
@@ -1486,7 +1579,7 @@ const startMediaRecorderRecording = async (stream) => {
 
   mediaRecorder.value = recorder
   audioChunks.value = []
-  realTimeTranscript.value = ''
+  resetTranscriptState(true)
 
   // 每1秒收集一次数据
   recorder.ondataavailable = (event) => {
@@ -1512,6 +1605,7 @@ const stopRecording = async () => {
   console.log('停止录音...')
 
   // 保存当前的转录文本，避免后续被覆盖
+  flushTranscriptUpdate()
   const currentTranscript = realTimeTranscript.value.trim()
 
   // 立即设置录音状态为false，确保UI立即更新显示麦克风图标
@@ -1557,18 +1651,12 @@ const stopRecording = async () => {
             const finalTranscript = result.data.trim()
             if (finalTranscript) {
               // 使用最终识别结果
-              if (userMessage.value && !userMessage.value.endsWith(' ')) {
-                userMessage.value += ' '
-              }
-              userMessage.value += finalTranscript
+              applyFinalTranscript(finalTranscript)
               ElMessage.success(`语音识别完成: ${finalTranscript}`)
             } else {
               // 如果最终结果为空，使用保存的实时转录结果
               if (currentTranscript) {
-                if (userMessage.value && !userMessage.value.endsWith(' ')) {
-                  userMessage.value += ' '
-                }
-                userMessage.value += currentTranscript
+                applyFinalTranscript(currentTranscript)
                 ElMessage.success(`语音识别完成: ${currentTranscript}`)
               }
             }
@@ -1576,10 +1664,7 @@ const stopRecording = async () => {
             console.warn('停止语音识别会话失败:', response.status)
             // 失败时也使用保存的实时转录结果
             if (currentTranscript) {
-              if (userMessage.value && !userMessage.value.endsWith(' ')) {
-                userMessage.value += ' '
-              }
-              userMessage.value += currentTranscript
+              applyFinalTranscript(currentTranscript)
               ElMessage.success(`语音识别完成: ${currentTranscript}`)
             }
           }
@@ -1587,20 +1672,14 @@ const stopRecording = async () => {
           console.warn('停止语音识别会话失败:', response.status)
           // 失败时也使用保存的实时转录结果
           if (currentTranscript) {
-            if (userMessage.value && !userMessage.value.endsWith(' ')) {
-              userMessage.value += ' '
-            }
-            userMessage.value += currentTranscript
+            applyFinalTranscript(currentTranscript)
             ElMessage.success(`语音识别完成: ${currentTranscript}`)
           }
         }
       } else {
         // 没有会话令牌时使用保存的实时转录结果
         if (currentTranscript) {
-          if (userMessage.value && !userMessage.value.endsWith(' ')) {
-            userMessage.value += ' '
-          }
-          userMessage.value += currentTranscript
+          applyFinalTranscript(currentTranscript)
           ElMessage.success(`语音识别完成: ${currentTranscript}`)
         }
       }
@@ -1609,16 +1688,13 @@ const stopRecording = async () => {
       console.error('停止录音时发生错误:', error)
       // 发生错误时仍然尝试使用保存的实时转录结果
       if (currentTranscript) {
-        if (userMessage.value && !userMessage.value.endsWith(' ')) {
-          userMessage.value += ' '
-        }
-        userMessage.value += currentTranscript
+        applyFinalTranscript(currentTranscript)
         ElMessage.success(`语音识别完成: ${currentTranscript}`)
       }
     }
 
     // 最终清理状态
-    realTimeTranscript.value = ''
+    resetTranscriptState()
     streamingSessionToken.value = ''
 
     // 清理录音资源
@@ -1642,6 +1718,7 @@ const forceStopRecording = async () => {
   }
 
   // 保存当前转录文本
+  flushTranscriptUpdate()
   const currentTranscript = realTimeTranscript.value.trim()
 
   try {
@@ -1662,16 +1739,13 @@ const forceStopRecording = async () => {
 
   // 如果有转录文本，添加到输入框
   if (currentTranscript) {
-    if (userMessage.value && !userMessage.value.endsWith(' ')) {
-      userMessage.value += ' '
-    }
-    userMessage.value += currentTranscript
+    applyFinalTranscript(currentTranscript)
     ElMessage.success(`语音识别已保存: ${currentTranscript}`)
   }
 
   // 立即清理所有资源
   cleanupRecording()
-  realTimeTranscript.value = ''
+  resetTranscriptState()
   streamingSessionToken.value = ''
 
   ElMessage.warning('录音已强制停止')
@@ -1707,6 +1781,7 @@ const cleanupRecording = () => {
   // 重置状态
   chunkBuffer.value = new Int16Array(0)
   audioChunks.value = []
+  resetTranscriptState()
 }
 
 // 发送音频分片到后端（Web Audio API方案）- 流式识别
@@ -1734,7 +1809,7 @@ const sendStreamingAudioChunk = async (audioData, sampleRate) => {
       const result = await response.json()
       if (result.code === 200 && result.data && result.data.trim()) {
         // 更新实时转录文本（服务器返回的是累积结果）
-        realTimeTranscript.value = result.data.trim()
+        scheduleTranscriptUpdate(result.data)
       }
     } else {
       console.warn('服务器响应错误:', response.status, response.statusText)
@@ -1771,7 +1846,7 @@ const sendStreamingMediaRecorderChunk = async () => {
       const result = await response.json()
       if (result.code === 200 && result.data && result.data.trim()) {
         // 更新实时转录文本（服务器返回的是累积结果）
-        realTimeTranscript.value = result.data.trim()
+        scheduleTranscriptUpdate(result.data)
       }
     } else {
       console.warn('服务器响应错误:', response.status, response.statusText)
@@ -2896,6 +2971,7 @@ onUnmounted(() => {
   border-top: 1px solid var(--app-border);
   padding: 12px 24px;
   min-height: 72px; /* 最小高度，会根据转录区域扩展 */
+  height: auto;
   flex-shrink: 0; /* 禁止收缩 */
   box-sizing: border-box;
   box-shadow: 0 -1px 3px rgba(15, 23, 42, 0.06);
@@ -2907,12 +2983,20 @@ onUnmounted(() => {
   margin: 0 auto;
   position: relative;
   width: 100%;
-  height: 100%; /* 继承输入区高度 */
   display: flex;
-  align-items: center; /* 垂直居中 */
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
   isolation: isolate; /* 创建新的堆叠上下文 */
   overflow: visible; /* 确保按钮不被裁剪 */
   z-index: 10; /* 为容器设置基础层级 */
+}
+
+.input-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 56px;
 }
 
 /* 录音按钮专用容器 */
@@ -2998,10 +3082,9 @@ onUnmounted(() => {
 
 /* 输入框内部的转录显示区域 */
 .transcript-input-display {
-  position: absolute;
-  top: 8px;
-  left: 72px;
-  right: 72px;
+  position: relative;
+  margin-left: 72px;
+  margin-right: 72px;
   background-color: var(--app-primary-soft-2);
   border: 1px solid rgba(var(--app-primary-rgb), 0.25);
   border-radius: 8px;
@@ -3021,6 +3104,10 @@ onUnmounted(() => {
 .transcript-input-content {
   color: #374151;
   line-height: 1.4;
+  max-height: 160px;
+  min-height: 28px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
   word-wrap: break-word;
   white-space: pre-wrap;
 }
@@ -3050,10 +3137,6 @@ onUnmounted(() => {
   resize: none;
   background-image: none;
   transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
-}
-
-:deep(.message-input.with-transcript .el-textarea__inner) {
-  padding-top: 80px; /* 为转录区域留出空间 */
 }
 
 :deep(.message-input .el-textarea__inner::placeholder) {
@@ -4053,6 +4136,15 @@ onUnmounted(() => {
     padding: 10px 12px;
     margin: 0 0 10px 70px; /* 移动端左边距稍微小一些 */
     max-width: calc(100% - 84px);
+  }
+
+  .transcript-input-display {
+    margin-left: 64px;
+    margin-right: 64px;
+  }
+
+  .transcript-input-content {
+    max-height: 110px;
   }
 
   .transcript-content {

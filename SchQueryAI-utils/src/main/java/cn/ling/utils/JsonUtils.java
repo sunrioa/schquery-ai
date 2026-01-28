@@ -1,5 +1,6 @@
 package cn.ling.utils;
 
+import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,24 +21,53 @@ import java.util.Map;
 public class JsonUtils {
 
     /**
-     * 模型模式（从配置文件读取，默认值为"offline"）
-     * 可能的取值："online"表示在线模式，"offline"表示离线模式
+     * 识别模型（从配置文件读取）
      */
-    @Value("${parameters.model:offline}")
+    @Value("${parameters.asr.model:fun-asr-realtime-2025-11-07}")
     private String model;
+
+    /**
+     * 音频格式
+     */
+    @Value("${parameters.asr.format:pcm}")
+    private String format;
+
+    /**
+     * 音频采样率
+     */
+    @Value("${parameters.asr.sampleRate:16000}")
+    private int sampleRate;
+
+    /**
+     * 是否启用中间结果
+     */
+    @Value("${parameters.asr.enableIntermediateResult:true}")
+    private boolean enableIntermediateResult;
+
+    /**
+     * 是否启用标点
+     */
+    @Value("${parameters.asr.enablePunctuation:true}")
+    private boolean enablePunctuation;
+
+    /**
+     * 是否启用数字转换
+     */
+    @Value("${parameters.asr.enableInverseTextNormalization:true}")
+    private boolean enableInverseTextNormalization;
 
     /**
      * 热词（从配置文件读取，默认空字符串）
      * 用于提升特定词汇的识别准确率
      */
-    @Value("${parameters.hotWords:}")
+    @Value("${parameters.asr.hotWords:}")
     private String hotWords;
 
     /**
-     * 音频采样率，固定为16000Hz
-     * 与音频处理流程中使用的采样率保持一致
+     * 是否使用header/payload结构
      */
-    private static final int AUDIO_SAMPLE_RATE = 16000;
+    @Value("${parameters.asr.useHeaderPayload:true}")
+    private boolean useHeaderPayload;
 
     /**
      * 使用FastJSON构建音频处理的配置消息
@@ -47,47 +77,58 @@ public class JsonUtils {
      * @return 构建好的配置消息TextMessage对象
      */
     public TextMessage buildConfigMessage(String wavName) {
+        return buildConfigMessage(wavName, null);
+    }
+
+    public TextMessage buildConfigMessage(String wavName, AsrConfig config) {
         log.info("开始构建配置消息，音频文件名: {}", wavName);
 
+        String resolvedModel = pickString(config == null ? null : config.getModel(), model);
+        String resolvedFormat = pickString(config == null ? null : config.getFormat(), format);
+        Integer resolvedSampleRate = pickInteger(config == null ? null : config.getSampleRate(), sampleRate);
+        boolean resolvedIntermediate = pickBoolean(config == null ? null : config.getEnableIntermediateResult(), enableIntermediateResult);
+        boolean resolvedPunctuation = pickBoolean(config == null ? null : config.getEnablePunctuation(), enablePunctuation);
+        boolean resolvedItn = pickBoolean(
+                config == null ? null : config.getEnableInverseTextNormalization(),
+                enableInverseTextNormalization
+        );
+        String resolvedHotWords = pickString(config == null ? null : config.getHotWords(), hotWords);
+        boolean resolvedUseHeaderPayload = pickBoolean(config == null ? null : config.getUseHeaderPayload(), useHeaderPayload);
+
         // 使用FastJSON的JSONObject创建配置消息
-        JSONObject config = new JSONObject();
+        JSONObject configJson = new JSONObject();
+        JSONObject payload = new JSONObject();
 
-        // 设置处理模式（在线/离线）
-        config.put("mode", model);
-        log.debug("配置消息添加模式: {}", model);
+        if (StringUtils.hasText(resolvedModel)) {
+            payload.put("model", resolvedModel);
+        }
+        payload.put("format", resolvedFormat);
+        payload.put("sample_rate", resolvedSampleRate);
+        payload.put("enable_intermediate_result", resolvedIntermediate);
+        payload.put("enable_punctuation", resolvedPunctuation);
+        payload.put("enable_inverse_text_normalization", resolvedItn);
 
-        // 设置音频文件名
-        config.put("wav_name", wavName);
-
-        // 设置音频格式为PCM
-        config.put("wav_format", "pcm");
-        log.debug("配置消息音频格式: pcm");
-
-        // 标记为正在说话状态
-        config.put("is_speaking", true);
-
-        // 设置音频采样率
-        config.put("audio_fs", AUDIO_SAMPLE_RATE);
-        log.debug("配置消息采样率: {}", AUDIO_SAMPLE_RATE);
-
-        // 启用数字转换（将语音中的数字转换为阿拉伯数字）
-        config.put("itn", true);
-
-        // 设置分片大小参数
-        int[] chunkSizes = new int[]{5, 10, 5};
-        config.put("chunk_size", chunkSizes);
-        log.debug("配置消息分片大小: {}", chunkSizes);
-
-        // 当热词不为空时添加热词配置
-        if (StringUtils.hasText(hotWords)) {
-            config.put("hotwords", hotWords);
-            log.debug("配置消息添加热词: {}", hotWords);
+        if (StringUtils.hasText(resolvedHotWords)) {
+            payload.put("hotwords", parseHotWords(resolvedHotWords));
+            log.debug("配置消息添加热词: {}", resolvedHotWords);
         } else {
             log.debug("未配置热词，不添加hotwords字段");
         }
 
-        log.info("配置消息构建完成，内容: {}", config);
-        return new TextMessage(config.toString());
+        if (resolvedUseHeaderPayload) {
+            JSONObject header = new JSONObject();
+            header.put("action", "start");
+            header.put("task_id", wavName);
+            configJson.put("header", header);
+            configJson.put("payload", payload);
+        } else {
+            configJson.put("action", "start");
+            configJson.put("task_id", wavName);
+            configJson.putAll(payload);
+        }
+
+        log.info("配置消息构建完成，内容: {}", configJson);
+        return new TextMessage(configJson.toString());
     }
 
     /**
@@ -98,26 +139,48 @@ public class JsonUtils {
      * @return 构建好的结束消息TextMessage对象
      */
     public TextMessage buildEndMessage(String wavName) {
+        return buildEndMessage(wavName, null);
+    }
+
+    public TextMessage buildEndMessage(String wavName, AsrConfig config) {
         log.info("开始构建结束消息，音频文件名: {}", wavName);
+
+        boolean resolvedUseHeaderPayload = pickBoolean(config == null ? null : config.getUseHeaderPayload(), useHeaderPayload);
 
         // 使用FastJSON的JSONObject创建结束消息
         JSONObject endMsg = new JSONObject();
-
-        // 设置音频文件名
-        endMsg.put("wav_name", wavName);
-
-        // 标记为非说话状态
-        endMsg.put("is_speaking", false);
-
-        // 标记为结束标识
-        endMsg.put("end", true);
-
-        // 设置处理模式（与配置消息保持一致）
-        endMsg.put("mode", model);
-        log.debug("结束消息模式: {}", model);
+        if (resolvedUseHeaderPayload) {
+            JSONObject header = new JSONObject();
+            header.put("action", "stop");
+            header.put("task_id", wavName);
+            endMsg.put("header", header);
+        } else {
+            endMsg.put("action", "stop");
+            endMsg.put("task_id", wavName);
+        }
 
         log.info("结束消息构建完成，内容: {}", endMsg);
         return new TextMessage(endMsg.toString());
+    }
+
+    private String pickString(String value, String fallback) {
+        return StringUtils.hasText(value) ? value : fallback;
+    }
+
+    private Integer pickInteger(Integer value, int fallback) {
+        return value != null ? value : fallback;
+    }
+
+    private boolean pickBoolean(Boolean value, boolean fallback) {
+        return value != null ? value : fallback;
+    }
+
+    private Object parseHotWords(String hotWords) {
+        try {
+            return JSON.parse(hotWords);
+        } catch (Exception e) {
+            return hotWords;
+        }
     }
 
     public static Map<String,Object> strToMap(String str){

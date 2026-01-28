@@ -94,13 +94,27 @@ email:
 server:
   port: 8080                           # 应用服务端口号
 
-# 语音识别（FunASR）配置
+# 语音识别（Aliyun ASR）配置
 parameters:
-  model: "offline"                     # 识别模式：必须为"offline"（离线模式）
-  hotWords: "{\"自定义\":20,\"热词\":20,\"设置\":30}"  # 自定义热词及权重（JSON格式）
-  serverIpPort: "ws://127.0.0.1:10095"  # FunASR服务器WebSocket地址
-  funasr:                              # FunASR详细配置节点
-    subprotocol: "funasr-ws"           # WebSocket子协议名称（1.0+版本使用）
+  asr:
+    endpoint: ${ALIYUN_ASR_ENDPOINT:wss://dashscope.aliyuncs.com/api-ws/v1/inference} # WebSocket地址
+    apiKey: ${ALIYUN_ASR_API_KEY:} # 建议通过环境变量注入
+    authHeaderName: "Authorization"
+    authHeaderValue: ${ALIYUN_ASR_AUTH_HEADER_VALUE:} # 可选，优先于apiKey
+    subprotocol: "" # 如需子协议可配置
+    model: "fun-asr-realtime-2025-11-07"
+    format: "pcm"
+    sampleRate: 16000
+    enableIntermediateResult: true
+    enablePunctuation: true
+    enableInverseTextNormalization: true
+    hotWords: ""
+    useHeaderPayload: true
+    chunkBytes: 960
+    chunkIntervalMs: 10
+    connectTimeoutMs: 10000
+  ffmpeg:
+    path: "E:\\gongju\\ffmpeg-8.0.1-essentials_build\\ffmpeg-8.0.1-essentials_build\\bin\\ffmpeg.exe" # 指定ffmpeg可执行文件路径，PATH中可用时保持默认
 
 # MinIO配置
 minio:

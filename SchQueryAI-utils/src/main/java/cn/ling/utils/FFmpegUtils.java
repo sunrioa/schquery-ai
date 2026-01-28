@@ -1,11 +1,15 @@
 package cn.ling.utils;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -19,6 +23,12 @@ public class FFmpegUtils {
 
     // 目标PCM音频的采样率：16000Hz
     private static final int AUDIO_SAMPLE_RATE = 16000;
+
+    /**
+     * FFmpeg 可执行文件路径（可选）
+     */
+    @Value("${parameters.ffmpeg.path:ffmpeg}")
+    private String ffmpegPath;
 
     /**
      * 将上传的音频文件转换为PCM格式
@@ -64,14 +74,27 @@ public class FFmpegUtils {
             // -acodec pcm_s16le: 音频编码格式（16位little-endian PCM）
             // -f s16le: 输出格式（16位little-endian）
             // -loglevel warning: 日志级别（仅显示警告及以上信息）
-            String ffmpegCmd = String.format(
-                    "ffmpeg -y -i %s -ar %d -ac 1 -acodec pcm_s16le -f s16le %s -loglevel warning",
-                    tempInput.getAbsolutePath(), AUDIO_SAMPLE_RATE, tempOutput.getAbsolutePath()
-            );
-            log.info("执行FFmpeg转换命令: {}", ffmpegCmd);
+            List<String> cmd = new ArrayList<>();
+            cmd.add(resolveFfmpegExecutable());
+            cmd.add("-y");
+            cmd.add("-i");
+            cmd.add(tempInput.getAbsolutePath());
+            cmd.add("-ar");
+            cmd.add(String.valueOf(AUDIO_SAMPLE_RATE));
+            cmd.add("-ac");
+            cmd.add("1");
+            cmd.add("-acodec");
+            cmd.add("pcm_s16le");
+            cmd.add("-f");
+            cmd.add("s16le");
+            cmd.add(tempOutput.getAbsolutePath());
+            cmd.add("-loglevel");
+            cmd.add("warning");
+
+            log.info("执行FFmpeg转换命令: {}", String.join(" ", cmd));
 
             // 执行FFmpeg命令
-            Process process = Runtime.getRuntime().exec(ffmpegCmd);
+            Process process = new ProcessBuilder(cmd).start();
 
             // 异步读取FFmpeg输出流和错误流（避免进程阻塞）
             readProcessOutput(process.getInputStream(), "FFmpeg输出");
@@ -155,6 +178,13 @@ public class FFmpegUtils {
                 log.warn("读取{}时发生错误", streamName, e);
             }
         }, "FFmpeg-" + streamName + "-Reader").start();
+    }
+
+    private String resolveFfmpegExecutable() {
+        if (!StringUtils.hasText(ffmpegPath)) {
+            return "ffmpeg";
+        }
+        return ffmpegPath.trim();
     }
 }
 

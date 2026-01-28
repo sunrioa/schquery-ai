@@ -1,5 +1,6 @@
 package cn.ling.handler;
 
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import lombok.Getter;
 import org.slf4j.Logger;
@@ -10,7 +11,7 @@ import java.util.concurrent.CountDownLatch;
 
 /**
  * 语音识别WebSocket处理器
- * 实现Spring WebSocketHandler接口，用于处理与FunASR语音识别服务的WebSocket通信
+ * 实现Spring WebSocketHandler接口，用于处理与阿里云语音识别服务的WebSocket通信
  * 支持实时语音识别结果接收和错误处理，使用同步机制等待识别完成
  */
 public class SttWebSocketHandler implements WebSocketHandler {
@@ -82,26 +83,25 @@ public class SttWebSocketHandler implements WebSocketHandler {
                 JSONObject json = JSONObject.parseObject(payload);
 
                 // 1. 优先处理服务器错误（一旦出错，直接标记）
-                if (json.containsKey("error") && !json.getString("error").isEmpty()) {
-                    errorMsg = json.getString("error");
+                String error = extractError(json);
+                if (StringUtils.hasText(error)) {
+                    errorMsg = error;
                     logger.error("服务器返回错误: {}", errorMsg);
                     latch.countDown(); // 触发等待结束
                     return;
                 }
 
                 // 2. 累加识别分片（每段结果都拼接到completeResult）
-                if (json.containsKey("text") && !json.getString("text").isEmpty()) {
-                    String segment = json.getString("text").trim();
-                    if (StringUtils.hasText(segment)) { // 只拼接非空片段
-                        completeResult.append(segment);
-                        logger.debug("累加识别片段，当前累计长度: {}字符，片段内容: {}", completeResult.length(), segment);
-                    } else {
-                        logger.debug("收到空的识别片段，跳过拼接");
-                    }
+                String segment = extractText(json);
+                if (StringUtils.hasText(segment)) { // 只拼接非空片段
+                    appendSegment(segment);
+                    logger.debug("累加识别片段，当前累计长度: {}字符，片段内容: {}", completeResult.length(), segment);
+                } else {
+                    logger.debug("收到空的识别片段，跳过拼接");
                 }
 
                 // 3. 收到"最终结果"标识时，触发等待结束（确保所有分片已接收）
-                if (json.containsKey("is_final") && json.getBooleanValue("is_final")) {
+                if (isFinalResult(json)) {
                     logger.info("收到最终结果标识，结束等待，累计结果长度: {}字符", completeResult.length());
                     latch.countDown();
                 }
@@ -161,5 +161,145 @@ public class SttWebSocketHandler implements WebSocketHandler {
     @Override
     public boolean supportsPartialMessages() {
         return false;
+    }
+
+    private void appendSegment(String segment) {
+        String trimmed = segment.trim();
+        if (!StringUtils.hasText(trimmed)) {
+            return;
+        }
+
+        String current = completeResult.toString();
+        if (StringUtils.hasText(current) && trimmed.startsWith(current)) {
+            completeResult.setLength(0);
+        }
+        completeResult.append(trimmed);
+    }
+
+    private String extractError(JSONObject json) {
+        String error = json.getString("error");
+        if (StringUtils.hasText(error)) {
+            return error;
+        }
+
+        Integer code = json.getInteger("code");
+        if (code != null && code != 0 && code != 200) {
+            String message = json.getString("message");
+            return StringUtils.hasText(message) ? message : "服务端错误，错误码: " + code;
+        }
+
+        JSONObject header = json.getJSONObject("header");
+        if (header != null) {
+            Integer status = header.getInteger("status");
+            if (status != null && status != 0 && status != 20000000) {
+                String message = header.getString("message");
+                return StringUtils.hasText(message) ? message : "服务端错误，状态码: " + status;
+            }
+        }
+
+        return null;
+    }
+
+    private String extractText(JSONObject json) {
+        String text = firstNonEmpty(
+                json.getString("text"),
+                json.getString("result"),
+                json.getString("sentence"),
+                json.getString("transcript")
+        );
+        if (StringUtils.hasText(text)) {
+            return text.trim();
+        }
+
+        JSONObject payload = json.getJSONObject("payload");
+        if (payload != null) {
+            text = firstNonEmpty(
+                    payload.getString("text"),
+                    payload.getString("result"),
+                    payload.getString("sentence"),
+                    payload.getString("transcript")
+            );
+            if (StringUtils.hasText(text)) {
+                return text.trim();
+            }
+            text = extractFromResults(payload.getJSONArray("results"));
+            if (StringUtils.hasText(text)) {
+                return text.trim();
+            }
+        }
+
+        JSONObject output = json.getJSONObject("output");
+        if (output != null) {
+            text = firstNonEmpty(
+                    output.getString("text"),
+                    output.getString("result"),
+                    output.getString("sentence"),
+                    output.getString("transcript")
+            );
+            if (StringUtils.hasText(text)) {
+                return text.trim();
+            }
+            text = extractFromResults(output.getJSONArray("results"));
+            if (StringUtils.hasText(text)) {
+                return text.trim();
+            }
+        }
+
+        return null;
+    }
+
+    private String extractFromResults(JSONArray results) {
+        if (results == null || results.isEmpty()) {
+            return null;
+        }
+        JSONObject first = results.getJSONObject(0);
+        if (first == null) {
+            return null;
+        }
+        return firstNonEmpty(
+                first.getString("text"),
+                first.getString("result"),
+                first.getString("sentence"),
+                first.getString("transcript")
+        );
+    }
+
+    private boolean isFinalResult(JSONObject json) {
+        if (json.getBooleanValue("is_final") || json.getBooleanValue("final")) {
+            return true;
+        }
+
+        JSONObject payload = json.getJSONObject("payload");
+        if (payload != null && (payload.getBooleanValue("is_final") || payload.getBooleanValue("final"))) {
+            return true;
+        }
+
+        JSONObject header = json.getJSONObject("header");
+        if (header != null) {
+            String name = firstNonEmpty(header.getString("name"), header.getString("event"));
+            if (StringUtils.hasText(name)) {
+                String normalized = name.toLowerCase();
+                if (normalized.contains("completed")
+                        || normalized.contains("sentenceend")
+                        || normalized.contains("finish")
+                        || normalized.contains("done")) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private String firstNonEmpty(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value;
+            }
+        }
+        return null;
     }
 }

@@ -7,6 +7,7 @@ import ForgotPassword from '../views/ForgotPassword.vue'
 import Profile from '../views/Profile.vue'
 import Chat from '../views/Chat.vue'
 import ChatWindow from '../views/ChatWindow.vue'
+import WidgetChat from '../views/WidgetChat.vue'
 import AdminCustomerService from '../views/admin/AdminCustomerService.vue'
 import AdminCustomerServiceInbox from '../views/admin/AdminCustomerServiceInbox.vue'
 import SystemManagement from '../views/admin/SystemManagement.vue'
@@ -77,6 +78,11 @@ const routes = [
     name: 'ChatWindow',
     component: ChatWindow,
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/widget/chat',
+    name: 'WidgetChat',
+    component: WidgetChat
   },
   {
     path: '/worker/conversation-management',

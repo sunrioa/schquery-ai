@@ -84,10 +84,24 @@ public class McpRagAdvisor implements BaseAdvisor {
                 .addSeparators(true)
                 .build();
 
+        String knowledgeForSystem = knowledgeContent;
+        if (StringUtils.hasText(knowledgeContent)) {
+            if (shouldSuppressKnowledge(userInput)) {
+                log.debug("跳过知识库内容拼接：检测到短问候/非检索型输入");
+                knowledgeForSystem = null;
+            } else {
+                String knowledgeBlock = "\n\n【知识库资料】\n" + knowledgeContent.trim();
+                chatClientRequest = chatClientRequest.mutate()
+                        .prompt(chatClientRequest.prompt().augmentUserMessage(knowledgeBlock))
+                        .build();
+                knowledgeForSystem = null;
+            }
+        }
+
         PromptMergeStrategy.MergeResult result = PromptMergeStrategy.merge(
                 userSystemMessage,
                 knowledgePrompt,
-                knowledgeContent,
+                knowledgeForSystem,
                 mcpContent,
                 mergeConfig
         );
@@ -232,6 +246,18 @@ public class McpRagAdvisor implements BaseAdvisor {
             return 1.0;
         }
         return raw;
+    }
+
+    private static boolean shouldSuppressKnowledge(String userInput) {
+        if (!StringUtils.hasText(userInput)) {
+            return true;
+        }
+        String normalized = userInput.trim().toLowerCase();
+        if (normalized.length() <= 2) {
+            return true;
+        }
+        String compact = normalized.replaceAll("\\s+", "");
+        return compact.matches("^(你好|您好|嗨|哈喽|哈囉|在吗|在么|早上好|上午好|中午好|下午好|晚上好|晚安|hi|hello|hey)$");
     }
 
     /**

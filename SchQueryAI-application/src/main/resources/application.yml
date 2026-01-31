@@ -49,7 +49,7 @@ spring:
           model: text-embedding-v1  # 文本嵌入模型
           dimensions: 1536          # 嵌入向量维度
           topK: 6
-          similarityThreshold: 0.1
+          similarityThreshold: 0.25
 
     vectorstore:
       qdrant:
@@ -115,6 +115,14 @@ parameters:
     connectTimeoutMs: 10000
   ffmpeg:
     path: "E:\\gongju\\ffmpeg-8.0.1-essentials_build\\ffmpeg-8.0.1-essentials_build\\bin\\ffmpeg.exe" # 指定ffmpeg可执行文件路径，PATH中可用时保持默认
+  widget:
+    siteKey: ${WIDGET_SITE_KEY:demo-site-key}
+    title: ${WIDGET_TITLE:SchQueryAI}
+    subtitle: ${WIDGET_SUBTITLE:AI Assistant}
+    primaryColor: ${WIDGET_PRIMARY_COLOR:#1d4ed8}
+    backgroundColor: ${WIDGET_BACKGROUND_COLOR:#ffffff}
+    textColor: ${WIDGET_TEXT_COLOR:#0f172a}
+    allowedOrigin: ${WIDGET_ALLOWED_ORIGIN:https://example.com}
 
 # MinIO配置
 minio:

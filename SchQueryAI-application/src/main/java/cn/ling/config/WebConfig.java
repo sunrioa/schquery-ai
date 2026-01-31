@@ -38,6 +38,10 @@ public class WebConfig implements WebMvcConfigurer {
                 "/user/sendRegisterCode",         // 发送注册验证码
                 "/user/sendFindPasswordCode",     // 发送找回密码验证码// 找回密码接口
                 "/user/findPassword",             // 找回密码接口
+                "/widget/auth",                   // 外部Widget鉴权
+                "/widget/config",                 // 外部Widget配置
+                "/widget/**",                     // 外部Widget全部接口兜底
+                "/api/widget/**",                 // 兼容前端直接带/api的请求
                 "/ws/**"                          // WebSocket 握手无需 JWT
         };
         log.debug("配置公共访问路径: {}", (Object) excludePatterns);

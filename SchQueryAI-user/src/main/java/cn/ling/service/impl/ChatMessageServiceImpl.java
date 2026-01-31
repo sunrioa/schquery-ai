@@ -233,6 +233,12 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
             if (maxTokens != null && maxTokens > 0) {
                 options.setMaxTokens(maxTokens);
                 hasAny = true;
+                log.debug("AI输出配置: maxTokens={}", maxTokens);
+            } else {
+                // 未配置 maxTokens 时使用默认值 4096，避免输出被截断
+                options.setMaxTokens(4096);
+                hasAny = true;
+                log.debug("AI输出配置: 使用默认 maxTokens=4096");
             }
 
             Double temperature = preset != null ? preset.getTemperature() : parseDouble(sysConfigService.getConfigValue(KEY_TEMPERATURE), null);

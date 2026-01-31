@@ -116,6 +116,15 @@ public class KnowledgeRagAdvisor implements BaseAdvisor {
         } catch (Exception e) {
             log.debug("获取知识库信息失败: {}", e.getMessage());
         }
+        if (knowledgeInfo != null) {
+            log.info("知识库检索配置: knowledgeId={}, use_rerank={}, min_score={}, rerank_model={}",
+                    knowledgeId,
+                    knowledgeInfo.getUseRerank(),
+                    knowledgeInfo.getMinScore(),
+                    knowledgeInfo.getRerankModelName());
+        } else {
+            log.info("知识库检索配置: knowledgeId={} (未找到对应知识库配置)", knowledgeId);
+        }
 
         try {
             int topK = resolveTopK(knowledgeInfo, baseSearchRequest.getTopK());
@@ -155,12 +164,15 @@ public class KnowledgeRagAdvisor implements BaseAdvisor {
 
             String knowledgeContent = buildKnowledgeContext(docs);
             if (!StringUtils.hasText(knowledgeContent)) {
+                log.info("⚠️ 知识库检索结果为空或全部被 rerank 过滤，本次对话将不使用知识库内容");
                 chatClientRequest.context().put("knowledgeHit", false);
                 chatClientRequest.context().remove("knowledgePrompt");
                 chatClientRequest.context().remove("knowledgeContent");
                 return chatClientRequest;
             }
 
+            log.info("✅ 知识库检索成功，获得 {} 个有效片段，将注入到上下文中", 
+                docs.stream().filter(d -> StringUtils.hasText(d.getText())).count());
             chatClientRequest.context().put("knowledgeHit", true);
             chatClientRequest.context().put("knowledgeId", knowledgeId);
 
@@ -203,7 +215,11 @@ public class KnowledgeRagAdvisor implements BaseAdvisor {
 
     private static String getKnowledgePrompt(KnowledgeInfo knowledgeInfo) {
         if (knowledgeInfo == null || !StringUtils.hasText(knowledgeInfo.getSystemPrompt())) {
-            return "优先使用知识库检索内容回答用户问题。";
+            return "【重要提示】以下内容仅作为检索资料参考，不代表你的身份或立场。\n" +
+                   "严格要求：\n" +
+                   "1. 禁止以资料中任何人物的身份自称或代入回答\n" +
+                   "2. 如资料内容与用户问题无关，请基于通用知识回答，勿强行使用无关资料\n" +
+                   "3. 若资料确实相关，可客观引用并说明来源";
         }
         return knowledgeInfo.getSystemPrompt().trim();
     }
@@ -283,15 +299,42 @@ public class KnowledgeRagAdvisor implements BaseAdvisor {
             }
 
             Double minScore = knowledgeInfo.getMinScore();
+            
+            // 调试日志：输出所有 rerank 结果的分数
+            log.info("Rerank 结果详情:");
+            for (var result : resp.getOutput().getResults()) {
+                if (result != null && result.getIndex() != null && result.getIndex() < candidates.size()) {
+                    String preview = candidates.get(result.getIndex()).getText();
+                    if (preview.length() > 50) {
+                        preview = preview.substring(0, 50) + "...";
+                    }
+                    log.info("  [片段{}] 分数={}, 内容={}", 
+                        result.getIndex() + 1, 
+                        result.getRelevance_score(), 
+                        preview);
+                }
+            }
+            log.info("当前分数阈值: minScore={}", minScore);
+            
             List<Document> reranked = Arrays.stream(resp.getOutput().getResults())
                     .filter(r -> r != null && r.getIndex() != null && r.getIndex() >= 0 && r.getIndex() < candidates.size())
-                    .filter(r -> minScore == null || (r.getRelevance_score() != null && r.getRelevance_score() >= minScore))
+                    .filter(r -> {
+                        boolean pass = minScore == null || (r.getRelevance_score() != null && r.getRelevance_score() >= minScore);
+                        if (!pass && r.getRelevance_score() != null) {
+                            log.debug(" 片段{} 被过滤: 分数={} < 阈值={}", r.getIndex() + 1, r.getRelevance_score(), minScore);
+                        }
+                        return pass;
+                    })
                     .map(r -> candidates.get(r.getIndex()))
                     .filter(d -> d != null && StringUtils.hasText(d.getText()))
                     .limit(topK)
                     .collect(Collectors.toList());
 
-            return reranked.isEmpty() ? docs : reranked;
+            log.info("Rerank 过滤后保留 {} 个片段（原始{}个，topK={}）", reranked.size(), candidates.size(), topK);
+            
+            //  重要：如果 rerank 过滤后结果为空，应该返回空列表而非兜底到原始结果
+            // 这样才能让后续的 knowledgeContent 判断生效，避免强行使用不相关内容
+            return reranked;
         } catch (Exception e) {
             log.debug("rerank执行失败，将使用向量检索结果: {}", e.getMessage());
             return docs;

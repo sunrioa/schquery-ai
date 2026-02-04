@@ -119,7 +119,18 @@ public class SttServiceImpl implements SttService {
         private volatile boolean isSending = false; // 发送状态锁
         private final Object sendLock = new Object(); // 同步锁
         private final Object resultLock = new Object();
-        private final StringBuilder completeResult = new StringBuilder();
+        /**
+         * DashScope 流式 ASR 会不断推送“中间结果”(intermediate)与“句末结果”(sentence_end)。
+         * 中间结果可能会对已识别的片段做回改（例如先出“好”，后出“你好”），
+         * 如果简单把每次 text 都 append 会产生重复/叠字。
+         *
+         * 这里将已确认的句末结果累计在 committedResult，中间结果仅覆盖 currentInterim。
+         * getCompleteResult() 返回 committed + currentInterim 作为“当前累计结果”，前端可直接替换显示。
+         */
+        private final StringBuilder committedResult = new StringBuilder();
+        private volatile String currentInterim = "";
+        private volatile Long lastCommittedSentenceId = null;
+        private volatile String lastCommittedTextNoId = null;
         @Setter
         private volatile String errorMsg;
         @Setter
@@ -138,21 +149,49 @@ public class SttServiceImpl implements SttService {
             this.completionLatch = new CountDownLatch(1);
         }
 
-        public void appendResult(String segment) {
-            if (!StringUtils.hasText(segment)) {
+        public void updateResult(RecognitionResult result) {
+            if (result == null || result.getSentence() == null) {
                 return;
             }
-            String trimmed = segment.trim();
+            if (result.getSentence().isHeartbeat()) {
+                return;
+            }
+            String text = result.getSentence().getText();
+            if (!StringUtils.hasText(text)) {
+                return;
+            }
+            String trimmed = text.trim();
             if (!StringUtils.hasText(trimmed)) {
                 return;
             }
 
+            boolean isSentenceEnd = result.isSentenceEnd();
+            Long sentenceId = result.getSentence().getSentenceId();
+
             synchronized (resultLock) {
-                String current = completeResult.toString();
-                if (StringUtils.hasText(current) && trimmed.startsWith(current)) {
-                    completeResult.setLength(0);
+                if (isSentenceEnd) {
+                    // 句末结果只累计一次（避免重复 onEvent/重试导致的重复追加）
+                    if (sentenceId != null) {
+                        if (lastCommittedSentenceId != null && sentenceId <= lastCommittedSentenceId) {
+                            currentInterim = "";
+                            return;
+                        }
+                        committedResult.append(trimmed);
+                        lastCommittedSentenceId = sentenceId;
+                    } else {
+                        // 极端情况下 sentenceId 可能为空，用文本做一次去重兜底
+                        if (StringUtils.hasText(lastCommittedTextNoId) && trimmed.equals(lastCommittedTextNoId)) {
+                            currentInterim = "";
+                            return;
+                        }
+                        committedResult.append(trimmed);
+                        lastCommittedTextNoId = trimmed;
+                    }
+                    currentInterim = "";
+                } else {
+                    // 中间结果仅覆盖当前片段，避免“回改”产生重复
+                    currentInterim = trimmed;
                 }
-                completeResult.append(trimmed);
             }
         }
 
@@ -161,7 +200,14 @@ public class SttServiceImpl implements SttService {
                 return "服务器错误：" + errorMsg;
             }
             synchronized (resultLock) {
-                return completeResult.toString().trim();
+                String committed = committedResult.toString();
+                if (!StringUtils.hasText(committed)) {
+                    return currentInterim == null ? "" : currentInterim.trim();
+                }
+                if (!StringUtils.hasText(currentInterim)) {
+                    return committed.trim();
+                }
+                return (committed + currentInterim).trim();
             }
         }
     }
@@ -538,13 +584,7 @@ public class SttServiceImpl implements SttService {
     }
 
     private void handleRecognitionResult(RecognitionSession session, RecognitionResult result) {
-        if (result == null || result.getSentence() == null) {
-            return;
-        }
-        String text = result.getSentence().getText();
-        if (StringUtils.hasText(text)) {
-            session.appendResult(text);
-        }
+        session.updateResult(result);
     }
 
     private void handleRecognitionError(RecognitionSession session, Throwable error) {

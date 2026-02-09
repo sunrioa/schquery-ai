@@ -1,0 +1,167 @@
+# Spring Boot应用配置文件
+spring:
+  data:
+    redis:
+      # Redis数据库配置 - 用于缓存和会话存储
+      database: 0        # Redis数据库索引（0-15）
+
+#      host: localhost  # 腾讯云Redis服务器IP地址
+#      port: 5580         # 腾讯云Redis服务器端口
+      host: localhost
+      port: 6379
+#      password: ${SECRET_VALUE} # 腾讯云Redis服务器密码
+
+#      host: localhost  # 百度云Redis服务器IP地址
+#      port: 6379         # 百度云Redis服务器端口
+#      password:          # 百度云Redis服务器密码
+
+      timeout: 30000ms   # 连接超时时间（毫秒）- 增加到30秒
+      lettuce:           # Lettuce连接池配置（Lettuce是默认的Redis客户端）
+        pool:
+          max-active: 16 # 连接池最大连接数
+          max-idle: 8    # 连接池最大空闲连接数
+          min-idle: 2    # 连接池最小空闲连接数
+          max-wait: 10000ms # 连接池最大等待时间 - 增加到10秒
+        shutdown-timeout: 10000ms # 优雅关闭超时时间
+        # 命令执行超时时间
+        command-timeout: 20000ms # 命令超时20秒
+
+  # Servlet配置
+  servlet:
+    multipart:
+      # 文件上传配置
+      enabled: true             # 开启文件上传功能（默认为true）
+      max-file-size: 100MB      # 单个文件最大上传大小
+      max-request-size: 200MB   # 单次请求最大上传大小（所有文件总和）
+      file-size-threshold: 10MB # 文件大小阈值：超过此大小将写入磁盘
+      location: /data/tmp/upload # 临时文件存储目录
+
+  http:
+    client:
+      connect-timeout: 30s
+      read-timeout: 30s
+
+  # AI功能配置
+  ai:
+    openai:
+      base-url: https://dashscope.aliyuncs.com/compatible-mode
+      api-key: ${DASHSCOPE_API_KEY}
+      chat:
+        options:
+          model: qwen-plus  # 对话模型：通义千问-plus版本
+
+      embedding:
+        options:
+          model: text-embedding-v1  # 文本嵌入模型
+          dimensions: 1536          # 嵌入向量维度
+          topK: 6
+          similarityThreshold: 0.25
+
+    vectorstore:
+      qdrant:
+
+#        host: localhost        # 腾讯云Qdrant服务器地址
+#        port: 6005                  # 腾讯云Qdrant服务器端口
+        host: localhost
+        port: 6334
+
+
+#        api-key: ${SECRET_VALUE}             # 腾讯云Qdrant访问密钥
+
+        collection-name: gzhhxy     # 向量集合名称
+        use-tls: false              # 是否启用TLS加密
+        initialize-schema: true     # 是否自动初始化数据库模式
+
+    search:
+      options:
+        apiKey: ${SEARCH_API_KEY}
+        engine: baidu
+
+
+  # MySQL数据库配置
+  datasource:                          # 数据库密码
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+#    url: jdbc:mysql://localhost:3306/schqueryai?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+#    username: root
+#    password: ${SECRET_VALUE}
+
+#    url: jdbc:mysql://localhost:3306/schqueryai?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+#    username: root
+#    password: ${SECRET_VALUE}
+    url: jdbc:mysql://localhost:3306/schqueryai?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: ${PASSWORD}
+    hikari:
+      # 连接最大生命周期（毫秒），15分钟，应对网络中间设备超时
+      max-lifetime: 900000
+      # 连接空闲超时时间（毫秒），闲置超过5分钟则关闭，需小于max-lifetime
+      idle-timeout: 300000
+      # 最小空闲连接数，根据业务调整，避免过多空闲连接
+      minimum-idle: 2
+      # 最大连接池大小，根据服务器性能和数据库允许的连接数调整
+      maximum-pool-size: 10
+      # 连接验证查询（MySQL专用），确保获取的连接可用
+      connection-test-query: SELECT 1
+      # 连接验证超时时间（毫秒）
+      validation-timeout: 3000
+      # 连接获取超时时间（毫秒），避免线程阻塞
+      connection-timeout: 30000
+      # 每次从连接池获取连接时进行测试，防止使用已关闭的连接
+      test-on-borrow: true
+      # 连接空闲时进行测试
+      test-while-idle: true
+      # 心跳检测间隔（毫秒），防止连接被网络设备关闭
+      keepalive-time: 30000
+
+# 邮件服务配置
+email:
+  host: smtp.qq.com                    # SMTP服务器地址（QQ邮箱）
+  port: 465                            # SMTP服务器端口（SSL加密）
+  username: user@example.com          # 邮箱用户名
+  password: ${EMAIL_PASSWORD}           # 邮箱授权码（非邮箱密码）
+  from: user@example.com              # 发件人邮箱地址
+
+# 服务器配置
+server:
+  port: 8080                           # 应用服务端口号
+
+# 语音识别（Aliyun ASR）配置
+parameters:
+  asr:
+    endpoint: ${ALIYUN_ASR_ENDPOINT:wss://dashscope.aliyuncs.com/api-ws/v1/inference} # WebSocket地址
+    apiKey: ${ALIYUN_ASR_API_KEY:} # 建议通过环境变量注入
+    authHeaderName: "Authorization"
+    authHeaderValue: ${ALIYUN_ASR_AUTH_HEADER_VALUE:} # 可选，优先于apiKey
+    subprotocol: "" # 如需子协议可配置
+    model: "fun-asr-realtime-2025-11-07"
+    format: "pcm"
+    sampleRate: 16000
+    enableIntermediateResult: true
+    enablePunctuation: true
+    enableInverseTextNormalization: true
+    hotWords: ""
+    useHeaderPayload: true
+    chunkBytes: 960
+    chunkIntervalMs: 10
+    connectTimeoutMs: 10000
+  ffmpeg:
+    path: "D:\\tools\\ffmpeg\\bin\\ffmpeg.exe"      # 指定ffmpeg可执行文件路径，PATH中可用时保持默认
+  widget:
+    siteKey: ${WIDGET_SITE_KEY:demo-site-key}
+    title: ${WIDGET_TITLE:SchQueryAI}
+    subtitle: ${WIDGET_SUBTITLE:AI Assistant}
+    primaryColor: ${WIDGET_PRIMARY_COLOR:#1d4ed8}
+    backgroundColor: ${WIDGET_BACKGROUND_COLOR:#ffffff}
+    textColor: ${WIDGET_TEXT_COLOR:#0f172a}
+    allowedOrigin: ${WIDGET_ALLOWED_ORIGIN:https://example.com}
+
+# MinIO配置
+minio:
+  endpoint: http://localhost:6000
+  accessKey: ${ACCESS_KEY}
+  secretKey: ${SECRET_KEY}
+  region: us-east-1
+  bucket: files
+
+#debug: true

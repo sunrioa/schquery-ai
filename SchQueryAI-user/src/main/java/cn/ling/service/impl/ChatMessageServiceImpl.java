@@ -72,21 +72,15 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
      */
     @Override
     public Result<List<ChatMessageVO>> getMessage(Long sessionId) {
-        log.info("开始获取会话 {} 的消息列表", sessionId);
-
         try {
             // 查询指定会话的所有消息
-            log.debug("查询会话 {} 的所有消息", sessionId);
             List<ChatMessage> messages = lambdaQuery()
                     .eq(ChatMessage::getSessionId, sessionId)
                     .orderByAsc(ChatMessage::getCreatedAt)
                     .list();
 
             if (messages != null && !messages.isEmpty()) {
-                log.info("查询到会话 {} 的 {} 条消息", sessionId, messages.size());
-
                 // 转换为VO对象
-                log.debug("开始转换为VO对象");
                 List<ChatMessageVO> messageVOs = messages.stream()
                     .map(message -> {
                         ChatMessageVO vo = new ChatMessageVO();
@@ -98,10 +92,8 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
                     })
                     .collect(Collectors.toList());
 
-                log.info("成功获取会话 {} 的 {} 条消息", sessionId, messageVOs.size());
                 return Result.success(messageVOs);
             } else {
-                log.info("会话 {} 没有消息记录", sessionId);
                 return Result.success(null);
             }
         } catch (Exception e) {
@@ -119,12 +111,8 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
      */
     @Override
     public Flux<String> sendMessage(ChatMessageDTO chatMessageDTO) {
-        log.info("开始处理用户消息，会话ID: {}, 内容长度: {}",
-            chatMessageDTO.getSessionId(), chatMessageDTO.getContent().length());
-
         try {
             // 先保存用户消息
-            log.debug("保存用户消息到数据库");
             ChatMessage userMessage = new ChatMessage();
             userMessage.setSessionId(chatMessageDTO.getSessionId());
             userMessage.setMessageType(0); // 用户消息
@@ -137,25 +125,17 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
                 log.error("保存用户消息失败，会话ID: {}", chatMessageDTO.getSessionId());
                 return Flux.error(new RuntimeException("保存用户消息失败"));
             }
-            log.info("用户消息保存成功，消息ID: {}", userMessage.getId());
 
             // 更新会话最后消息时间
-            log.debug("更新会话 {} 的最后消息时间", chatMessageDTO.getSessionId());
             chatSessionService.updateLastMessageTime(chatMessageDTO.getSessionId());
 
             // 解析预设并设置到 ThreadLocal
-            ChatPreset preset = resolveChatPreset(chatMessageDTO.getSessionId());
+            ChatPreset preset = resolveChatPreset();
             ChatContext.setPreset(preset);
 
             try {
                 // 使用流式生成AI回复
-                log.info("开始生成AI回复");
                 String modelName = resolveModelName(preset);
-                if (preset != null) {
-                    log.info("本次对话使用默认预设: presetId={}, presetName={}, model={}", preset.getId(), preset.getPresetName(), modelName);
-                } else {
-                    log.info("本次对话未命中默认预设，将使用默认模型配置: model={}", modelName);
-                }
                 ChatClient client = dynamicChatClientService.resolveClient(modelName);
                 ChatClient.ChatClientRequestSpec promptSpec = client.prompt();
                 OpenAiChatOptions dynamicOptions = buildChatOptions(preset);
@@ -168,18 +148,18 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
                 }
                 Flux<String> aiResponseStream = promptSpec.user(chatMessageDTO.getContent()).stream().content();
 
+                // 关键修复：添加微小延迟（50ms）确保浏览器不缓冲 SSE 响应
+                // 这使每个数据块间隔足够长，让浏览器识别为"流式"而非"缓冲"
+                aiResponseStream = aiResponseStream.delayElements(java.time.Duration.ofMillis(50));
+
                 // 用于累积完整的AI回复
                 StringBuilder fullResponse = new StringBuilder();
 
                 // 处理流式响应
                 return aiResponseStream
-                        .doOnNext(chunk -> {
-                            log.debug("收到AI回复片段，长度: {}", chunk.length());
-                            fullResponse.append(chunk);
-                        })
+                        .doOnNext(fullResponse::append)
                         .doOnComplete(() -> {
                             // 流式传输完成时，保存完整的AI回复到数据库
-                            log.info("AI流式回复完成，开始保存完整回复");
                             if (!fullResponse.isEmpty()) {
                                 ChatMessage aiMessage = new ChatMessage();
                                 aiMessage.setSessionId(chatMessageDTO.getSessionId());
@@ -188,23 +168,15 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
                                 aiMessage.setCreatedAt(new Date());
                                 boolean aiSaveSuccess = this.save(aiMessage);
 
-                                if (aiSaveSuccess) {
-                                    log.info("AI消息保存成功，消息ID: {}, 回复长度: {}",
-                                        aiMessage.getId(), fullResponse.length());
-                                } else {
+                                if (!aiSaveSuccess) {
                                     log.error("AI消息保存失败，会话ID: {}", chatMessageDTO.getSessionId());
                                 }
-                            } else {
-                                log.warn("AI回复内容为空，会话ID: {}", chatMessageDTO.getSessionId());
                             }
                         })
-                        .doOnError(error -> {
-                            log.error("AI流式回复过程中发生错误: {}", error.getMessage(), error);
-                        })
+                        .doOnError(error -> log.error("AI流式回复过程中发生错误: {}", error.getMessage(), error))
                         .doFinally(signalType -> {
                             // 无论成功还是失败，都要清理 ThreadLocal
                             ChatContext.clear();
-                            log.debug("已清理 ChatContext");
                         });
             } catch (Exception e) {
                 // 发生异常时也要清理 ThreadLocal
@@ -220,54 +192,43 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
 
     private OpenAiChatOptions buildChatOptions(ChatPreset preset) {
         try {
-            boolean hasAny = false;
             OpenAiChatOptions options = OpenAiChatOptions.builder().build();
 
             String model = preset != null ? trimToNull(preset.getModel()) : trimToNull(sysConfigService.getConfigValue(KEY_MODEL));
             if (StringUtils.hasText(model)) {
                 options.setModel(model);
-                hasAny = true;
             }
 
-            Integer maxTokens = preset != null ? preset.getMaxTokens() : parseInt(sysConfigService.getConfigValue(KEY_MAX_TOKENS), null);
+            Integer maxTokens = preset != null ? preset.getMaxTokens() : parseInt(sysConfigService.getConfigValue(KEY_MAX_TOKENS));
             if (maxTokens != null && maxTokens > 0) {
                 options.setMaxTokens(maxTokens);
-                hasAny = true;
-                log.debug("AI输出配置: maxTokens={}", maxTokens);
             } else {
                 // 未配置 maxTokens 时使用默认值 4096，避免输出被截断
                 options.setMaxTokens(4096);
-                hasAny = true;
-                log.debug("AI输出配置: 使用默认 maxTokens=4096");
             }
 
-            Double temperature = preset != null ? preset.getTemperature() : parseDouble(sysConfigService.getConfigValue(KEY_TEMPERATURE), null);
+            Double temperature = preset != null ? preset.getTemperature() : parseDouble(sysConfigService.getConfigValue(KEY_TEMPERATURE));
             if (temperature != null) {
                 options.setTemperature(temperature);
-                hasAny = true;
             }
 
-            Double topP = preset != null ? preset.getTopP() : parseDouble(sysConfigService.getConfigValue(KEY_TOP_P), null);
+            Double topP = preset != null ? preset.getTopP() : parseDouble(sysConfigService.getConfigValue(KEY_TOP_P));
             if (topP != null) {
                 options.setTopP(topP);
-                hasAny = true;
             }
 
-            Double presencePenalty = preset != null ? preset.getPresencePenalty() : parseDouble(sysConfigService.getConfigValue(KEY_PRESENCE_PENALTY), null);
+            Double presencePenalty = preset != null ? preset.getPresencePenalty() : parseDouble(sysConfigService.getConfigValue(KEY_PRESENCE_PENALTY));
             if (presencePenalty != null) {
                 options.setPresencePenalty(presencePenalty);
-                hasAny = true;
             }
 
-            Double frequencyPenalty = preset != null ? preset.getFrequencyPenalty() : parseDouble(sysConfigService.getConfigValue(KEY_FREQUENCY_PENALTY), null);
+            Double frequencyPenalty = preset != null ? preset.getFrequencyPenalty() : parseDouble(sysConfigService.getConfigValue(KEY_FREQUENCY_PENALTY));
             if (frequencyPenalty != null) {
                 options.setFrequencyPenalty(frequencyPenalty);
-                hasAny = true;
             }
 
-            return hasAny ? options : null;
+            return options;
         } catch (Exception e) {
-            log.debug("读取默认对话参数失败，将使用模型默认配置: {}", e.getMessage());
             return null;
         }
     }
@@ -280,7 +241,7 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
         return trimToNull(sysConfigService.getConfigValue(KEY_MODEL));
     }
 
-    private ChatPreset resolveChatPreset(Long sessionId) {
+    private ChatPreset resolveChatPreset() {
         try {
             // Chat UI no longer supports per-session model switching: always follow the global default preset.
             Long presetId = parseLong(sysConfigService.getConfigValue(KEY_DEFAULT_PRESET_ID));
@@ -297,7 +258,6 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
             }
             return preset;
         } catch (Exception e) {
-            log.debug("读取对话预设失败，将使用默认配置: {}", e.getMessage());
             return null;
         }
     }
@@ -318,25 +278,25 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
         return t.isEmpty() ? null : t;
     }
 
-    private static Integer parseInt(String raw, Integer def) {
+    private static Integer parseInt(String raw) {
         if (!StringUtils.hasText(raw)) {
-            return def;
+            return null;
         }
         try {
             return Integer.parseInt(raw.trim());
         } catch (Exception ignored) {
-            return def;
+            return null;
         }
     }
 
-    private static Double parseDouble(String raw, Double def) {
+    private static Double parseDouble(String raw) {
         if (!StringUtils.hasText(raw)) {
-            return def;
+            return null;
         }
         try {
             return Double.parseDouble(raw.trim());
         } catch (Exception ignored) {
-            return def;
+            return null;
         }
     }
 
@@ -361,35 +321,17 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
      */
     @Override
     public Result<String> deleteMessage(ChatMessageDTO chatMessageDTO) {
-        log.info("开始删除消息，消息ID: {}", chatMessageDTO.getId());
-
         try {
             // 验证消息是否存在
-            log.debug("验证消息存在性");
             ChatMessage existingMessage = getById(chatMessageDTO.getId());
             if (existingMessage == null) {
                 log.warn("尝试删除不存在的消息，消息ID: {}", chatMessageDTO.getId());
                 return Result.error("消息不存在");
             }
 
-            log.info("找到待删除消息，会话ID: {}, 消息类型: {}, 创建时间: {}",
-                existingMessage.getSessionId(),
-                existingMessage.getMessageType() == 0 ? "用户" : "AI",
-                existingMessage.getCreatedAt());
-
-            // 验证消息是否属于当前用户（通过检查会话所有权）
-            // 这是一个安全检查，防止用户删除其他用户会话中的消息
-            // 注意：当前实现允许删除任何存在的消息，在生产环境中应增加更严格的权限验证
-            log.debug("验证消息删除权限");
-
-            // 当前版本允许删除任何存在的消息
-            // 在更安全的实现中，应在此处验证会话所有权
-            log.warn("注意：当前实现允许删除任何存在的消息，建议在生产环境中增加权限验证");
-
             boolean success = removeById(chatMessageDTO.getId());
 
             if (success) {
-                log.info("消息删除成功，消息ID: {}", chatMessageDTO.getId());
                 return Result.success("删除消息成功");
             } else {
                 log.error("消息删除失败，消息ID: {}", chatMessageDTO.getId());

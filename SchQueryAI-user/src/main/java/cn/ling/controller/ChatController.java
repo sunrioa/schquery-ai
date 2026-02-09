@@ -11,8 +11,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
+import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 聊天功能控制器
@@ -95,14 +100,51 @@ public class ChatController {
      *
      * @param sessionId 会话ID
      * @param content 消息内容
-     * @return Flux流式响应对象，逐步返回AI生成的内容
+     * @return ResponseBodyEmitter流式响应对象
      */
     @GetMapping(value = "/message/send", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> sendMessage(@RequestParam Long sessionId, @RequestParam String content) {
+    public ResponseBodyEmitter sendMessage(
+            @RequestParam Long sessionId,
+            @RequestParam String content) {
+
+        // 创建 ResponseBodyEmitter
+        ResponseBodyEmitter emitter = new ResponseBodyEmitter(30 * 60 * 1000L);
+
         ChatMessageDTO dto = new ChatMessageDTO();
         dto.setSessionId(sessionId);
         dto.setContent(content);
-        return chatMessageService.sendMessage(dto);
+
+        // 获取 Flux 流
+        Flux<String> aiResponseStream = chatMessageService.sendMessage(dto);
+
+        AtomicReference<String> fullResponse = new AtomicReference<>("");
+        AtomicLong chunkCount = new AtomicLong(0);
+
+        // 直接订阅并发送，不使用新线程
+        aiResponseStream
+                .doOnNext(chunk -> {
+                    try {
+                        long count = chunkCount.incrementAndGet();
+                        fullResponse.updateAndGet(prev -> prev + chunk);
+
+                        // 构建 SSE 事件并立即发送
+                        String sseEvent = "data: " + chunk + "\n\n";
+                        emitter.send(sseEvent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    } catch (IOException e) {
+                        log.error("发送 SSE 数据失败: {}", e.getMessage(), e);
+                        emitter.completeWithError(e);
+                    }
+                })
+                .doOnError(error -> {
+                    log.error("AI流式响应发生错误: {}", error.getMessage(), error);
+                    emitter.completeWithError(error);
+                })
+                .doOnComplete(() -> {
+                    emitter.complete();
+                })
+                .subscribe();
+
+        return emitter;
     }
 
     /**

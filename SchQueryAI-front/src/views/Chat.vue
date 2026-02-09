@@ -1009,23 +1009,19 @@ const escapeHtml = (text) => {
 
 // 添加一个观察器来监视消息变化
 watch(messages, (newMessages, oldMessages) => {
-  console.log('Messages array changed, length:', newMessages.length)
   // 深度监听消息变化，确保渲染更新
   nextTick(() => {
-    console.log('Watch nextTick executed')
+    // Vue 响应式更新触发
   })
 }, { deep: true, immediate: false })
 
 // 加载会话列表
 const loadSessions = async () => {
-  console.log('Loading sessions...')
   try {
     sessionsLoading.value = true
     const response = await chatApi.getSessions()
-    console.log('Sessions response:', response)
     if (response?.code === 200) {
       sessions.value = response.data || []
-      console.log('Sessions loaded:', sessions.value)
     }
     if (isMobile.value && !currentSessionId.value) {
       mobileSidebarVisible.value = true
@@ -1118,8 +1114,6 @@ const sendMessage = async () => {
     createdAt: new Date().toISOString(),
     renderVersion: ++renderVersion // 添加版本号字段
   }
-  // 注意：messages 数组中存的是响应式代理，直接改 aiMessageObj 不会触发视图更新
-  let aiMessageRef = null
 
   // 显示输入状态
   isTyping.value = true
@@ -1147,8 +1141,9 @@ const sendMessage = async () => {
 
     isTyping.value = false
     messages.value.push(aiMessageObj)
-    aiMessageRef = messages.value[messages.value.length - 1]
     streamingMessageIds.value.add(aiMessageObj.id)
+    // 获取 AI 消息在数组中的索引，用于后续更新
+    const aiMessageIndex = messages.value.length - 1
 
     // SSE 缓冲区：按事件（\n\n）解析，保留换行以支持 Markdown
     let buffer = ''
@@ -1164,34 +1159,37 @@ const sendMessage = async () => {
       }
 
       buffer += decoder.decode(value, { stream: true })
-      buffer = buffer.replace(/\r+/g, '')
+      buffer = buffer.replace(/\r\n/g, '\n').replace(/\r+/g, '')
 
-      const events = buffer.split('\n\n')
-      buffer = events.pop() || ''
+      // 按行分割，处理每个 data: 行
+      const lines = buffer.split('\n')
+      // 保留最后一个可能不完整的行到缓冲区
+      buffer = lines[lines.length - 1] || ''
 
-      for (const evt of events) {
-        const lines = evt.split('\n')
-        const dataLines = lines
-          .filter((line) => line.startsWith('data:'))
-          .map((line) => line.slice(5).replace(/^ /, ''))
+      for (let i = 0; i < lines.length - 1; i++) {
+        const line = lines[i].trim()
+        if (!line) continue
+        if (!line.startsWith('data:')) continue
+        if (line === 'data:[DONE]') continue
 
-        const eventData = dataLines.length ? dataLines.join('\n') : evt
-        if (!eventData) continue
-        if (eventData.trim() === '[DONE]') continue
+        // 提取 data: 后面的内容
+        const content = line.slice(5).replace(/^ /, '')
+        aiMessageText += content
 
-        aiMessageText += eventData
-      }
-
-      // 在流式传输过程中更新内容（保持流式标记，先不做 Markdown 渲染）
-      if (aiMessageRef) {
-        aiMessageRef.content = aiMessageText
-      }
-
-      nextTick(() => {
-        if (messagesContainer.value) {
-          messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+        // 每处理一个数据块就立即更新内容，实现流式显示效果
+        // 直接通过数组索引更新，确保 Vue 响应式系统能检测到变化
+        if (messages.value[aiMessageIndex]) {
+          messages.value[aiMessageIndex].content = aiMessageText
+          // 强制触发 Vue 响应式更新
+          messages.value[aiMessageIndex].renderVersion = ++renderVersion
         }
-      })
+
+        nextTick(() => {
+          if (messagesContainer.value) {
+            messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+          }
+        })
+      }
     }
 
     // 流式数据读取完成后，处理最终内容
@@ -1208,15 +1206,12 @@ const sendMessage = async () => {
     }
 
     const cleanedContent = cleanAIResponse(aiMessageText)
-    console.log('流式完成，内容长度:', cleanedContent.length)
 
     streamingMessageIds.value.delete(aiMessageObj.id)
-    if (aiMessageRef) {
-      aiMessageRef.content = cleanedContent
-      aiMessageRef.renderVersion = ++renderVersion
-    } else {
-      aiMessageObj.content = cleanedContent
-      aiMessageObj.renderVersion = ++renderVersion
+    // 流式完成后，更新最终内容
+    if (messages.value[aiMessageIndex]) {
+      messages.value[aiMessageIndex].content = cleanedContent
+      messages.value[aiMessageIndex].renderVersion = ++renderVersion
     }
 
     // 等待Vue更新完成
@@ -1256,22 +1251,16 @@ const handleEnterKey = (event) => {
 
 // 返回按钮处理函数
 const goBack = () => {
-  console.log('返回按钮被点击') // 调试信息
-
   try {
     // 检查当前路径和上一页路径
     const currentPath = router.currentRoute.value.path
     const referrer = document.referrer
-
-    console.log('当前路径:', currentPath)
-    console.log('referrer:', referrer)
 
     // 如果当前路径是 /chat，并且上一页不是 login 页面，则返回
     if (currentPath === '/chat' && referrer && !referrer.includes('login')) {
       router.go(-1)
     } else {
       // 否则直接跳转到首页
-      console.log('跳转到首页')
       router.push('/home')
     }
   } catch (error) {
@@ -1486,7 +1475,6 @@ const startRecording = async () => {
     }
 
     streamingSessionToken.value = result.data
-    console.log('流式识别会话已启动，令牌：', streamingSessionToken.value)
 
     // 2. 请求麦克风权限
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -1602,8 +1590,6 @@ const startMediaRecorderRecording = async (stream) => {
 const stopRecording = async () => {
   if (!isRecording.value) return
 
-  console.log('停止录音...')
-
   // 保存当前的转录文本，避免后续被覆盖
   flushTranscriptUpdate()
   const currentTranscript = realTimeTranscript.value.trim()
@@ -1632,8 +1618,6 @@ const stopRecording = async () => {
   // 延迟1.5秒后停止流式识别会话，确保最后一个音频分片的识别结果返回
   setTimeout(async () => {
     try {
-      console.log('发送停止请求到后端...')
-
       // 停止流式识别会话并获取最终结果
       if (streamingSessionToken.value) {
         const response = await fetch('/api/user/streaming/stop', {
@@ -1699,15 +1683,11 @@ const stopRecording = async () => {
 
     // 清理录音资源
     cleanupRecording()
-
-    console.log('录音处理完成')
   }, 1500) // 延迟1.5秒发送停止请求
 }
 
 // 强制停止录音（紧急情况使用）
 const forceStopRecording = async () => {
-  console.log('强制停止录音...')
-
   // 立即停止UI状态
   isRecording.value = false
 
@@ -2046,8 +2026,6 @@ onMounted(() => {
 onUnmounted(() => {
   cleanupRecording()
   window.removeEventListener('resize', updateIsMobile)
-
-  console.log('Component unmounted, cleanup completed')
 })
 </script>
 

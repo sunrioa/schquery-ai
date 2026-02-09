@@ -93,6 +93,14 @@ email:
 # 服务器配置
 server:
   port: 8080                           # 应用服务端口号
+  # Tomcat 配置优化 SSE 流式响应
+  tomcat:
+    threads:
+      max: 200                         # 最大工作线程数
+      min-spare: 20                    # 最小空闲线程数
+    connection-timeout: 20000          # 连接超时时间（毫秒）
+    accept-count: 100                  # 接受连接队列大小
+    async-timeout: 30000               # 异步请求超时时间（毫秒）
 
 # 语音识别（Aliyun ASR）配置
 parameters:

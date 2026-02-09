@@ -7,6 +7,7 @@ import cn.ling.rpc.OcrRpc;
 import cn.ling.service.DocumentChunksService;
 import cn.ling.service.DocumentsService;
 import cn.ling.service.SyncService;
+import cn.ling.utils.DocumentReaderStrategy;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -78,20 +79,12 @@ public class SyncServiceImpl implements SyncService {
             String content = "";
             try {
                 if (documentsDTO != null && StringUtils.hasText(documentsDTO.getContent())) {
+                    // 优先使用前端传入的content
                     content = documentsDTO.getContent().trim();
                     log.info("使用请求参数content作为文档内容 - 文档ID: {}, 内容长度: {} 字符", documentsId, content.length());
-                } else if ("application/pdf".equalsIgnoreCase(file.getContentType())) {
-                    log.info("开始对PDF文件进行OCR识别 - 文档ID: {}, 文件名: {}", documentsId, file.getOriginalFilename());
-                    content = executeOcr(file);
-                    log.info("PDF OCR识别完成 - 文档ID: {}, 提取内容长度: {} 字符", documentsId, content != null ? content.length() : 0);
-                } else if (isLikelyTextFile(file)) {
-                    log.info("检测为文本类文件，开始读取内容 - 文档ID: {}, 文件名: {}", documentsId, file.getOriginalFilename());
-                    content = readTextFile(file);
-                    log.info("文本内容读取完成 - 文档ID: {}, 内容长度: {} 字符", documentsId, content != null ? content.length() : 0);
                 } else {
-                    log.warn("暂不支持的文件类型，跳过内容提取 - 文档ID: {}, 文件类型: {}, 文件名: {}",
-                            documentsId, file.getContentType(), file.getOriginalFilename());
-                    content = "";
+                    // 使用文档读取策略中心提取内容
+                    content = extractContentByStrategy(documentsId, file);
                 }
             } catch (Exception e) {
                 log.error("文档内容提取失败 - 文档ID: {}, 错误信息: {}", documentsId, e.getMessage(), e);
@@ -175,8 +168,56 @@ public class SyncServiceImpl implements SyncService {
     }
 
     /**
+     * 使用文档读取策略中心提取内容
+     * 1. 优先使用DocumentReaderStrategy直接提取文档文字内容
+     * 2. 对于PDF文件，如果提取内容为空或太少（判定为扫描件），则调用OCR服务
+     *
+     * @param documentsId 文档ID
+     * @param file 上传的文件
+     * @return 提取的文本内容
+     */
+    private String extractContentByStrategy(Long documentsId, MultipartFile file) {
+        log.info("开始使用文档读取策略提取内容 - 文档ID: {}, 文件名: {}", documentsId, file.getOriginalFilename());
+
+        // 1. 检查文件类型是否支持
+        if (!DocumentReaderStrategy.isSupported(file)) {
+            log.warn("不支持的文件类型，尝试OCR处理 - 文档ID: {}, 文件名: {}",
+                    documentsId, file.getOriginalFilename());
+            return executeOcr(file);
+        }
+
+        // 2. 使用文档读取策略中心提取内容
+        String content = DocumentReaderStrategy.read(file);
+        String fileType = DocumentReaderStrategy.getFileType(file);
+
+        if (StringUtils.hasText(content)) {
+            log.info("文档读取策略提取成功 - 文档ID: {}, 文件类型: {}, 内容长度: {} 字符",
+                    documentsId, fileType, content.length());
+        } else {
+            log.warn("文档读取策略提取内容为空 - 文档ID: {}, 文件类型: {}", documentsId, fileType);
+        }
+
+        // 3. 对于PDF文件，如果提取的内容太少，可能是扫描件，需要使用OCR
+        if ("application/pdf".equals(fileType)) {
+            // 判断是否为扫描件：提取内容少于50字符，或者去除空白后少于20字符
+            boolean isLikelyScan = content == null
+                    || content.trim().length() < 20
+                    || content.length() < 50;
+
+            if (isLikelyScan) {
+                log.info("PDF提取内容过少，判定为扫描件，启用OCR识别 - 文档ID: {}, 已提取长度: {} 字符",
+                        documentsId, content != null ? content.length() : 0);
+                return executeOcr(file);
+            }
+        }
+
+        return content != null ? content : "";
+    }
+
+    /**
      * 执行OCR识别
      * 调用RPC服务对PDF文件进行文本提取
+     * 主要用于扫描版PDF或图片类文档
      *
      * @param pdfFile PDF文件
      * @return 提取的文本内容

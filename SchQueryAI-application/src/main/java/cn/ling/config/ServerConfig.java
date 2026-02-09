@@ -26,6 +26,12 @@ public class ServerConfig {
                     connector.setProperty("maxConnections", "8192");
                     // 设置接收队列大小
                     connector.setProperty("acceptCount", "100");
+
+                    // 关键配置：禁用上传超时，保持长连接
+                    connector.setProperty("disableUploadTimeout", "true");
+                    // 设置较小的缓冲区大小，减少 SSE 响应缓冲延迟
+                    connector.setProperty("socket.appreadbufsize", "2048");
+                    connector.setProperty("socket.appwritebufsize", "2048");
                 });
             }
         };

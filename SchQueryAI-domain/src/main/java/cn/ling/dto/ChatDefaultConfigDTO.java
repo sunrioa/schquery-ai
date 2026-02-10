@@ -10,6 +10,32 @@ import lombok.Data;
 public class ChatDefaultConfigDTO {
 
     /**
+     * 追问建议配置
+     */
+    private SuggestConfig suggestConfig;
+
+    /**
+     * 追问建议配置
+     */
+    @Data
+    public static class SuggestConfig {
+        /**
+         * 是否启用
+         */
+        private String enabled;
+
+        /**
+         * 上下文对话轮次（1-3轮）
+         */
+        private String chatTurn;
+
+        /**
+         * 使用角色ID
+         */
+        private String roleId;
+    }
+
+    /**
      * 默认对话模型名称（chat_model.model_name）
      */
     private String model;

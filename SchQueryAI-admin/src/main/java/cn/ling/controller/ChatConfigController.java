@@ -39,6 +39,11 @@ public class ChatConfigController {
     private static final String KEY_WEIGHT_MCP = "chat.weight.mcp";
     private static final String KEY_WELCOME_MESSAGE = "chat.default.message";
 
+    // 追问建议配置
+    private static final String KEY_SUGGEST_USE = "suggest.use";
+    private static final String KEY_SUGGEST_CHAT_TURN = "suggest.chatTurn";
+    private static final String KEY_SUGGEST_ROLE = "suggest.role";
+
     @Resource
     private SysConfigService sysConfigService;
 
@@ -63,6 +68,14 @@ public class ChatConfigController {
         dto.setWeightKnowledge(parseDouble(sysConfigService.getConfigValue(KEY_WEIGHT_KNOWLEDGE), 0.25));
         dto.setWeightMcp(parseDouble(sysConfigService.getConfigValue(KEY_WEIGHT_MCP), 0.15));
         dto.setWelcomeMessage(sysConfigService.getConfigValue(KEY_WELCOME_MESSAGE));
+
+        // 追问建议配置
+        ChatDefaultConfigDTO.SuggestConfig suggestConfig = new ChatDefaultConfigDTO.SuggestConfig();
+        suggestConfig.setEnabled(sysConfigService.getConfigValue(KEY_SUGGEST_USE));
+        suggestConfig.setChatTurn(sysConfigService.getConfigValue(KEY_SUGGEST_CHAT_TURN));
+        suggestConfig.setRoleId(sysConfigService.getConfigValue(KEY_SUGGEST_ROLE));
+        dto.setSuggestConfig(suggestConfig);
+
         return Result.success(dto);
     }
 
@@ -98,6 +111,14 @@ public class ChatConfigController {
             upsert(KEY_WEIGHT_MCP, "MCP权重", String.valueOf(normalizeWeight(dto.getWeightMcp(), 0.15)), "提示词融合策略");
         }
         upsert(KEY_WELCOME_MESSAGE, "欢迎消息", trimToNull(dto.getWelcomeMessage()), "对话管理");
+
+        // 保存追问建议配置
+        if (dto.getSuggestConfig() != null) {
+            ChatDefaultConfigDTO.SuggestConfig suggestConfig = dto.getSuggestConfig();
+            upsert(KEY_SUGGEST_USE, "追问建议启用", suggestConfig.getEnabled(), "追问建议");
+            upsert(KEY_SUGGEST_CHAT_TURN, "追问建议对话轮次", suggestConfig.getChatTurn(), "追问建议");
+            upsert(KEY_SUGGEST_ROLE, "追问建议角色", trimToNull(suggestConfig.getRoleId()), "追问建议");
+        }
 
         return Result.success("保存成功");
     }

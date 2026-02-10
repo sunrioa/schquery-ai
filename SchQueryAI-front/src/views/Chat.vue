@@ -278,26 +278,22 @@
 import { ref, onMounted, onUnmounted, nextTick, watch, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElEmpty, ElAvatar, ElDropdown, ElDropdownMenu, ElDropdownItem, ElButton, ElInput, ElDialog, ElForm, ElFormItem, ElIcon } from 'element-plus'
-import { Plus, Setting, Edit, Delete, Service, Upload, Loading, Microphone, SwitchButton, User, Lock, ArrowDown, ArrowLeft, Moon, Sunny, ChatDotRound, Tools, Menu } from '@element-plus/icons-vue'
-import { chatApi } from '../api/chat'
-import { userApi } from '../api/user'
+import { Plus, Setting, Edit, Delete, Service, Upload, Loading, Microphone, SwitchButton, User, Lock, ArrowDown, Moon, Sunny, ChatDotRound, Tools, Menu } from '@element-plus/icons-vue'
+import { chatApi } from '@/api/chat'
 import WeatherBadge from '../components/WeatherBadge.vue'
-import { useUserStore } from '../stores/userStore'
-import { getAIAvatar } from '../utils/avatarUtils'
+import { useUserStore } from '@/stores/userStore'
+import { getAIAvatar } from '@/utils/avatarUtils'
 import { Marked } from 'marked'
 import {
   isAdmin,
-  isWorker,
-  hasAnyRole,
-  getCurrentUser
-} from '../utils/auth'
-import { applyTheme, isDarkTheme } from '../utils/theme'
+  isWorker
+} from '@/utils/auth'
+import { applyTheme, isDarkTheme } from '@/utils/theme'
 import hljs from 'highlight.js'
 
 // 路由实例和用户store
 const router = useRouter()
 const userStore = useUserStore()
-const instance = getCurrentInstance() // 添加实例引用用于强制更新
 
 // 状态变量
 const sessions = ref([])
@@ -312,14 +308,6 @@ const renameSessionName = ref('')
 const messagesContainer = ref(null)
 const messageInputRef = ref(null)
 const transcriptScrollRef = ref(null)
-
-// 客服对话框相关状态
-const showCustomerServiceDialog = ref(false)
-const customerServiceMessage = ref('')
-const customerServiceTopic = ref('general')
-const customerServiceHistory = ref([])
-const customerServiceLoading = ref(false)
-const customerServiceMessagesContainer = ref(null)
 
 // 录音相关状态
 const isRecording = ref(false)
@@ -580,7 +568,7 @@ const detectLanguage = (code, lang) => {
   if (/public\s+class|private\s+class|System\.out\.println|import\s+java\./.test(code)) return 'java'
 
   // CSS检测
-  if (/\{[^}]*\}|#[a-zA-Z-]+\s*\{|\.color|background-color|font-size/.test(code)) return 'css'
+  if (/{[^}]*}|#[a-zA-Z-]+\s*\{|\.color|background-color|font-size/.test(code)) return 'css'
 
   return 'text'
 }
@@ -983,23 +971,6 @@ const preprocessMarkdown = (text) => {
   return processed.trim()
 }
 
-// 增强的文本渲染，处理基本的格式
-const renderEnhancedText = (text) => {
-  return text
-    // HTML转义
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    // 保留换行
-    .replace(/\n/g, '<br>')
-    // 处理粗体（已完成的）
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    // 处理斜体（已完成的）
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    // 处理行内代码（已完成的）
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-}
-
 // HTML转义函数
 const escapeHtml = (text) => {
   const div = document.createElement('div')
@@ -1008,7 +979,7 @@ const escapeHtml = (text) => {
 }
 
 // 添加一个观察器来监视消息变化
-watch(messages, (newMessages, oldMessages) => {
+watch(messages, () => {
   // 深度监听消息变化，确保渲染更新
   nextTick(() => {
     // Vue 响应式更新触发
@@ -1249,27 +1220,6 @@ const handleEnterKey = (event) => {
   event.ctrlKey ? (userMessage.value += '\n') : sendMessage()
 }
 
-// 返回按钮处理函数
-const goBack = () => {
-  try {
-    // 检查当前路径和上一页路径
-    const currentPath = router.currentRoute.value.path
-    const referrer = document.referrer
-
-    // 如果当前路径是 /chat，并且上一页不是 login 页面，则返回
-    if (currentPath === '/chat' && referrer && !referrer.includes('login')) {
-      router.go(-1)
-    } else {
-      // 否则直接跳转到首页
-      router.push('/home')
-    }
-  } catch (error) {
-    console.error('返回失败:', error)
-    // 出错时直接跳转到首页
-    router.push('/home')
-  }
-}
-
 // 处理会话操作
 const handleSessionCommand = async (command, session) => {
   if (!checkToken()) return
@@ -1347,71 +1297,6 @@ const handleUserCommand = async (command) => {
         // 用户取消操作
       }
       break
-  }
-}
-
-// 加载客服消息历史
-const loadCustomerServiceHistory = async () => {
-  try {
-    // 调用后端 API 获取此用户的客服消息历史
-    // 暂时正也没有实瞳的 API，所以这里一个空数组
-    customerServiceHistory.value = []
-  } catch (error) {
-    console.error('加载消息历史失败:', error)
-  }
-}
-
-// 发送客服消息
-const sendCustomerServiceMessage = async () => {
-  if (!customerServiceMessage.value.trim()) return
-
-  if (!checkToken()) return
-
-  try {
-    customerServiceLoading.value = true
-
-    // 调用后端 API 发送客服消息
-    const response = await fetch('/api/customer-service/send', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        messageContent: customerServiceMessage.value,
-        topic: customerServiceTopic.value,
-        senderType: 1  // 1-用户，2-管理员
-      })
-    })
-
-    if (!response.ok) {
-      throw new Error('发送消息失败')
-    }
-
-    const result = await response.json()
-    if (result.code !== 200) {
-      throw new Error(result.msg || '发送消息失败')
-    }
-
-    // 消息发送成功，清空输入框并添加到历史
-    const messageData = result.data
-    if (messageData) {
-      customerServiceHistory.value.push(messageData)
-      customerServiceMessage.value = ''
-      ElMessage.success('消息已发送')
-
-      // 滿果済滥，会话自动滥动到最下
-      nextTick(() => {
-        if (customerServiceMessagesContainer.value) {
-          customerServiceMessagesContainer.value.scrollTop = customerServiceMessagesContainer.value.scrollHeight
-        }
-      })
-    }
-  } catch (error) {
-    console.error('发送消息失败:', error)
-    ElMessage.error(error.message || '发送消息失败')
-  } finally {
-    customerServiceLoading.value = false
   }
 }
 
@@ -1684,51 +1569,6 @@ const stopRecording = async () => {
     // 清理录音资源
     cleanupRecording()
   }, 1500) // 延迟1.5秒发送停止请求
-}
-
-// 强制停止录音（紧急情况使用）
-const forceStopRecording = async () => {
-  // 立即停止UI状态
-  isRecording.value = false
-
-  // 停止定时器
-  if (recordingTimer.value) {
-    clearInterval(recordingTimer.value)
-    recordingTimer.value = null
-  }
-
-  // 保存当前转录文本
-  flushTranscriptUpdate()
-  const currentTranscript = realTimeTranscript.value.trim()
-
-  try {
-    // 立即强制停止后端流式识别会话
-    if (streamingSessionToken.value) {
-      await fetch('/api/user/streaming/forceStop', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ sessionToken: streamingSessionToken.value })
-      })
-    }
-  } catch (error) {
-    console.warn('强制停止后端会话失败:', error)
-  }
-
-  // 如果有转录文本，添加到输入框
-  if (currentTranscript) {
-    applyFinalTranscript(currentTranscript)
-    ElMessage.success(`语音识别已保存: ${currentTranscript}`)
-  }
-
-  // 立即清理所有资源
-  cleanupRecording()
-  resetTranscriptState()
-  streamingSessionToken.value = ''
-
-  ElMessage.warning('录音已强制停止')
 }
 
 // 清理录音资源
@@ -3617,21 +3457,8 @@ onUnmounted(() => {
 }
 
 /* SQL代码块特殊样式 */
-.markdown-content pre code[class*="language-sql"],
-.markdown-content pre code:has("SELECT"),
-.markdown-content pre code:has("INSERT"),
-.markdown-content pre code:has("UPDATE"),
-.markdown-content pre code:has("DELETE") {
+.markdown-content pre code[class*="language-sql"] {
   color: #86efac;
-}
-
-/* SQL关键字高亮 */
-.markdown-content pre code:has("SELECT") span,
-.markdown-content pre code:has("INSERT") span,
-.markdown-content pre code:has("UPDATE") span,
-.markdown-content pre code:has("DELETE") span {
-  color: #fbbf24;
-  font-weight: bold;
 }
 
 /* 现代化表格样式（卡片） */

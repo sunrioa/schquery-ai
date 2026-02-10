@@ -4,11 +4,13 @@ import cn.ling.Result;
 import cn.ling.dto.CustomerServiceDTO;
 import cn.ling.domain.pojo.CustomerServiceMessage;
 import cn.ling.domain.pojo.CustomerServiceSession;
+import cn.ling.domain.pojo.ImageStore;
 import cn.ling.domain.pojo.User;
 import cn.ling.domain.vo.CustomerServiceVO;
 import cn.ling.exception.CustomException;
 import cn.ling.mapper.CustomerServiceMapper;
 import cn.ling.mapper.CustomerServiceSessionMapper;
+import cn.ling.mapper.ImageStoreMapper;
 import cn.ling.mapper.UserMapper;
 import cn.ling.service.CustomerServiceService;
 import cn.ling.service.ICustomerServiceBridge;
@@ -19,6 +21,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -31,10 +34,45 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
 
     private final CustomerServiceSessionMapper customerServiceSessionMapper;
     private final UserMapper userMapper;
+    private final ImageStoreMapper imageStoreMapper;
 
-    public CustomerServiceServiceImpl(CustomerServiceSessionMapper customerServiceSessionMapper, UserMapper userMapper) {
+    public CustomerServiceServiceImpl(CustomerServiceSessionMapper customerServiceSessionMapper, UserMapper userMapper, ImageStoreMapper imageStoreMapper) {
         this.customerServiceSessionMapper = customerServiceSessionMapper;
         this.userMapper = userMapper;
+        this.imageStoreMapper = imageStoreMapper;
+    }
+
+    /**
+     * 批量获取用户的头像base64数据
+     * @param userIds 用户ID列表
+     * @return 用户ID -> base64字符串 的映射
+     */
+    private Map<Long, String> getUserAvatarBase64Map(List<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        // 过滤掉null值
+        List<Long> validIds = userIds.stream()
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .collect(Collectors.toList());
+
+        if (validIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return validIds.stream()
+                .collect(Collectors.toMap(
+                        id -> id,
+                        id -> {
+                            User user = userMapper.selectById(id);
+                            if (user != null && user.getAvatar() != null) {
+                                ImageStore imageStore = imageStoreMapper.selectById(user.getAvatar());
+                                return imageStore != null ? imageStore.getImageBase64() : null;
+                            }
+                            return null;
+                        }
+                ));
     }
 
     @Override
@@ -48,7 +86,6 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
                     .senderType(1) // 1-用户
                     .senderId(dto.getUserId())
                     .senderName(dto.getUserName())
-                    .senderAvatar(dto.getUserAvatar()) // 用户头像
                     .readStatus(0) // 未读
                     .topic(dto.getTopic())
                     .createTime(LocalDateTime.now(ZoneId.systemDefault()))
@@ -99,7 +136,6 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
                     .senderType(2) // 2-管理员
                     .senderId(dto.getSenderId())
                     .senderName(dto.getSenderName())
-                    .senderAvatar(dto.getSenderAvatar()) // 管理员头像
                     .readStatus(1) // 管理员发送，自动为已读
                     .topic(dto.getTopic())
                     .createTime(LocalDateTime.now(ZoneId.systemDefault()))
@@ -147,6 +183,16 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
     public Result<List<CustomerServiceVO>> getMessagesByUserId(Long userId) {
         try {
             List<CustomerServiceMessage> messages = this.baseMapper.selectByUserId(userId);
+
+            // 收集所有发送者ID（用户和管理员）
+            List<Long> senderIds = messages.stream()
+                    .map(CustomerServiceMessage::getSenderId)
+                    .distinct()
+                    .collect(Collectors.toList());
+
+            // 批量获取头像base64数据
+            Map<Long, String> senderAvatarMap = getUserAvatarBase64Map(senderIds);
+
             List<CustomerServiceVO> result = messages.stream()
                     .map(msg -> CustomerServiceVO.builder()
                             .id(msg.getId())
@@ -156,7 +202,7 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
                             .senderType(msg.getSenderType())
                             .senderId(msg.getSenderId())
                             .senderName(msg.getSenderName())
-                            .senderAvatar(msg.getSenderAvatar()) // 添加头像
+                            .senderAvatar(senderAvatarMap.get(msg.getSenderId()))
                             .readStatus(msg.getReadStatus())
                             .topic(msg.getTopic())
                             .createTime(msg.getCreateTime().toString())
@@ -194,6 +240,19 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
         try {
             List<CustomerServiceSession> sessions = customerServiceSessionMapper.selectPendingSessions();
 
+            // 收集所有发送者ID（用户和管理员）
+            List<Long> allSenderIds = sessions.stream()
+                    .flatMap(session -> {
+                        List<CustomerServiceMessage> messages = this.baseMapper.selectByUserId(session.getUserId());
+                        return messages.stream()
+                                .map(CustomerServiceMessage::getSenderId);
+                    })
+                    .distinct()
+                    .collect(Collectors.toList());
+
+            // 批量获取头像base64数据
+            Map<Long, String> senderAvatarMap = getUserAvatarBase64Map(allSenderIds);
+
             List<CustomerServiceVO.UserSessionVO> result = sessions.stream()
                     .map(session -> {
                         // 获取该用户的消息列表
@@ -208,7 +267,7 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
                                         .senderType(msg.getSenderType())
                                         .senderId(msg.getSenderId())
                                         .senderName(msg.getSenderName())
-                                        .senderAvatar(msg.getSenderAvatar()) // 添加头像
+                                        .senderAvatar(senderAvatarMap.get(msg.getSenderId()))
                                         .readStatus(msg.getReadStatus())
                                         .topic(msg.getTopic())
                                         .createTime(msg.getCreateTime().toString())

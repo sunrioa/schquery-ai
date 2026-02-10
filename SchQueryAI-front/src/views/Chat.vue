@@ -172,7 +172,7 @@
                 <div class="message-text" v-if="message.messageType === 0">{{ message.content }}</div>
                 <div class="message-text" v-else-if="message.content">
                   <!-- 流式传输时显示预处理文本，完成后显示Markdown格式 -->
-                  <div v-if="streamingMessageIds.has(message.id)" class="streaming-text" v-text="message.content"></div>
+                  <div v-if="message.isStreaming" class="streaming-text" v-text="message.content"></div>
                   <div v-else class="markdown-content"
                        :key="`md-${message.id}-${message.renderVersion || 0}`"
                        v-html="renderMarkdown(message.content, message.id)"></div>
@@ -324,7 +324,6 @@ const chunkBuffer = ref(new Int16Array(0))
 const realTimeTranscript = ref('')
 const streamingSessionToken = ref('') // 流式识别会话令牌
 let renderVersion = 0 // 渲染版本号，用于强制重新渲染
-const streamingMessageIds = ref(new Set()) // 用于标记正在流式传输的消息ID
 
 const transcriptBaseMessage = ref('')
 let transcriptUpdateTimer = null
@@ -1034,9 +1033,6 @@ const selectSession = async (session) => {
 // 加载消息历史
 const loadMessages = async (sessionId) => {
   try {
-    // 清理之前的流式标记
-    streamingMessageIds.value.clear()
-
     const response = await chatApi.getMessages(sessionId)
     if (response?.code === 200) {
       messages.value = (response.data || []).map(msg => {
@@ -1045,6 +1041,8 @@ const loadMessages = async (sessionId) => {
           msg.content = cleanAIResponse(msg.content)
           msg.renderVersion = ++renderVersion // 关键添加
         }
+        // 确保加载的消息不在流式状态
+        msg.isStreaming = false
         return msg
       })
       nextTick(() => {
@@ -1083,7 +1081,8 @@ const sendMessage = async () => {
     content: '',
     messageType: 1,
     createdAt: new Date().toISOString(),
-    renderVersion: ++renderVersion // 添加版本号字段
+    renderVersion: ++renderVersion, // 添加版本号字段
+    isStreaming: true // 添加流式标记
   }
 
   // 显示输入状态
@@ -1112,7 +1111,6 @@ const sendMessage = async () => {
 
     isTyping.value = false
     messages.value.push(aiMessageObj)
-    streamingMessageIds.value.add(aiMessageObj.id)
     // 获取 AI 消息在数组中的索引，用于后续更新
     const aiMessageIndex = messages.value.length - 1
 
@@ -1178,15 +1176,18 @@ const sendMessage = async () => {
 
     const cleanedContent = cleanAIResponse(aiMessageText)
 
-    streamingMessageIds.value.delete(aiMessageObj.id)
-    // 流式完成后，更新最终内容
+    // 流式完成后，更新最终内容（本地更新，避免闪烁）
     if (messages.value[aiMessageIndex]) {
       messages.value[aiMessageIndex].content = cleanedContent
       messages.value[aiMessageIndex].renderVersion = ++renderVersion
+      messages.value[aiMessageIndex].isStreaming = false
     }
 
     // 等待Vue更新完成
     await nextTick()
+
+    // 重新加载消息列表，确保 Markdown 正确渲染
+    await loadMessages(currentSessionId.value)
 
     await loadSessions()
   } catch (error) {
@@ -1194,19 +1195,24 @@ const sendMessage = async () => {
     isTyping.value = false
 
     // 确保清理流式标记
-    streamingMessageIds.value.delete(aiMessageObj.id)
+    const aiIndex = messages.value.findIndex(msg => msg.id === aiMessageObj.id)
+    if (aiIndex > -1) {
+      messages.value[aiIndex].isStreaming = false
+    }
 
     handleApiError(error, error.message || '发送消息失败')
     const index = messages.value.findIndex(msg => msg.id === userMessageObj.id)
     if (index > -1) messages.value.splice(index, 1)
 
     // 也清理AI消息
-    const aiIndex = messages.value.findIndex(msg => msg.id === aiMessageObj.id)
     if (aiIndex > -1) messages.value.splice(aiIndex, 1)
   } finally {
     isTyping.value = false
     // 确保在所有情况下都清理流式状态
-    streamingMessageIds.value.delete(aiMessageObj.id)
+    const aiIndex = messages.value.findIndex(msg => msg.id === aiMessageObj.id)
+    if (aiIndex > -1 && messages.value[aiIndex]) {
+      messages.value[aiIndex].isStreaming = false
+    }
     nextTick(() => {
       if (messagesContainer.value) {
         messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight

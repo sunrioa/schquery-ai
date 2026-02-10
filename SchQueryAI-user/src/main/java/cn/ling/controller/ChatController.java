@@ -5,14 +5,15 @@ import cn.ling.domain.dto.ChatMessageDTO;
 import cn.ling.domain.dto.ChatSessionDTO;
 import cn.ling.domain.vo.ChatMessageVO;
 import cn.ling.domain.vo.ChatSessionVO;
+import cn.ling.domain.vo.SuggestVO;
 import cn.ling.service.ChatMessageService;
 import cn.ling.service.ChatSessionService;
+import cn.ling.service.SuggestService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 import java.io.IOException;
 import java.util.List;
@@ -34,6 +35,9 @@ public class ChatController {
 
     @Autowired
     private ChatMessageService chatMessageService;
+
+    @Autowired
+    private SuggestService suggestService;
 
     /**
      * 创建新的聊天会话
@@ -157,6 +161,46 @@ public class ChatController {
     @RequestMapping("/message/delete")
     public Result<String> deleteMessage(@RequestBody ChatMessageDTO chatMessageDTO) {
         return chatMessageService.deleteMessage(chatMessageDTO);
+    }
+
+    /**
+     * 获取追问建议
+     * 根据最后一条消息的意图返回预设追问问题
+     *
+     * @param sessionId 会话ID
+     * @return 追问建议列表
+     */
+    @RequestMapping("/suggest/get")
+    public Result<SuggestVO> getSuggest(Long sessionId) {
+        try {
+            // 获取会话的最后一条用户消息的意图
+            // 由于意图识别结果保存在消息处理流程中，这里简化处理
+            // 直接基于上下文生成追问建议
+            SuggestVO suggest = suggestService.generateSuggestByContext(sessionId);
+            return Result.success(suggest);
+        } catch (Exception e) {
+            log.error("获取追问建议失败: {}", e.getMessage(), e);
+            return Result.error("获取追问建议失败");
+        }
+    }
+
+    /**
+     * 根据意图获取追问建议
+     * 用于前端在接收AI回复后，基于识别的意图快速返回预设追问
+     *
+     * @param intent 意图名称（如：专业信息、招生计划等）
+     * @return 追问建议列表
+     */
+    @RequestMapping("/suggest/by-intent")
+    public Result<SuggestVO> getSuggestByIntent(@RequestParam String intent) {
+        try {
+            SuggestVO suggest = suggestService.getSuggestByIntent(intent);
+            System.err.println(suggest);
+            return Result.success(suggest);
+        } catch (Exception e) {
+            log.error("根据意图获取追问建议失败: {}", e.getMessage(), e);
+            return Result.error("获取追问建议失败");
+        }
     }
 
 }

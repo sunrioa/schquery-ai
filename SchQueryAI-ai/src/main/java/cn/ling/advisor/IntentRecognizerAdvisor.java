@@ -1,5 +1,6 @@
 package cn.ling.advisor;
 
+import cn.ling.context.ChatContext;
 import cn.ling.rpc.IntentRecognizerRpc;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -72,11 +73,15 @@ public class IntentRecognizerAdvisor implements BaseAdvisor {
 
             // 3. 将识别结果存入请求上下文，供后续处理使用
             chatClientRequest.context().put("INTENT", intent);
+
+            // 4. 将识别结果存入 ChatContext，用于追问建议
+            ChatContext.setIntent(intent);
             
         } catch (Exception e) {
             log.error("意图识别失败，用户输入: {}, 错误信息: {}", userInput, e.getMessage(), e);
             // 识别失败时设置为未知意图
             chatClientRequest.context().put("INTENT", "UNKNOWN");
+            ChatContext.setIntent("UNKNOWN");
         }
 
         return chatClientRequest;

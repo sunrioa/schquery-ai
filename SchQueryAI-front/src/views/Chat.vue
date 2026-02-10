@@ -173,9 +173,29 @@
                 <div class="message-text" v-else-if="message.content">
                   <!-- 流式传输时显示预处理文本，完成后显示Markdown格式 -->
                   <div v-if="message.isStreaming" class="streaming-text" v-text="message.content"></div>
-                  <div v-else class="markdown-content"
-                       :key="`md-${message.id}-${message.renderVersion || 0}`"
-                       v-html="renderMarkdown(message.content, message.id)"></div>
+                  <div v-else>
+                    <div class="markdown-content"
+                         :key="`md-${message.id}-${message.renderVersion || 0}`"
+                         v-html="renderMarkdown(message.content, message.id)"></div>
+                    <!-- 追问建议 -->
+                    <div v-if="message.suggestions && message.suggestions.length > 0 && !message.isStreaming" class="suggest-section">
+                      <div class="suggest-header">
+                        <el-icon><QuestionFilled /></el-icon>
+                        <span>其他人都在问</span>
+                      </div>
+                      <div class="suggest-list">
+                        <div
+                          v-for="(suggestion, idx) in message.suggestions"
+                          :key="`suggest-${message.id}-${idx}`"
+                          class="suggest-item"
+                          @click="clickSuggestion(suggestion)"
+                        >
+                          <el-icon><ArrowRight /></el-icon>
+                          <span>{{ suggestion }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <div class="message-time">{{ formatTime(message.createdAt) }}</div>
               </div>
@@ -278,7 +298,7 @@
 import { ref, onMounted, onUnmounted, nextTick, watch, getCurrentInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElEmpty, ElAvatar, ElDropdown, ElDropdownMenu, ElDropdownItem, ElButton, ElInput, ElDialog, ElForm, ElFormItem, ElIcon } from 'element-plus'
-import { Plus, Setting, Edit, Delete, Service, Upload, Loading, Microphone, SwitchButton, User, Lock, ArrowDown, Moon, Sunny, ChatDotRound, Tools, Menu } from '@element-plus/icons-vue'
+import { Plus, Setting, Edit, Delete, Service, Upload, Loading, Microphone, SwitchButton, User, Lock, ArrowDown, Moon, Sunny, ChatDotRound, Tools, Menu, QuestionFilled, ArrowRight } from '@element-plus/icons-vue'
 import { chatApi } from '@/api/chat'
 import WeatherBadge from '../components/WeatherBadge.vue'
 import { useUserStore } from '@/stores/userStore'
@@ -1116,6 +1136,7 @@ const sendMessage = async () => {
 
     // SSE 缓冲区：按事件（\n\n）解析，保留换行以支持 Markdown
     let buffer = ''
+    let lastRecognizedIntent = null
 
     // 读取流式数据
     let isReading = true
@@ -1130,47 +1151,69 @@ const sendMessage = async () => {
       buffer += decoder.decode(value, { stream: true })
       buffer = buffer.replace(/\r\n/g, '\n').replace(/\r+/g, '')
 
-      // 按行分割，处理每个 data: 行
-      const lines = buffer.split('\n')
-      // 保留最后一个可能不完整的行到缓冲区
-      buffer = lines[lines.length - 1] || ''
+      // 按事件分割（\n\n）
+      const events = buffer.split('\n\n')
+      // 保留最后一个可能不完整的事件到缓冲区
+      buffer = events.pop() || ''
 
-      for (let i = 0; i < lines.length - 1; i++) {
-        const line = lines[i].trim()
-        if (!line) continue
-        if (!line.startsWith('data:')) continue
-        if (line === 'data:[DONE]') continue
+      for (const event of events) {
+        if (!event.trim()) continue
 
-        // 提取 data: 后面的内容
-        const content = line.slice(5).replace(/^ /, '')
-        aiMessageText += content
+        const lines = event.split('\n')
+        let eventType = 'message'
+        let eventData = ''
 
-        // 每处理一个数据块就立即更新内容，实现流式显示效果
-        // 直接通过数组索引更新，确保 Vue 响应式系统能检测到变化
-        if (messages.value[aiMessageIndex]) {
-          messages.value[aiMessageIndex].content = aiMessageText
-          // 强制触发 Vue 响应式更新
-          messages.value[aiMessageIndex].renderVersion = ++renderVersion
+        for (const line of lines) {
+          if (line.startsWith('event:')) {
+            eventType = line.slice(6).trim()
+          } else if (line.startsWith('data:')) {
+            eventData = line.slice(5).replace(/^ /, '')
+          }
         }
 
-        nextTick(() => {
-          if (messagesContainer.value) {
-            messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+        if (eventType === 'intent' && eventData) {
+          // 处理意图事件
+          try {
+            const intentData = JSON.parse(eventData)
+            lastRecognizedIntent = intentData.intent
+            console.log('Recognized intent:', lastRecognizedIntent)
+          } catch (e) {
+            console.error('Failed to parse intent data:', eventData)
           }
-        })
+        } else if (eventType === 'message' && eventData) {
+          if (eventData === '[DONE]') continue
+          aiMessageText += eventData
+
+          // 每处理一个数据块就立即更新内容，实现流式显示效果
+          if (messages.value[aiMessageIndex]) {
+            messages.value[aiMessageIndex].content = aiMessageText
+            messages.value[aiMessageIndex].renderVersion = ++renderVersion
+          }
+
+          nextTick(() => {
+            if (messagesContainer.value) {
+              messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+            }
+          })
+        }
       }
     }
 
-    // 流式数据读取完成后，处理最终内容
-    // 解析可能残留的最后一个事件（无 \n\n 结尾的情况）
+    // 处理缓冲区中残留的数据
     if (buffer && buffer.trim()) {
-      const lines = buffer.split('\n')
-      const dataLines = lines
-        .filter((line) => line.startsWith('data:'))
-        .map((line) => line.slice(5).replace(/^ /, ''))
-      const eventData = dataLines.length ? dataLines.join('\n') : buffer
-      if (eventData && eventData.trim() !== '[DONE]') {
-        aiMessageText += eventData
+      const events = buffer.split('\n\n')
+      for (const event of events) {
+        if (!event.trim()) continue
+        const lines = event.split('\n')
+        let eventData = ''
+        for (const line of lines) {
+          if (line.startsWith('data:')) {
+            eventData = line.slice(5).replace(/^ /, '')
+          }
+        }
+        if (eventData && eventData !== '[DONE]') {
+          aiMessageText += eventData
+        }
       }
     }
 
@@ -1181,6 +1224,28 @@ const sendMessage = async () => {
       messages.value[aiMessageIndex].content = cleanedContent
       messages.value[aiMessageIndex].renderVersion = ++renderVersion
       messages.value[aiMessageIndex].isStreaming = false
+    }
+
+    // 获取追问建议
+    if (lastRecognizedIntent) {
+      try {
+        const suggestResponse = await fetch(`/api/user/suggest/by-intent?intent=${encodeURIComponent(lastRecognizedIntent)}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        })
+        if (suggestResponse.ok) {
+          const suggestResult = await suggestResponse.json()
+          if (suggestResult.code === 200 && suggestResult.data && suggestResult.data.enabled && suggestResult.data.suggestions) {
+            if (messages.value[aiMessageIndex]) {
+              messages.value[aiMessageIndex].suggestions = suggestResult.data.suggestions
+              messages.value[aiMessageIndex].renderVersion = ++renderVersion
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load suggestions:', e)
+      }
     }
 
     // 等待Vue更新完成
@@ -1219,6 +1284,12 @@ const sendMessage = async () => {
       }
     })
   }
+}
+
+// 点击追问建议
+const clickSuggestion = (suggestion) => {
+  userMessage.value = suggestion
+  sendMessage()
 }
 
 // 处理回车键
@@ -2310,6 +2381,55 @@ onUnmounted(() => {
 
 .user-message .message-time {
   color: rgba(255, 255, 255, 0.7);
+}
+
+/* 追问建议样式 */
+.suggest-section {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: var(--app-surface-2);
+  border-radius: 8px;
+  border: 1px solid var(--app-border);
+}
+
+.suggest-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--app-muted);
+  margin-bottom: 10px;
+}
+
+.suggest-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.suggest-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--app-surface);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--app-text);
+  font-size: 14px;
+}
+
+.suggest-item:hover {
+  background: var(--app-primary-soft);
+  color: var(--app-primary);
+  transform: translateX(4px);
+}
+
+.suggest-item .el-icon {
+  flex-shrink: 0;
+  font-size: 14px;
 }
 
 /* 消息头像优化 */

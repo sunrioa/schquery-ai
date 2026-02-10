@@ -158,6 +158,16 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
                 // 处理流式响应
                 return aiResponseStream
                         .doOnNext(fullResponse::append)
+                        .concatWith(Flux.defer(() -> {
+                            // 流式传输完成后，获取意图并作为最后一个事件发送
+                            String intent = ChatContext.getIntent();
+                            if (intent != null && !intent.isEmpty()) {
+                                // 发送意图信息，格式：event: intent\ndata: {"intent":"专业信息"}\n\n
+                                String intentEvent = String.format("event: intent\ndata: {\"intent\":\"%s\"}\n\n", intent);
+                                return Flux.just(intentEvent);
+                            }
+                            return Flux.empty();
+                        }))
                         .doOnComplete(() -> {
                             // 流式传输完成时，保存完整的AI回复到数据库
                             if (!fullResponse.isEmpty()) {

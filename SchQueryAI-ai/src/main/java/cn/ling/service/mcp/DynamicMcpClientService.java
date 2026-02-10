@@ -67,7 +67,7 @@ public class DynamicMcpClientService {
                     clients.add(client);
                 }
             } catch (Exception e) {
-                log.warn("连接MCP服务失败: {}, err={}", url, e.getMessage());
+                log.warn("获取MCP客户端异常: {}, 错误: {}", url, e.getMessage());
             }
         }
         return clients;
@@ -92,16 +92,18 @@ public class DynamicMcpClientService {
         if (!StringUtils.hasText(url)) {
             return null;
         }
+        String baseUrl = normalizeBaseUrl(url);
         try {
-            String baseUrl = normalizeBaseUrl(url);
+            log.info("正在连接MCP服务: {}", baseUrl);
             HttpClientSseClientTransport transport = HttpClientSseClientTransport.builder(baseUrl).build();
             McpSyncClient client = McpClient.sync(transport)
                     .requestTimeout(requestTimeout)
                     .build();
             client.initialize();
+            log.info("MCP服务连接成功: {}", baseUrl);
             return client;
         } catch (Exception e) {
-            log.warn("创建MCP客户端失败: {}, err={}", url, e.getMessage());
+            log.warn("MCP服务连接失败: {}，请确认MCP服务是否已启动。错误信息: {}", baseUrl, e.getMessage());
             return null;
         }
     }

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- 引入 Spring Boot 的 logback 扩展 -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <!-- 彩色日志输出 -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- 降低第三方库的日志级别 -->
+    <logger name="io.modelcontextprotocol" level="ERROR"/>
+    <logger name="io.modelcontextprotocol.client.transport" level="OFF"/>
+    <logger name="reactor.core.publisher" level="OFF"/>
+    <logger name="reactor.core.Exceptions" level="OFF"/>
+    <logger name="java.net.http" level="ERROR"/>
+    <logger name="jdk.internal.net.http" level="ERROR"/>
+    <logger name="jdk.internal.net.http.common" level="ERROR"/>
+
+    <!-- 根日志级别 -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

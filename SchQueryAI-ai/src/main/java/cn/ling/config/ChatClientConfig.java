@@ -26,7 +26,7 @@ public class ChatClientConfig {
      * 顾问执行顺序：敏感词过滤(0) -> 意图识别(1) -> RAG增强(2)
      *
      * @param openAiChatModel OpenAI聊天模型实例
-     * @param questionAnswerAdvisor RAG问答增强顾问，基于向量数据库检索相关文档
+     * @param knowledgeRagAdvisor RAG问答增强顾问，基于向量数据库检索相关文档
      * @param sensitiveFilterAdvisor 敏感词过滤顾问，过滤用户输入中的敏感内容
      * @param intentRecognizerAdvisor 意图识别顾问，识别用户查询意图
      * @return 配置好的ChatClient聊天客户端

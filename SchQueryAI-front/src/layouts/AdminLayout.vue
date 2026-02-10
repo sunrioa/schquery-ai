@@ -31,17 +31,21 @@
                 <el-icon><Setting /></el-icon>
                 <span>AI 管理</span>
               </template>
+              <el-menu-item index="/admin/ai/chat-model">
+                <el-icon><Collection /></el-icon>
+                <span>模型管理</span>
+              </el-menu-item>
               <el-menu-item index="/admin/ai/chat-config">
                 <el-icon><Setting /></el-icon>
-                <span>默认对话参数</span>
+                <span>模型配置</span>
+              </el-menu-item>
+              <el-menu-item index="/admin/ai/chat-management">
+                <el-icon><ChatDotRound /></el-icon>
+                <span>对话管理</span>
               </el-menu-item>
               <el-menu-item index="/admin/ai/knowledge">
                 <el-icon><UploadFilled /></el-icon>
                 <span>知识库管理</span>
-              </el-menu-item>
-              <el-menu-item index="/admin/ai/chat-model">
-                <el-icon><Collection /></el-icon>
-                <span>模型管理</span>
               </el-menu-item>
               <el-menu-item index="/admin/ai/asr-model">
                 <el-icon><Collection /></el-icon>

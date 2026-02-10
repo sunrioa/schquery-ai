@@ -2,7 +2,7 @@
   <div class="admin-page ai-chat-config-container">
     <div class="page-header">
       <div class="header-info">
-        <h2 class="title">AI 对话配置中心</h2>
+        <h2 class="title">AI 模型配置中心</h2>
         <p class="subtitle">统一管理角色预设与检索策略</p>
       </div>
       <div class="header-ops">

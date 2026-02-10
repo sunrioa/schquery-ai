@@ -78,4 +78,9 @@ public class ChatDefaultConfigDTO {
      * 平衡模式下：MCP内容权重（0.0-1.0）
      */
     private Double weightMcp;
+
+    /**
+     * 新会话欢迎消息
+     */
+    private String welcomeMessage;
 }

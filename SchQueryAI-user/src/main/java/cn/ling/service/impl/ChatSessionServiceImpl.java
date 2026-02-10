@@ -1,6 +1,7 @@
 package cn.ling.service.impl;
 
 import cn.ling.exception.CustomException;
+import cn.ling.service.ChatMessageService;
 import cn.ling.utils.ContextUtils;
 import cn.ling.Result;
 import cn.ling.domain.dto.ChatSessionDTO;
@@ -12,6 +13,7 @@ import cn.ling.service.SysConfigService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import java.util.Date;
@@ -29,9 +31,14 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
     implements ChatSessionService{
 
     private static final String KEY_DEFAULT_PRESET_ID = "chat.preset.defaultId";
+    private static final String KEY_WELCOME_MESSAGE = "chat.default.message";
 
     @Resource
     private SysConfigService sysConfigService;
+
+    @Lazy
+    @Resource
+    private ChatMessageService chatMessageService;
 
     /**
      * 创建新的聊天会话
@@ -65,6 +72,10 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
 
             if (success) {
                 log.info("聊天会话创建成功，会话ID: {}, 用户ID: {}", chatSession.getId(), userId);
+
+                // 添加欢迎消息
+                addWelcomeMessage(chatSession.getId());
+
                 return Result.success(chatSession.getId().toString());
             } else {
                 log.error("聊天会话创建失败，用户ID: {}", userId);
@@ -280,6 +291,45 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
             return Long.parseLong(raw.trim());
         } catch (Exception ignored) {
             return null;
+        }
+    }
+
+    /**
+     * 添加欢迎消息到新创建的会话
+     *
+     * @param sessionId 会话ID
+     */
+    private void addWelcomeMessage(Long sessionId) {
+        try {
+            // 从数据库配置读取欢迎消息，如果未配置则使用默认值
+            String welcomeContent = sysConfigService.getConfigValue(KEY_WELCOME_MESSAGE);
+            if (!StringUtils.hasText(welcomeContent)) {
+                welcomeContent =
+                        """
+                                # 欢迎使用 SchQueryAI 广州航海学院智能招生助手！
+                        
+                                我是专为广州航海学院打造的智能招生服务助手，能为你提供以下核心支持：
+                        
+                                - **招生政策解读**：最新招生计划、报考条件、录取规则等权威信息
+                                - **专业深度介绍**：特色专业、课程设置、师资力量、就业前景等详细解析
+                                - **志愿填报指导**：结合分数与兴趣，提供科学的志愿填报建议
+                                - **校园生活咨询**：校园设施、住宿条件、奖助政策、社团活动等全方位介绍
+                                - **职业规划参考**：航海类专业及其他专业的行业发展趋势与就业方向
+                        
+                                无论你是想了解报考流程、专业选择，还是对未来的职业发展有疑问，都可以随时向我提问。我会以专业、准确的信息，助力你做出最适合自己的选择。
+                        """;
+            }
+
+            cn.ling.domain.pojo.ChatMessage welcomeMessage = new cn.ling.domain.pojo.ChatMessage();
+            welcomeMessage.setSessionId(sessionId);
+            welcomeMessage.setMessageType(1); // AI消息
+            welcomeMessage.setCreatedAt(new Date());
+            welcomeMessage.setContent(welcomeContent);
+
+            chatMessageService.save(welcomeMessage);
+            log.debug("欢迎消息添加成功，会话ID: {}", sessionId);
+        } catch (Exception e) {
+            log.error("添加欢迎消息失败，会话ID: {}, 异常信息: {}", sessionId, e.getMessage(), e);
         }
     }
 }

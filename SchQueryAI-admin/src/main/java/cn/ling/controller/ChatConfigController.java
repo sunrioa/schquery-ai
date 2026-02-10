@@ -37,6 +37,7 @@ public class ChatConfigController {
     private static final String KEY_WEIGHT_USER = "chat.weight.user";
     private static final String KEY_WEIGHT_KNOWLEDGE = "chat.weight.knowledge";
     private static final String KEY_WEIGHT_MCP = "chat.weight.mcp";
+    private static final String KEY_WELCOME_MESSAGE = "chat.default.message";
 
     @Resource
     private SysConfigService sysConfigService;
@@ -61,6 +62,7 @@ public class ChatConfigController {
         dto.setWeightUser(parseDouble(sysConfigService.getConfigValue(KEY_WEIGHT_USER), 0.6));
         dto.setWeightKnowledge(parseDouble(sysConfigService.getConfigValue(KEY_WEIGHT_KNOWLEDGE), 0.25));
         dto.setWeightMcp(parseDouble(sysConfigService.getConfigValue(KEY_WEIGHT_MCP), 0.15));
+        dto.setWelcomeMessage(sysConfigService.getConfigValue(KEY_WELCOME_MESSAGE));
         return Result.success(dto);
     }
 
@@ -95,6 +97,7 @@ public class ChatConfigController {
         if (dto.getWeightMcp() != null) {
             upsert(KEY_WEIGHT_MCP, "MCP权重", String.valueOf(normalizeWeight(dto.getWeightMcp(), 0.15)), "提示词融合策略");
         }
+        upsert(KEY_WELCOME_MESSAGE, "欢迎消息", trimToNull(dto.getWelcomeMessage()), "对话管理");
 
         return Result.success("保存成功");
     }

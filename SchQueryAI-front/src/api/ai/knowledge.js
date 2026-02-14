@@ -33,8 +33,8 @@ export function uploadKnowledgeAttach({ knowledgeId, title, content, metadata, f
   })
 }
 
-export function getKnowledgeAttachList(knowledgeId) {
-  return request.get(`/knowledge/attach/list/${knowledgeId}`)
+export function getKnowledgeAttachList(knowledgeId, params = {}) {
+  return request.get(`/knowledge/attach/list/${knowledgeId}`, { params })
 }
 
 export function getKnowledgeAttachInfo(id) {

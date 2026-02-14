@@ -10,6 +10,7 @@ import cn.ling.service.DocumentChunksService;
 import cn.ling.service.DocumentsService;
 import cn.ling.service.KnowledgeInfoService;
 import cn.ling.utils.JsonUtils;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -222,15 +223,31 @@ public class KnowledgeAttachController {
     }
 
     @GetMapping("/list/{knowledgeId}")
-    public Result<List<Documents>> listByKnowledge(@PathVariable("knowledgeId") Long knowledgeId) {
+    public Result<Page<Documents>> listByKnowledge(
+            @PathVariable("knowledgeId") Long knowledgeId,
+            @RequestParam(value = "pageNum", required = false, defaultValue = "1") Integer pageNum,
+            @RequestParam(value = "pageSize", required = false, defaultValue = "20") Integer pageSize) {
         if (knowledgeId == null) {
             return Result.error(400, "knowledgeId不能为空");
         }
-        List<Documents> docs = documentsService.lambdaQuery()
+
+        // 分页参数校验
+        if (pageNum == null || pageNum < 1) {
+            pageNum = 1;
+        }
+        if (pageSize == null || pageSize < 1) {
+            pageSize = 20;
+        }
+        if (pageSize > 200) {
+            pageSize = 200;
+        }
+
+        Page<Documents> page = documentsService.lambdaQuery()
                 .eq(Documents::getKnowledgeId, knowledgeId)
-                .orderByDesc(Documents::getUpdateTime)
-                .list();
-        return Result.success(docs);
+                .orderByAsc(Documents::getId)
+                .page(new Page<>(pageNum, pageSize));
+
+        return Result.success(page);
     }
 
     /**

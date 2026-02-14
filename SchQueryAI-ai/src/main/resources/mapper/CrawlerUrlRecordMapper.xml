@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cn.ling.crawler.mapper.CrawlerUrlRecordMapper">
+
+    <!-- 检查 URL 是否成功访问（status=1） -->
+    <select id="existsSuccessfulByUrl" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM crawler_url_record
+        WHERE url = #{url}
+          AND status = 1
+          AND error_msg IS NULL
+    </select>
+
+    <!-- 清空所有记录 -->
+    <delete id="deleteAll">
+        DELETE FROM crawler_url_record
+    </delete>
+
+</mapper>

@@ -46,6 +46,19 @@
           </el-table-column>
         </el-table>
       </div>
+
+      <!-- 分页 -->
+      <div class="pagination-container">
+        <el-pagination
+          v-model:current-page="pagination.pageNum"
+          v-model:page-size="pagination.pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="pagination.total"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleSizeChange"
+          @current-change="handlePageChange"
+        />
+      </div>
     </el-card>
 
     <!-- 上传文档 -->
@@ -194,6 +207,13 @@ const loading = ref(false)
 const knowledge = ref(null)
 const docs = ref([])
 
+// 分页状态
+const pagination = ref({
+  pageNum: 1,
+  pageSize: 20,
+  total: 0
+})
+
 const loadKnowledge = async () => {
   if (!knowledgeId.value) return
   const res = await getKnowledgeDetail(knowledgeId.value)
@@ -202,8 +222,30 @@ const loadKnowledge = async () => {
 
 const loadDocs = async () => {
   if (!knowledgeId.value) return
-  const res = await getKnowledgeAttachList(knowledgeId.value)
-  docs.value = res?.data || []
+  loading.value = true
+  try {
+    const res = await getKnowledgeAttachList(knowledgeId.value, {
+      pageNum: pagination.value.pageNum,
+      pageSize: pagination.value.pageSize
+    })
+    docs.value = res?.data?.records || res?.data || []
+    pagination.value.total = res?.data?.total || 0
+  } finally {
+    loading.value = false
+  }
+}
+
+// 分页大小变化
+const handleSizeChange = (size) => {
+  pagination.value.pageSize = size
+  pagination.value.pageNum = 1
+  loadDocs()
+}
+
+// 页码变化
+const handlePageChange = (page) => {
+  pagination.value.pageNum = page
+  loadDocs()
 }
 
 const refreshAll = async () => {
@@ -528,6 +570,12 @@ const formatTime = (timestamp) => {
 
 .table-scroll :deep(.el-table) {
   min-width: 760px;
+}
+
+.pagination-container {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .op-actions {

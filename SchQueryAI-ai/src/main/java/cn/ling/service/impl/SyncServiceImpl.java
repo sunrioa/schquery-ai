@@ -14,11 +14,8 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.util.Locale;
+import java.util.Map;
 
 /**
  * 同步服务实现类
@@ -30,9 +27,6 @@ public class SyncServiceImpl implements SyncService {
 
     @Resource
     private OcrRpc ocrRpc;
-
-    @Resource
-    private AIserviceImpl aIservice;
 
     /**
      * 异步处理知识库文档上传
@@ -246,7 +240,9 @@ public class SyncServiceImpl implements SyncService {
             log.debug("OCR识别成功 - 文件名: {}, 提取文本长度: {} 字符",
                     pdfFile.getOriginalFilename(), ocrResp.getData().length());
 
-            return aIservice.ocrCorrect(ocrResp.getData());
+            // OCR 结果后处理：清理和规范化文本
+            String processedContent = postProcessOcrResult(ocrResp.getData());
+            return processedContent;
 
         } catch (Exception e) {
             log.error("OCR识别过程中发生异常 - 文件名: {}, 错误信息: {}",
@@ -255,36 +251,150 @@ public class SyncServiceImpl implements SyncService {
         }
     }
 
-    private boolean isLikelyTextFile(MultipartFile file) {
-        String contentType = file.getContentType();
-        if (StringUtils.hasText(contentType) && contentType.toLowerCase(Locale.ROOT).startsWith("text/")) {
-            return true;
+    /**
+     * OCR 结果后处理
+     * 清理和规范化 OCR 识别的文本内容
+     *
+     * @param ocrResult OCR 原始识别结果
+     * @return 处理后的文本
+     */
+    private String postProcessOcrResult(String ocrResult) {
+        if (!StringUtils.hasText(ocrResult)) {
+            return ocrResult;
         }
-        String filename = file.getOriginalFilename();
-        if (!StringUtils.hasText(filename)) {
-            return false;
-        }
-        String lower = filename.toLowerCase(Locale.ROOT);
-        return lower.endsWith(".txt") || lower.endsWith(".md") || lower.endsWith(".csv") || lower.endsWith(".log");
+
+        // 1. 去除多余的空白字符
+        String processed = ocrResult.replaceAll("\\s+", " ").trim();
+
+        // 2. 修正常见的 OCR 识别错误
+        processed = processed
+                // 修正连续的句号
+                .replaceAll("\\.{3,}", "…")
+                // 修正连续的连字符
+                .replaceAll("-{3,}", "—")
+                // 修正错误的换行合并（小写字母后跟大写字母可能是错误的换行）
+                .replaceAll("([a-z])(\\s*)([A-Z])", "$1$2 $3");
+
+        // 3. 去除控制字符
+        processed = processed.replaceAll("[\\p{Cntrl}]", " ");
+
+        // 4. 去除特殊字符序列（保留有意义的标点）
+        processed = processed.replaceAll("[^\\p{L}\\p{N}\\p{P}\\s]", " ");
+
+        // 5. 再次清理空白
+        processed = processed.replaceAll("\\s+", " ").trim();
+
+        log.debug("OCR 结果后处理完成 - 原始长度: {}, 处理后长度: {}",
+                ocrResult.length(), processed.length());
+
+        return processed;
     }
 
-    private String readTextFile(MultipartFile file) {
+    /**
+     * 从爬虫直接保存文档内容到知识库
+     * 用于爬虫服务直接调用，跳过文件上传步骤
+     *
+     * @param knowledgeId 知识库 ID
+     * @param content 文档内容
+     * @param metadata 元数据（Map 格式）
+     * @param documentsService 文档服务
+     * @param documentChunksService 文档分块服务
+     */
+    @Override
+    @Async
+    public void saveCrawlerContent(Long knowledgeId, String content, Map<String, Object> metadata,
+                                  DocumentsService documentsService, DocumentChunksService documentChunksService) {
+        log.info("爬虫直接保存内容 - 知识库ID: {}, 内容长度: {}", knowledgeId, content.length());
+
         try {
-            byte[] bytes = file.getBytes();
-            if (bytes.length == 0) {
-                return "";
+
+            // 1. 创建 Documents 对象
+            Documents documents = new Documents();
+            documents.setKnowledgeId(knowledgeId);
+            documents.setProcessStatus(1); // 处理中
+            documents.setUpdateTime(LocalDateTime.now());
+
+            // 2. 保存基本信息
+            boolean saved = documentsService.save(documents);
+            if (!saved) {
+                throw new RuntimeException("保存文档失败");
             }
 
-            String utf8 = new String(bytes, StandardCharsets.UTF_8);
-            if (StringUtils.hasText(utf8)) {
-                return utf8;
+            // 3. 更新内容
+            documents.setContent(content);
+            documents.setMetadata(metadata);
+            documents.setProcessStatus(2); // 已处理
+            documents.setUpdateTime(LocalDateTime.now());
+
+            // 3.5 提取 sourceUrl 并设置到 Documents.sourceUrl
+            if (metadata != null && !metadata.isEmpty()) {
+                Object sourceUrlObj = metadata.get("sourceUrl");
+                if (sourceUrlObj != null) {
+                    documents.setSourceUrl(sourceUrlObj.toString());
+                }
+
+                // 3.5.1 提取 sourceType 并设置到 Documents.sourceType
+                Object sourceTypeObj = metadata.get("sourceType");
+                if (sourceTypeObj != null) {
+                    try {
+                        documents.setSourceType(Integer.parseInt(sourceTypeObj.toString()));
+                    } catch (NumberFormatException e) {
+                        log.warn("sourceType 格式错误: {}", sourceTypeObj);
+                    }
+                }
             }
 
-            // 简单兜底：部分Windows文本可能为GBK/GB18030
-            String gbk = new String(bytes, Charset.forName("GB18030"));
-            return gbk == null ? "" : gbk;
+            // 3.6 提取 title 并设置到 Documents.title
+            String title = null;
+            if (metadata != null && !metadata.isEmpty()) {
+                Object titleObj = metadata.get("title");
+                if (titleObj != null) {
+                    title = titleObj.toString();
+                }
+            }
+            if (title != null && !title.isEmpty()) {
+                documents.setTitle(title);
+            }
+
+            boolean updated = documentsService.updateById(documents);
+            if (!updated) {
+                throw new RuntimeException("更新文档内容失败");
+            }
+
+            // 4. 如果有内容，进行向量化处理
+            if (StringUtils.hasText(content)) {
+                log.info("开始文档分块和向量化处理 - 文档ID: {}", documents.getId());
+                documentChunksService.saveDocument(
+                        documents.getId(),
+                        knowledgeId,
+                        metadata,
+                        content
+                );
+                log.info("文档分块和向量化处理完成 - 文档ID: {}", documents.getId());
+
+                // 5. 标记处理完成
+                documents.setProcessStatus(2); // 已完成
+                documents.setUpdateTime(LocalDateTime.now());
+                documentsService.updateById(documents);
+                log.info("爬虫内容保存完成 - 文档ID: {}, 内容长度: {}", documents.getId(), content.length());
+            } else {
+                log.warn("文档内容为空，跳过分块和向量化处理 - 文档ID: {}", documents.getId());
+            }
+
         } catch (Exception e) {
-            throw new RuntimeException("读取文本文件失败：" + e.getMessage(), e);
+            log.error("爬虫内容保存失败 - 知识库ID: {}, 错误信息: {}", knowledgeId, e.getMessage(), e);
+            // 尝试更新为处理失败
+            try {
+                Documents documents = documentsService.getById(knowledgeId);
+                if (documents != null) {
+                    documents.setProcessStatus(3); // 处理失败
+                    documents.setUpdateTime(LocalDateTime.now());
+                    documentsService.updateById(documents);
+                }
+            } catch (Exception updateEx) {
+                log.error("更新文档失败状态时发生异常 - 知识库ID: {}, 错误信息: {}", knowledgeId, updateEx.getMessage(), updateEx);
+            }
+            throw new RuntimeException("爬虫内容保存失败：" + e.getMessage(), e);
         }
     }
 }

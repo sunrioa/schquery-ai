@@ -211,6 +211,12 @@ const routes = [
     meta: { requiresAuth: true, requiresRole: ['admin'], layout: 'admin' }
   },
   {
+    path: '/admin/ai/crawler',
+    name: 'CrawlerManager',
+    component: () => import('@/views/admin/ai/CrawlerManager.vue'),
+    meta: { requiresAuth: true, requiresRole: ['admin'], layout: 'admin' }
+  },
+  {
     path: '/404',
     name: 'NotFound',
     component: NotFound

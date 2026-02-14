@@ -31,6 +31,10 @@
                 <el-icon><Setting /></el-icon>
                 <span>AI 管理</span>
               </template>
+              <el-menu-item index="/admin/ai/crawler">
+                <el-icon><Monitor /></el-icon>
+                <span>爬虫管理</span>
+              </el-menu-item>
               <el-menu-item index="/admin/ai/chat-model">
                 <el-icon><Collection /></el-icon>
                 <span>模型管理</span>

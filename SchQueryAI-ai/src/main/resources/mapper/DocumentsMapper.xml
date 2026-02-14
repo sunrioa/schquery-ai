@@ -14,6 +14,8 @@
             <result property="uploadTime" column="upload_time" jdbcType="TIMESTAMP"/>
             <result property="updateTime" column="update_time" jdbcType="TIMESTAMP"/>
             <result property="status" column="status" jdbcType="TINYINT"/>
+            <result property="sourceUrl" column="source_url" jdbcType="VARCHAR"/>
+            <result property="sourceType" column="source_type" jdbcType="TINYINT"/>
             <result property="processStatus" column="process_status" jdbcType="TINYINT"/>
         <result
                 property="metadata"
@@ -25,7 +27,7 @@
     <sql id="Base_Column_List">
         id,knowledge_id,title,content,
         file_path,file_type,upload_time,
-        update_time,status,process_status,
+        update_time,status,source_url,source_type,process_status,
         metadata
     </sql>
 </mapper>

@@ -11,7 +11,6 @@ import cn.ling.mapper.DocumentChunksMapper;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -33,9 +32,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Service
 public class DocumentChunksServiceImpl extends ServiceImpl<DocumentChunksMapper, DocumentChunks>
     implements DocumentChunksService{
-
-    @Resource
-    TokenTextSplitter tokenTextSplitter;
 
     @Resource
     @Qualifier("qdrantVectorStore")

@@ -73,6 +73,16 @@ public class Documents {
     private Integer status;
 
     /**
+     * 来源URL（如爬虫抓取的原始链接）
+     */
+    private String sourceUrl;
+
+    /**
+     * 来源类型：1-人工上传，2-爬虫获取，3-API导入
+     */
+    private Integer sourceType;
+
+    /**
      * 处理状态：0-未处理，1-处理中，2-处理完成，3-处理失败（用于跟踪文档拆分、向量化流程）
      */
     private Integer processStatus;

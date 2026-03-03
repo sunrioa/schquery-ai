@@ -1,6 +1,10 @@
 package cn.ling.crawler.service;
 
+import cn.ling.domain.pojo.Documents;
+import cn.ling.domain.pojo.DocumentChunks;
 import cn.ling.crawler.service.CrawlerConfigService.CrawlerConfig;
+import cn.ling.crawler.vo.CrawlerDraftResultVO;
+import cn.ling.crawler.vo.CrawlerSaveResultVO;
 import cn.ling.crawler.vo.CrawlerStatusVO;
 import cn.ling.service.DocumentChunksService;
 import cn.ling.service.DocumentsService;
@@ -12,13 +16,22 @@ import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -46,12 +59,17 @@ public class WebsiteCrawlerService {
     @Resource
     private SyncService syncService;
 
+    @Resource
+    private VectorStore qdrantVectorStore;
+
     /**
      * 爬虫运行状态
      */
     private volatile boolean running = false;
     private final Set<String> pendingUrls = ConcurrentHashMap.newKeySet();
     private final Set<String> visitedUrlSet = ConcurrentHashMap.newKeySet();
+    private final Map<String, CrawlerDraftResultVO> draftResultMap = new ConcurrentHashMap<>();
+    private final Map<String, String> draftIdByUrl = new ConcurrentHashMap<>();
 
     /**
      * 获取爬虫完整状态信息
@@ -71,6 +89,112 @@ public class WebsiteCrawlerService {
         } else {
             log.info("爬虫未在运行，无需停止");
         }
+    }
+
+    /**
+     * 获取当前抓取结果草稿（按抓取时间倒序）
+     */
+    public List<CrawlerDraftResultVO> listDraftResults() {
+        List<CrawlerDraftResultVO> results = new ArrayList<>(draftResultMap.values());
+        results.sort(Comparator.comparing(CrawlerDraftResultVO::getFetchTime, Comparator.nullsLast(LocalDateTime::compareTo)).reversed());
+        return results;
+    }
+
+    /**
+     * 获取草稿数量
+     */
+    public int getDraftResultCount() {
+        return draftResultMap.size();
+    }
+
+    /**
+     * 更新草稿内容（标题/正文）
+     */
+    public CrawlerDraftResultVO updateDraftResult(String id, String title, String content) {
+        if (!StringUtils.hasText(id)) {
+            throw new IllegalArgumentException("草稿ID不能为空");
+        }
+        CrawlerDraftResultVO draft = draftResultMap.get(id);
+        if (draft == null) {
+            throw new IllegalArgumentException("未找到对应抓取草稿");
+        }
+        if (!StringUtils.hasText(content)) {
+            throw new IllegalArgumentException("内容不能为空");
+        }
+
+        draft.setTitle(StringUtils.hasText(title) ? title.trim() : draft.getTitle());
+        draft.setContent(content.trim());
+        draft.setContentLength(draft.getContent().length());
+        draft.setEdited(true);
+        draft.setUpdatedTime(LocalDateTime.now());
+        draftResultMap.put(id, draft);
+        return draft;
+    }
+
+    /**
+     * 清空抓取草稿
+     */
+    public void clearDraftResults() {
+        draftResultMap.clear();
+        draftIdByUrl.clear();
+    }
+
+    /**
+     * 保存选中的抓取草稿到知识库（触发分块+向量化）
+     */
+    public CrawlerSaveResultVO saveDraftResults(List<String> ids, Long knowledgeId) {
+        if (ids == null || ids.isEmpty()) {
+            throw new IllegalArgumentException("请选择要保存的抓取结果");
+        }
+
+        CrawlerConfig config = crawlerConfigService.getConfig();
+        Long finalKnowledgeId = knowledgeId != null ? knowledgeId : config.getKnowledgeId();
+        if (finalKnowledgeId == null) {
+            throw new IllegalArgumentException("未配置知识库，请先在爬虫配置中选择知识库");
+        }
+
+        int submittedCount = 0;
+        int skippedCount = 0;
+        List<String> failedItems = new ArrayList<>();
+        List<CrawlerDraftResultVO> savedItems = new ArrayList<>();
+
+        for (String id : ids.stream().filter(Objects::nonNull).distinct().toList()) {
+            CrawlerDraftResultVO draft = draftResultMap.get(id);
+            if (draft == null) {
+                skippedCount++;
+                failedItems.add("未找到草稿：" + id);
+                continue;
+            }
+            if (!StringUtils.hasText(draft.getContent())) {
+                skippedCount++;
+                failedItems.add("内容为空：" + draft.getUrl());
+                continue;
+            }
+
+            try {
+                saveToKnowledgeBase(draft.getUrl(), draft.getTitle(), draft.getContent(), config, finalKnowledgeId);
+                dedupService.markUrlVisited(draft.getUrl(), draft.getTitle(), 1, null);
+
+                draft.setSaved(true);
+                draft.setSavedTime(LocalDateTime.now());
+                draft.setKnowledgeId(finalKnowledgeId);
+                draftResultMap.put(draft.getId(), draft);
+                savedItems.add(draft);
+                submittedCount++;
+            } catch (Exception e) {
+                skippedCount++;
+                failedItems.add(draft.getUrl() + "：" + e.getMessage());
+                log.error("保存抓取草稿失败: url={}", draft.getUrl(), e);
+            }
+        }
+
+        return CrawlerSaveResultVO.builder()
+                .submittedCount(submittedCount)
+                .skippedCount(skippedCount)
+                .knowledgeId(finalKnowledgeId)
+                .failedItems(failedItems)
+                .savedItems(savedItems)
+                .build();
     }
 
     /**
@@ -102,18 +226,52 @@ public class WebsiteCrawlerService {
     public void clearAll() {
         pendingUrls.clear();
         visitedUrlSet.clear();
+        clearDraftResults();
         dedupService.clearAll(); // 清空内存和数据库
     }
 
     /**
      * 启动爬虫
      */
-    public void manualCrawl() {
-        CrawlerConfig config = crawlerConfigService.getConfig();
-        if (!config.getEnabled()) {
-            log.info("爬虫功能已禁用，跳过本次爬取");
-            return;
+    public synchronized boolean manualCrawl() {
+        return manualCrawl(null, null);
+    }
+
+    /**
+     * 启动爬虫（支持本次任务覆盖起始URL和抓取间隔）
+     */
+    public synchronized boolean manualCrawl(String startUrlOverride, Integer requestIntervalMsOverride) {
+        if (running) {
+            log.info("爬虫已在运行中，忽略重复启动");
+            return false;
         }
+
+        CrawlerConfig config = crawlerConfigService.getConfig();
+        if (!Boolean.TRUE.equals(config.getEnabled())) {
+            log.info("爬虫功能已禁用，跳过本次爬取");
+            return false;
+        }
+
+        CrawlerConfig runConfig = CrawlerConfig.builder()
+                .enabled(config.getEnabled())
+                .baseUrl(config.getBaseUrl())
+                .startUrl(config.getStartUrl())
+                .maxPages(config.getMaxPages())
+                .contentMinLength(config.getContentMinLength())
+                .contentMaxLength(config.getContentMaxLength())
+                .requestIntervalMs(config.getRequestIntervalMs())
+                .strictVectorCheckEnabled(config.getStrictVectorCheckEnabled())
+                .knowledgeId(config.getKnowledgeId())
+                .knowledgeName(config.getKnowledgeName())
+                .scheduleEnabled(config.getScheduleEnabled())
+                .scheduleCron(config.getScheduleCron())
+                .build();
+
+        if (requestIntervalMsOverride != null && requestIntervalMsOverride >= 0) {
+            runConfig.setRequestIntervalMs(requestIntervalMsOverride);
+        }
+
+        String startUrl = resolveStartUrl(runConfig, startUrlOverride);
 
         log.info("开始手动爬虫任务...");
         running = true;
@@ -123,32 +281,31 @@ public class WebsiteCrawlerService {
         visitedUrlSet.clear();
         log.info("已清空本次任务缓存");
 
-        try {
-            // 1. 初始化：添加起始URL到待处理队列
-            String startUrl = config.getBaseUrl() + config.getStartUrl();
-            pendingUrls.add(startUrl);
-            log.info("添加起始 URL 到待处理队列: {}", startUrl);
+        // 1. 初始化：添加起始URL到待处理队列
+        pendingUrls.add(startUrl);
+        log.info("添加起始 URL 到待处理队列: {}", startUrl);
 
-            // 2. 循环处理待处理队列，直到队列为空或达到限制
-            crawlSite();
-
-        } finally {
-            running = false;
-            log.info("手动爬虫任务完成 - 已访问页面: {}, 待处理队列: {}",
-                    visitedUrlSet.size(), pendingUrls.size());
-        }
+        // 2. 异步执行爬取，避免阻塞接口
+        CompletableFuture.runAsync(() -> {
+            try {
+                crawlSite(runConfig);
+            } finally {
+                running = false;
+                log.info("手动爬虫任务完成 - 已访问页面: {}, 待处理队列: {}, 草稿数: {}",
+                        visitedUrlSet.size(), pendingUrls.size(), draftResultMap.size());
+            }
+        });
+        return true;
     }
 
     /**
      * 爬取指定网站（循环处理待处理队列）
      */
-    private void crawlSite() {
+    private void crawlSite(CrawlerConfig config) {
         while (running && !pendingUrls.isEmpty()) {
-            // 动态获取配置（支持运行中更新）
-            CrawlerConfig config = crawlerConfigService.getConfig();
-
             // 检查是否达到最大页面数限制
-            if (visitedUrlSet.size() >= config.getMaxPages()) {
+            Integer maxPages = config.getMaxPages();
+            if (maxPages != null && maxPages > 0 && visitedUrlSet.size() >= maxPages) {
                 log.warn("已达到最大页面数限制，停止爬虫");
                 break;
             }
@@ -165,22 +322,29 @@ public class WebsiteCrawlerService {
             // 标记为本次任务已访问
             visitedUrlSet.add(url);
 
-            // 检查数据库中是否已访问（决定是否保存数据）
-            boolean wasVisited = dedupService.isUrlVisited(url);
-            if (wasVisited) {
-                log.info("页面已存在，仅提取链接: {}", url);
+            // 已入库（且仍有分块记录）则只提取链接，不重复抓取内容
+            boolean alreadyIndexed = isUrlIndexed(url, config);
+            if (alreadyIndexed) {
+                log.info("页面已向量化，跳过内容抓取，仅提取链接: {}", url);
+                Set<String> discoveredUrls = extractLinksOnly(url, config);
+                if (discoveredUrls != null && !discoveredUrls.isEmpty()) {
+                    pendingUrls.addAll(discoveredUrls);
+                }
+                applyRequestInterval(config.getRequestIntervalMs());
+                continue;
             }
 
             // 处理页面（获取内容和链接）
             CrawlResult result = processPage(url, config);
             if (result.isSkipped()) {
                 log.debug("跳过页面: {}", url);
+                applyRequestInterval(config.getRequestIntervalMs());
                 continue;
             }
 
-            // 只保存新页面到知识库
-            if (result.isSuccess() && !wasVisited) {
-                saveToKnowledgeBase(url, result.getTitle(), result.getContent(), config);
+            // 将每个成功页面保存为草稿记录（每个页面一条）
+            if (result.isSuccess()) {
+                saveAsDraft(url, result.getTitle(), result.getContent());
             }
 
             // 将发现的链接添加到待处理队列（无论是否已访问）
@@ -189,6 +353,8 @@ public class WebsiteCrawlerService {
                 log.debug("发现 {} 个新链接，添加到待处理队列", discoveredUrls.size());
                 pendingUrls.addAll(discoveredUrls);
             }
+
+            applyRequestInterval(config.getRequestIntervalMs());
         }
     }
 
@@ -213,14 +379,20 @@ public class WebsiteCrawlerService {
 
             // 3. 提取所有文本内容
             String content = extractContent(doc);
+            if (!StringUtils.hasText(content)) {
+                return CrawlResult.failed("页面内容为空");
+            }
+
+            // 3.1 根据配置控制内容长度
+            content = normalizeContent(content, config);
+            if (!StringUtils.hasText(content)) {
+                return CrawlResult.failed("页面内容不满足长度要求");
+            }
 
             // 4. 提取所有链接
             Set<String> links = extractLinks(doc, config);
 
-            // 5. 标记 URL 已访问
-            dedupService.markUrlVisited(url, title, 1, null);
-
-            // 6. 返回成功结果（包含发现的链接）
+            // 5. 返回成功结果（包含发现的链接）
             return CrawlResult.success(title, content, links, doc);
         } catch (Exception e) {
             log.error("处理页面失败: {}", url, e);
@@ -270,6 +442,214 @@ public class WebsiteCrawlerService {
         }
 
         return content.toString();
+    }
+
+    /**
+     * 按配置裁剪内容长度
+     */
+    private String normalizeContent(String content, CrawlerConfig config) {
+        if (!StringUtils.hasText(content)) {
+            return "";
+        }
+        String normalized = content.trim();
+
+        Integer minLength = config.getContentMinLength();
+        if (minLength != null && minLength > 0 && normalized.length() < minLength) {
+            return "";
+        }
+
+        Integer maxLength = config.getContentMaxLength();
+        if (maxLength != null && maxLength > 0 && normalized.length() > maxLength) {
+            normalized = normalized.substring(0, maxLength);
+        }
+        return normalized;
+    }
+
+    /**
+     * 解析本次任务起始URL（可覆盖配置）
+     */
+    private String resolveStartUrl(CrawlerConfig config, String startUrlOverride) {
+        if (StringUtils.hasText(startUrlOverride)) {
+            String override = startUrlOverride.trim();
+            try {
+                String absoluteUrl;
+                if (override.startsWith("http://") || override.startsWith("https://")) {
+                    absoluteUrl = override;
+                } else {
+                    if (!StringUtils.hasText(config.getBaseUrl())) {
+                        throw new IllegalArgumentException("baseUrl 为空，无法解析相对起始URL");
+                    }
+                    absoluteUrl = new java.net.URL(new java.net.URL(config.getBaseUrl().trim()), override).toString();
+                }
+
+                java.net.URL parsed = new java.net.URL(absoluteUrl);
+                String baseUrl = parsed.getProtocol() + "://" + parsed.getHost();
+                if (parsed.getPort() != -1 && parsed.getPort() != parsed.getDefaultPort()) {
+                    baseUrl += ":" + parsed.getPort();
+                }
+                String path = StringUtils.hasText(parsed.getPath()) ? parsed.getPath() : "/";
+                if (StringUtils.hasText(parsed.getQuery())) {
+                    path += "?" + parsed.getQuery();
+                }
+
+                config.setBaseUrl(baseUrl);
+                config.setStartUrl(path);
+                return absoluteUrl;
+            } catch (Exception e) {
+                throw new IllegalArgumentException("起始URL格式错误：" + override);
+            }
+        }
+
+        if (!StringUtils.hasText(config.getBaseUrl()) || !StringUtils.hasText(config.getStartUrl())) {
+            throw new IllegalStateException("爬虫配置不完整：baseUrl/startUrl 不能为空");
+        }
+
+        try {
+            return new java.net.URL(new java.net.URL(config.getBaseUrl().trim()), config.getStartUrl().trim()).toString();
+        } catch (Exception e) {
+            throw new IllegalStateException("爬虫配置错误：baseUrl/startUrl 组合失败");
+        }
+    }
+
+    /**
+     * 已向量化页面仅提取链接，不再抓取正文
+     */
+    private Set<String> extractLinksOnly(String url, CrawlerConfig config) {
+        Document doc = fetchPage(url, config);
+        if (doc == null) {
+            return new HashSet<>();
+        }
+        return extractLinks(doc, config);
+    }
+
+    /**
+     * 控制请求频率，避免访问过快
+     */
+    private void applyRequestInterval(Integer intervalMs) {
+        if (intervalMs == null || intervalMs <= 0) {
+            return;
+        }
+        try {
+            Thread.sleep(intervalMs);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("爬虫等待间隔被中断");
+        }
+    }
+
+    /**
+     * 新抓取内容保存为草稿（前端可编辑后再入库）
+     */
+    private void saveAsDraft(String url, String title, String content) {
+        if (!StringUtils.hasText(url) || !StringUtils.hasText(content)) {
+            return;
+        }
+        synchronized (this) {
+            String existingId = draftIdByUrl.get(url);
+            if (StringUtils.hasText(existingId) && draftResultMap.containsKey(existingId)) {
+                CrawlerDraftResultVO existing = draftResultMap.get(existingId);
+                existing.setTitle(title);
+                existing.setContent(content);
+                existing.setContentLength(content.length());
+                existing.setUpdatedTime(LocalDateTime.now());
+                existing.setSaved(existing.isSaved());
+                existing.setSavedTime(existing.isSaved() ? existing.getSavedTime() : null);
+                existing.setEdited(false);
+                draftResultMap.put(existingId, existing);
+                return;
+            }
+
+            String id = UUID.randomUUID().toString();
+            CrawlerDraftResultVO draft = CrawlerDraftResultVO.builder()
+                    .id(id)
+                    .url(url)
+                    .title(title)
+                    .content(content)
+                    .contentLength(content.length())
+                    .fetchTime(LocalDateTime.now())
+                    .updatedTime(LocalDateTime.now())
+                    .saved(false)
+                    .edited(false)
+                    .savedTime(null)
+                    .build();
+            draftResultMap.put(id, draft);
+            draftIdByUrl.put(url, id);
+            log.info("新增爬虫草稿: url={}, 内容长度={}", url, content.length());
+        }
+    }
+
+    /**
+     * 判断URL是否已有可用索引（文档+分块）
+     * 说明：若通过管理端删除文档，分块会一并删除；此时会被视为未索引，下一次可重新爬取为草稿。
+     */
+    private boolean isUrlIndexed(String url, CrawlerConfig config) {
+        if (!StringUtils.hasText(url)) {
+            return false;
+        }
+        Long knowledgeId = config == null ? null : config.getKnowledgeId();
+        Documents doc = documentsService.lambdaQuery()
+                .eq(Documents::getSourceUrl, url)
+                .eq(Documents::getSourceType, 2)
+                .eq(Documents::getProcessStatus, 2)
+                .eq(knowledgeId != null, Documents::getKnowledgeId, knowledgeId)
+                .orderByDesc(Documents::getId)
+                .last("limit 1")
+                .one();
+        if (doc == null || doc.getId() == null) {
+            return false;
+        }
+        long chunkCount = documentChunksService.lambdaQuery()
+                .eq(DocumentChunks::getDocumentId, doc.getId())
+                .count();
+        if (chunkCount <= 0) {
+            return false;
+        }
+
+        // 默认走数据库快速判断，开启后再额外检查Qdrant中是否仍存在向量点位
+        boolean strictVectorCheckEnabled = config != null && Boolean.TRUE.equals(config.getStrictVectorCheckEnabled());
+        if (!strictVectorCheckEnabled) {
+            return true;
+        }
+
+        boolean vectorExists = existsVectorInQdrant(doc.getId());
+        if (!vectorExists) {
+            log.warn("检测到文档记录存在但向量点位缺失，将重新抓取为草稿: url={}, documentId={}", url, doc.getId());
+        }
+        return vectorExists;
+    }
+
+    /**
+     * 强校验：确认Qdrant中仍存在该文档对应向量点位
+     */
+    private boolean existsVectorInQdrant(Long documentId) {
+        if (documentId == null) {
+            return false;
+        }
+        try {
+            SearchRequest numberFilterRequest = SearchRequest.builder()
+                    .query("crawler_vector_exist_check")
+                    .topK(1)
+                    .similarityThreshold(-1.0d)
+                    .filterExpression("WHERE document_id == " + documentId)
+                    .build();
+            List<org.springframework.ai.document.Document> docs = qdrantVectorStore.similaritySearch(numberFilterRequest);
+            if (docs != null && !docs.isEmpty()) {
+                return true;
+            }
+
+            SearchRequest stringFilterRequest = SearchRequest.builder()
+                    .query("crawler_vector_exist_check")
+                    .topK(1)
+                    .similarityThreshold(-1.0d)
+                    .filterExpression("WHERE document_id == '" + documentId + "'")
+                    .build();
+            docs = qdrantVectorStore.similaritySearch(stringFilterRequest);
+            return docs != null && !docs.isEmpty();
+        } catch (Exception e) {
+            // 强校验失败时退回数据库快速判断，避免因向量库瞬时异常导致重复抓取
+            log.warn("向量强校验失败，回退数据库判定: documentId={}, error={}", documentId, e.getMessage());
+            return true;
+        }
     }
 
     /**
@@ -357,25 +737,21 @@ public class WebsiteCrawlerService {
     /**
      * 存入知识库
      */
-    private void saveToKnowledgeBase(String url, String title, String content, CrawlerConfig config) {
-        try {
-            // 生成元数据 JSON 字符串
-            String metadataJson = metadataService.generatePageMetadata(url, title, content, config);
+    private void saveToKnowledgeBase(String url, String title, String content, CrawlerConfig config, Long knowledgeId) {
+        // 生成元数据 JSON 字符串
+        String metadataJson = metadataService.generatePageMetadata(url, title, content, config);
 
-            // 将 JSON 字符串转换为 Map
-            Gson gson = new Gson();
-            TypeToken<Map<String, Object>> typeToken =
-                    new TypeToken<>() {};
-            Map<String, Object> metadata = gson.fromJson(metadataJson, typeToken.getType());
+        // 将 JSON 字符串转换为 Map
+        Gson gson = new Gson();
+        TypeToken<Map<String, Object>> typeToken =
+                new TypeToken<>() {};
+        Map<String, Object> metadata = gson.fromJson(metadataJson, typeToken.getType());
 
-            // 调用同步服务保存到知识库（异步处理文档分块和向量化）
-            syncService.saveCrawlerContent(config.getKnowledgeId(), content, metadata,
-                    documentsService, documentChunksService);
+        // 调用同步服务保存到知识库（异步处理文档分块和向量化）
+        syncService.saveCrawlerContent(knowledgeId, content, metadata,
+                documentsService, documentChunksService);
 
-            log.info("已存入知识库: url={}, 标题={}, {} 字符", url, title, content.length());
-        } catch (Exception e) {
-            log.error("存入知识库失败: {}", url, e);
-        }
+        log.info("已提交入库: url={}, 标题={}, {} 字符, knowledgeId={}", url, title, content.length(), knowledgeId);
     }
 
     /**

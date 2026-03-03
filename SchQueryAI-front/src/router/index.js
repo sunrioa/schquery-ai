@@ -21,6 +21,7 @@ import ChatConfig from '../views/admin/ai/ChatConfig.vue'
 import ChatModel from '../views/admin/ai/ChatModel.vue'
 import ChatManagement from '../views/admin/ai/ChatManagement.vue'
 import AsrModel from '../views/admin/ai/AsrModel.vue'
+import OcrModel from '../views/admin/ai/OcrModel.vue'
 import KnowledgeManage from '../views/admin/ai/KnowledgeManage.vue'
 import KnowledgeDetail from '../views/admin/ai/KnowledgeDetail.vue'
 import McpManage from '../views/admin/ai/McpManage.vue'
@@ -190,6 +191,12 @@ const routes = [
     path: '/admin/ai/asr-model',
     name: 'AsrModel',
     component: AsrModel,
+    meta: { requiresAuth: true, requiresRole: ['admin'], layout: 'admin' }
+  },
+  {
+    path: '/admin/ai/ocr-model',
+    name: 'OcrModel',
+    component: OcrModel,
     meta: { requiresAuth: true, requiresRole: ['admin'], layout: 'admin' }
   },
   {

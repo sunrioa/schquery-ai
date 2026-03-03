@@ -33,6 +33,8 @@ public class CrawlerConfigService {
         Integer maxPages = getIntFromDb("max.pages");
         Integer contentMinLength = getIntFromDb("content.min.length");
         Integer contentMaxLength = getIntFromDb("content.max.length");
+        Integer requestIntervalMs = getIntFromDb("request.interval.ms");
+        Boolean strictVectorCheckEnabled = getBooleanFromDb("strict.vector.check.enabled");
         Long knowledgeId = getLongFromDb("knowledge.id");
         Boolean scheduleEnabled = getBooleanFromDb("schedule.enabled");
         String scheduleCron = getStringFromDb("schedule.cron");
@@ -57,6 +59,8 @@ public class CrawlerConfigService {
                 .maxPages(maxPages)
                 .contentMinLength(contentMinLength)
                 .contentMaxLength(contentMaxLength)
+                .requestIntervalMs(requestIntervalMs)
+                .strictVectorCheckEnabled(strictVectorCheckEnabled)
                 .knowledgeId(knowledgeId)
                 .knowledgeName(knowledgeName)
                 .scheduleEnabled(scheduleEnabled)
@@ -119,6 +123,8 @@ public class CrawlerConfigService {
         private Integer maxPages;
         private Integer contentMinLength;
         private Integer contentMaxLength;
+        private Integer requestIntervalMs;
+        private Boolean strictVectorCheckEnabled;
         private Long knowledgeId;
         private String knowledgeName;
         private Boolean scheduleEnabled;

@@ -3,9 +3,13 @@ package cn.ling.crawler.controller;
 import cn.ling.Result;
 import cn.ling.crawler.service.WebsiteCrawlerService;
 import cn.ling.crawler.service.CrawlerConfigService;
+import cn.ling.crawler.vo.CrawlerDraftResultVO;
+import cn.ling.crawler.vo.CrawlerSaveResultVO;
 import cn.ling.crawler.vo.CrawlerStatusVO;
 import jakarta.annotation.Resource;
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -14,7 +18,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * 爬虫管理接口
@@ -34,14 +37,15 @@ public class CrawlerController {
      * 手动触发爬虫
      */
     @PostMapping("/start")
-    public Result<String> startCrawl() {
-        if (crawlerService.getStatus().isRunning()) {
-            return Result.error("爬虫正在运行中，请勿重复触发");
-        }
-
+    public Result<String> startCrawl(@RequestBody(required = false) StartCrawlRequest request) {
         try {
-            crawlerService.manualCrawl();
-            return Result.success("爬虫已启动，请查看日志");
+            String startUrl = request == null ? null : request.getStartUrl();
+            Integer requestIntervalMs = request == null ? null : request.getRequestIntervalMs();
+            boolean started = crawlerService.manualCrawl(startUrl, requestIntervalMs);
+            if (!started) {
+                return Result.error("爬虫正在运行中或未启用，请检查配置");
+            }
+            return Result.success("爬虫任务已启动，抓取结果可在下方草稿列表查看");
         } catch (Exception e) {
             log.error("启动爬虫失败", e);
             return Result.error("启动失败：" + e.getMessage());
@@ -73,6 +77,7 @@ public class CrawlerController {
         data.put("running", status.isRunning());
         data.put("visitedCount", status.getVisitedCount());
         data.put("pendingCount", status.getPendingCount());
+        data.put("draftCount", crawlerService.getDraftResultCount());
         data.put("config", configService.getConfig());
 
         return Result.success(data);
@@ -98,6 +103,51 @@ public class CrawlerController {
             log.error("更新配置失败", e);
             return Result.error("更新失败：" + e.getMessage());
         }
+    }
+
+    /**
+     * 获取抓取草稿列表
+     */
+    @GetMapping("/results")
+    public Result<List<CrawlerDraftResultVO>> getResults() {
+        return Result.success(crawlerService.listDraftResults());
+    }
+
+    /**
+     * 更新抓取草稿（前端编辑后保存草稿）
+     */
+    @PostMapping("/results/update")
+    public Result<CrawlerDraftResultVO> updateResult(@RequestBody DraftUpdateRequest request) {
+        try {
+            CrawlerDraftResultVO updated = crawlerService.updateDraftResult(request.getId(), request.getTitle(), request.getContent());
+            return Result.success(updated, "草稿已更新");
+        } catch (Exception e) {
+            return Result.error("更新草稿失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 保存选中草稿到知识库（触发向量化）
+     */
+    @PostMapping("/results/save")
+    public Result<CrawlerSaveResultVO> saveResults(@RequestBody DraftSaveRequest request) {
+        try {
+            List<String> ids = request == null ? Collections.emptyList() : request.getIds();
+            Long knowledgeId = request == null ? null : request.getKnowledgeId();
+            CrawlerSaveResultVO result = crawlerService.saveDraftResults(ids, knowledgeId);
+            return Result.success(result, "已提交保存任务");
+        } catch (Exception e) {
+            return Result.error("保存失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 清空抓取草稿
+     */
+    @PostMapping("/results/clear")
+    public Result<String> clearResults() {
+        crawlerService.clearDraftResults();
+        return Result.success("草稿已清空");
     }
 
     /**
@@ -129,20 +179,20 @@ public class CrawlerController {
             case "monthly":
                 return generateMonthlyCron(params);
             default:
-                return (String) params.getOrDefault("cron", "0 0 2 ? * MON");
+                return normalizeCronExpression((String) params.getOrDefault("cron", "0 0 2 ? * MON"));
         }
     }
 
     private String generateIntervalCron(Map<String, Object> params) {
-        Integer value = (Integer) params.getOrDefault("value", 1);
+        Integer value = parsePositiveInt(params.get("value"), 1);
         String unit = (String) params.getOrDefault("unit", "hour");
         switch (unit) {
             case "minute":
-                return "*/" + value + " * * *";
+                return String.format("0 */%d * * * ?", value);
             case "hour":
-                return "0 */" + value + " * * ?";
+                return String.format("0 0 */%d * * ?", value);
             case "day":
-                return "0 0 */" + value + " * * ?";
+                return String.format("0 0 0 */%d * ?", value);
             default:
                 return "0 0 2 ? * MON";
         }
@@ -150,28 +200,144 @@ public class CrawlerController {
 
     private String generateDailyCron(Map<String, Object> params) {
         String time = (String) params.getOrDefault("time", "02:00");
-        String[] parts = time.split(":");
-        return String.format("%s %s * * ?", parts[1], parts[0]);
+        int[] hourMinute = parseHourMinute(time);
+        return String.format("0 %d %d * * ?", hourMinute[1], hourMinute[0]);
     }
 
     private String generateWeeklyCron(Map<String, Object> params) {
         String time = (String) params.getOrDefault("time", "02:00");
-        @SuppressWarnings("unchecked")
-        Object daysObj = params.getOrDefault("days", new HashSet());
-        Set<Integer> days = Set.of();
-        if (daysObj instanceof Set) {
-            days = (Set<Integer>) daysObj;
-        } else if (daysObj instanceof List) {
-            days = new HashSet<>((List<Integer>) daysObj);
+        int[] hourMinute = parseHourMinute(time);
+        Object daysObj = params.getOrDefault("days", Collections.singletonList(1));
+        Set<String> days = new LinkedHashSet<>();
+
+        if (daysObj instanceof Collection<?>) {
+            for (Object day : (Collection<?>) daysObj) {
+                String mapped = mapDayOfWeek(day);
+                if (mapped != null) {
+                    days.add(mapped);
+                }
+            }
+        } else {
+            String mapped = mapDayOfWeek(daysObj);
+            if (mapped != null) {
+                days.add(mapped);
+            }
         }
-        String[] parts = time.split(":");
-        return String.format("%s %s %s * ?", parts[1], days.stream().map(String::valueOf).sorted().map(String::valueOf).collect(Collectors.joining(",")));
+
+        if (days.isEmpty()) {
+            days.add("MON");
+        }
+
+        return String.format("0 %d %d ? * %s", hourMinute[1], hourMinute[0], String.join(",", days));
     }
 
     private String generateMonthlyCron(Map<String, Object> params) {
         String time = (String) params.getOrDefault("time", "02:00");
-        Integer day = (Integer) params.getOrDefault("day", 1);
+        int[] hourMinute = parseHourMinute(time);
+        Integer day = parsePositiveInt(params.get("day"), 1);
+        if (day > 31) {
+            day = 31;
+        }
+        return String.format("0 %d %d %d * ?", hourMinute[1], hourMinute[0], day);
+    }
+
+    private int[] parseHourMinute(String time) {
+        if (!StringUtils.hasText(time) || !time.contains(":")) {
+            return new int[]{2, 0};
+        }
         String[] parts = time.split(":");
-        return String.format("%s %s %s * ?", parts[1], day);
+        try {
+            int hour = Math.max(0, Math.min(23, Integer.parseInt(parts[0])));
+            int minute = Math.max(0, Math.min(59, Integer.parseInt(parts[1])));
+            return new int[]{hour, minute};
+        } catch (Exception e) {
+            return new int[]{2, 0};
+        }
+    }
+
+    private Integer parsePositiveInt(Object value, int defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        try {
+            int parsed = Integer.parseInt(String.valueOf(value));
+            return parsed > 0 ? parsed : defaultValue;
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
+    private String mapDayOfWeek(Object dayObj) {
+        if (dayObj == null) {
+            return null;
+        }
+        String value = String.valueOf(dayObj).trim();
+        if (value.isEmpty()) {
+            return null;
+        }
+        switch (value.toUpperCase()) {
+            case "0":
+            case "7":
+            case "SUN":
+                return "SUN";
+            case "1":
+            case "MON":
+                return "MON";
+            case "2":
+            case "TUE":
+                return "TUE";
+            case "3":
+            case "WED":
+                return "WED";
+            case "4":
+            case "THU":
+                return "THU";
+            case "5":
+            case "FRI":
+                return "FRI";
+            case "6":
+            case "SAT":
+                return "SAT";
+            default:
+                return null;
+        }
+    }
+
+    private String normalizeCronExpression(String cron) {
+        if (!StringUtils.hasText(cron)) {
+            return "0 0 2 ? * MON";
+        }
+        String normalized = cron.trim().replaceAll("\\s+", " ");
+        String[] parts = normalized.split(" ");
+        if (parts.length == 5) {
+            return "0 " + normalized;
+        }
+        return normalized;
+    }
+
+    @Data
+    private static class DraftUpdateRequest {
+        private String id;
+        private String title;
+        private String content;
+    }
+
+    @Data
+    private static class DraftSaveRequest {
+        private List<String> ids;
+        private Long knowledgeId;
+    }
+
+    @Data
+    private static class StartCrawlRequest {
+        /**
+         * 可选：本次任务起始URL，支持绝对URL或相对路径
+         */
+        private String startUrl;
+
+        /**
+         * 可选：本次任务请求间隔（毫秒）
+         */
+        private Integer requestIntervalMs;
     }
 }

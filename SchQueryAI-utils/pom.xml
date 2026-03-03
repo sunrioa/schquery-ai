@@ -104,5 +104,12 @@
             <artifactId>poi-scratchpad</artifactId>
             <version>5.2.5</version>
         </dependency>
+
+        <!-- JavaCV PDF 截图和图片处理 -->
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>javacv-platform</artifactId>
+            <version>1.5.9</version>
+        </dependency>
     </dependencies>
 </project>

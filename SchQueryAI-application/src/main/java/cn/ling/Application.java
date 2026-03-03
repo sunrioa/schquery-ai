@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * SchQueryAI 应用程序主入口类
@@ -11,6 +12,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
  */
 @Slf4j // 启用SLF4J日志功能
 @EnableAsync
+@EnableScheduling
 @SpringBootApplication
 public class Application {
 

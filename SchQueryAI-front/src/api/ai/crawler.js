@@ -3,10 +3,11 @@ import request from '@/api/request'
 /**
  * 爬虫管理 API
  */
-export function startCrawlApi() {
+export function startCrawlApi(data = {}) {
   return request({
     url: '/ai/crawler/start',
-    method: 'post'
+    method: 'post',
+    data
   })
 }
 
@@ -58,5 +59,35 @@ export function generateCronApi(params) {
     headers: {
       'Content-Type': 'application/json'
     }
+  })
+}
+
+export function getCrawlerResultsApi() {
+  return request({
+    url: '/ai/crawler/results',
+    method: 'get'
+  })
+}
+
+export function updateCrawlerResultApi(data) {
+  return request({
+    url: '/ai/crawler/results/update',
+    method: 'post',
+    data
+  })
+}
+
+export function saveCrawlerResultsApi(data) {
+  return request({
+    url: '/ai/crawler/results/save',
+    method: 'post',
+    data
+  })
+}
+
+export function clearCrawlerResultsApi() {
+  return request({
+    url: '/ai/crawler/results/clear',
+    method: 'post'
   })
 }

@@ -55,6 +55,10 @@
                 <el-icon><Collection /></el-icon>
                 <span>语音识别配置</span>
               </el-menu-item>
+              <el-menu-item index="/admin/ai/ocr-model">
+                <el-icon><Document /></el-icon>
+                <span>OCR 文字识别配置</span>
+              </el-menu-item>
               <el-menu-item index="/admin/ai/mcp">
                 <el-icon><Monitor /></el-icon>
                 <span>MCP 管理</span>

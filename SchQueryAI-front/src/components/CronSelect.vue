@@ -81,12 +81,12 @@
       </el-form-item>
       <el-form-item label="格式说明">
         <div class="cron-help">
-          <p>格式：分 时 日 月 周</p>
+          <p>格式：秒 分 时 日 月 周</p>
           <p>示例：</p>
           <ul>
-            <li>0 0 2 * * - 每天凌晨2点</li>
-            <li>0 0 ? * MON - 每周一凌晨2点</li>
-            <li>0 0/2 * * * - 每2小时</li>
+            <li>0 0 2 * * ? - 每天凌晨2点</li>
+            <li>0 0 2 ? * MON - 每周一凌晨2点</li>
+            <li>0 0 */2 * * ? - 每2小时</li>
           </ul>
         </div>
       </el-form-item>
@@ -190,11 +190,11 @@ const generateIntervalCron = () => {
   const value = intervalValue.value
   switch (intervalUnit.value) {
     case 'minute':
-      return `*/${value} * * * ?`
+      return `0 */${value} * * * ?`
     case 'hour':
-      return `0 */${value} * * ?`
+      return `0 0 */${value} * * ?`
     case 'day':
-      return `0 0 */${value} * ?`
+      return `0 0 0 */${value} * ?`
     default:
       return '0 0 2 ? * MON'
   }
@@ -204,22 +204,35 @@ const generateIntervalCron = () => {
 const generateDailyCron = () => {
   if (!dailyTime.value) return '0 0 2 ? * *'
   const [hour, minute] = dailyTime.value.split(':')
-  return `${minute} ${hour} * * ?`
+  return `0 ${minute} ${hour} * * ?`
 }
 
 // 生成每周执行cron
 const generateWeeklyCron = () => {
   if (!weeklyTime.value || weeklyDays.value.length === 0) return '0 0 2 ? * MON'
   const [hour, minute] = weeklyTime.value.split(':')
-  const days = weeklyDays.value.sort().join(',')
-  return `${minute} ${hour} ? * ${days}`
+  const dayMap = {
+    0: 'SUN',
+    1: 'MON',
+    2: 'TUE',
+    3: 'WED',
+    4: 'THU',
+    5: 'FRI',
+    6: 'SAT',
+    7: 'SUN'
+  }
+  const days = weeklyDays.value
+    .map(day => dayMap[day] || 'MON')
+    .filter((item, idx, arr) => arr.indexOf(item) === idx)
+    .join(',')
+  return `0 ${minute} ${hour} ? * ${days || 'MON'}`
 }
 
 // 生成每月执行cron
 const generateMonthlyCron = () => {
   if (!monthlyTime.value || !monthlyDay.value) return '0 0 2 1 * ?'
   const [hour, minute] = monthlyTime.value.split(':')
-  return `${minute} ${hour} ${monthlyDay.value} * ?`
+  return `0 ${minute} ${hour} ${monthlyDay.value} * ?`
 }
 
 // 计算下次执行时间（简化版）
@@ -237,7 +250,8 @@ const copyCron = () => {
 const callBackendGenerate = async () => {
   if (type.value === 'custom') {
     // 自定义模式，不调用后端
-    cronExpression.value = customCron.value
+    cronExpression.value = normalizeCronExpression(customCron.value)
+    calculateNextExecution(cronExpression.value)
     return
   }
 
@@ -272,17 +286,30 @@ const callBackendGenerate = async () => {
 }
 
 // 初始化
-watch(() => [type, intervalValue, intervalUnit, dailyTime, weeklyDays, weeklyTime, monthlyDay, monthlyTime, customCron], () => {
+watch([type, intervalValue, intervalUnit, dailyTime, weeklyDays, weeklyTime, monthlyDay, monthlyTime, customCron], () => {
   callBackendGenerate()
-}, { deep: true })
+}, { deep: true, immediate: true })
 
 // 从传入的cron表达式解析初始类型（可选）
 watch(() => props.modelValue, (newVal) => {
   if (newVal && newVal !== cronExpression.value) {
     // 这里可以解析传入的cron，设置到对应的表单
-    cronExpression.value = newVal
+    cronExpression.value = normalizeCronExpression(newVal)
+    calculateNextExecution(cronExpression.value)
   }
 }, { immediate: true })
+
+function normalizeCronExpression (cron) {
+  if (!cron || !cron.trim()) {
+    return '0 0 2 ? * MON'
+  }
+  const value = cron.trim().replace(/\s+/g, ' ')
+  const parts = value.split(' ')
+  if (parts.length === 5) {
+    return `0 ${value}`
+  }
+  return value
+}
 </script>
 
 <style scoped>

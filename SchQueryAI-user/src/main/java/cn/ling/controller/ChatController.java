@@ -17,8 +17,6 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter
 import reactor.core.publisher.Flux;
 import java.io.IOException;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 聊天功能控制器
@@ -121,18 +119,18 @@ public class ChatController {
         // 获取 Flux 流
         Flux<String> aiResponseStream = chatMessageService.sendMessage(dto);
 
-        AtomicReference<String> fullResponse = new AtomicReference<>("");
-        AtomicLong chunkCount = new AtomicLong(0);
-
         // 直接订阅并发送，不使用新线程
         aiResponseStream
                 .doOnNext(chunk -> {
                     try {
-                        long count = chunkCount.incrementAndGet();
-                        fullResponse.updateAndGet(prev -> prev + chunk);
-
-                        // 构建 SSE 事件并立即发送
-                        String sseEvent = "data: " + chunk + "\n\n";
+                        String sseEvent;
+                        if (chunk == null) {
+                            sseEvent = "data: \n\n";
+                        } else if (chunk.startsWith("event:") || chunk.startsWith("data:")) {
+                            sseEvent = chunk.endsWith("\n\n") ? chunk : chunk + "\n\n";
+                        } else {
+                            sseEvent = toSseDataEvent(chunk);
+                        }
                         emitter.send(sseEvent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                     } catch (IOException e) {
                         log.error("发送 SSE 数据失败: {}", e.getMessage(), e);
@@ -149,6 +147,24 @@ public class ChatController {
                 .subscribe();
 
         return emitter;
+    }
+
+    /**
+     * 将普通文本编码为标准 SSE data 事件。
+     * SSE 规范要求多行数据需要逐行使用 data: 前缀，否则后续行会被客户端丢弃。
+     */
+    private String toSseDataEvent(String chunk) {
+        if (chunk == null) {
+            return "data: \n\n";
+        }
+        String normalized = chunk.replace("\r\n", "\n").replace("\r", "\n");
+        String[] lines = normalized.split("\n", -1);
+        StringBuilder builder = new StringBuilder();
+        for (String line : lines) {
+            builder.append("data: ").append(line).append("\n");
+        }
+        builder.append("\n");
+        return builder.toString();
     }
 
     /**
@@ -189,13 +205,14 @@ public class ChatController {
      * 用于前端在接收AI回复后，基于识别的意图快速返回预设追问
      *
      * @param intent 意图名称（如：专业信息、招生计划等）
+     * @param sessionId 会话ID（可选；用于无预设意图时回退上下文生成）
      * @return 追问建议列表
      */
     @RequestMapping("/suggest/by-intent")
-    public Result<SuggestVO> getSuggestByIntent(@RequestParam String intent) {
+    public Result<SuggestVO> getSuggestByIntent(@RequestParam String intent,
+                                                @RequestParam(required = false) Long sessionId) {
         try {
-            SuggestVO suggest = suggestService.getSuggestByIntent(intent);
-            System.err.println(suggest);
+            SuggestVO suggest = suggestService.getSuggestByIntent(intent, sessionId);
             return Result.success(suggest);
         } catch (Exception e) {
             log.error("根据意图获取追问建议失败: {}", e.getMessage(), e);

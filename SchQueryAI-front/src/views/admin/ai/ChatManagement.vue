@@ -116,6 +116,44 @@
               </el-button>
             </div>
           </div>
+
+          <div class="config-section intent-section">
+            <div class="section-header">
+              <div class="section-title">
+                <el-icon><MagicStick /></el-icon>
+                <span>意图识别增强提示词</span>
+              </div>
+              <el-switch v-model="intentPromptConfig.enabled" active-text="启用" inactive-text="禁用" />
+            </div>
+
+            <el-alert
+              type="info"
+              :closable="false"
+              show-icon
+              title="功能说明"
+              description="根据识别到的用户意图，为系统提示词追加对应规则（例如专业信息/分数线/招生政策），让回答更聚焦。"
+              style="margin-bottom: 20px;"
+            />
+
+            <el-form label-position="top">
+              <el-form-item v-for="item in intentPromptItems" :key="item.key" :label="item.label">
+                <el-input
+                  v-model="intentPromptConfig.promptMap[item.key]"
+                  type="textarea"
+                  :rows="3"
+                  maxlength="500"
+                  show-word-limit
+                  :placeholder="`请输入${item.label}的补充提示词`"
+                />
+              </el-form-item>
+            </el-form>
+
+            <div class="section-actions">
+              <el-button type="primary" :loading="saving" @click="saveIntentConfig">
+                <el-icon><Check /></el-icon>保存配置
+              </el-button>
+            </div>
+          </div>
         </div>
       </el-tab-pane>
     </el-tabs>
@@ -148,6 +186,31 @@ const followupConfig = ref({
   roleId: ''
 })
 
+const buildDefaultIntentPromptMap = () => ({
+  '专业信息': '回答应优先给出专业特点、核心课程、培养方向和就业去向，并适当做专业对比。',
+  '招生计划': '回答应聚焦招生人数、省份名额、专业变化，优先给结构化列表并标注年份。',
+  '历年分数线': '回答应优先给近3年分数线、位次变化及报考建议，避免只给单一年份。',
+  '招生政策': '回答应明确政策条款、适用对象、时间节点，涉及不确定内容时提醒以官方公告为准。',
+  '报考指南': '回答应按步骤给出志愿填报建议，并提供不同分数段/风险偏好的策略。',
+  '校园信息': '回答应覆盖学习生活、住宿餐饮、奖助学金与校园资源，突出实用信息。',
+  UNKNOWN: '若意图不明确，先做问题澄清，再给出可选追问方向。'
+})
+
+const intentPromptItems = [
+  { key: '专业信息', label: '专业信息意图提示词' },
+  { key: '招生计划', label: '招生计划意图提示词' },
+  { key: '历年分数线', label: '历年分数线意图提示词' },
+  { key: '招生政策', label: '招生政策意图提示词' },
+  { key: '报考指南', label: '报考指南意图提示词' },
+  { key: '校园信息', label: '校园信息意图提示词' },
+  { key: 'UNKNOWN', label: '未知意图提示词' }
+]
+
+const intentPromptConfig = ref({
+  enabled: false,
+  promptMap: buildDefaultIntentPromptMap()
+})
+
 // 预设列表（用于角色选择）
 const presets = ref([])
 
@@ -173,6 +236,23 @@ const loadFollowupConfig = async () => {
     }
   } catch (e) {
     console.error('加载追问建议配置失败:', e)
+  }
+}
+
+// 加载意图识别增强配置
+const loadIntentConfig = async () => {
+  try {
+    const res = await getChatDefaultConfig()
+    const intentConfig = res?.data?.intentConfig || {}
+    intentPromptConfig.value = {
+      enabled: intentConfig.enabled === 'true' || intentConfig.enabled === true,
+      promptMap: {
+        ...buildDefaultIntentPromptMap(),
+        ...(intentConfig.promptMap || {})
+      }
+    }
+  } catch (e) {
+    console.error('加载意图提示词配置失败:', e)
   }
 }
 
@@ -229,8 +309,26 @@ const saveFollowupConfig = async () => {
   }
 }
 
+// 保存意图识别增强配置
+const saveIntentConfig = async () => {
+  saving.value = true
+  try {
+    await saveChatDefaultConfig({
+      intentConfig: {
+        enabled: intentPromptConfig.value.enabled,
+        promptMap: intentPromptConfig.value.promptMap
+      }
+    })
+    ElMessage.success('意图增强提示词配置保存成功')
+  } catch (e) {
+    ElMessage.error('保存失败: ' + (e.message || '未知错误'))
+  } finally {
+    saving.value = false
+  }
+}
+
 onMounted(async () => {
-  await Promise.all([loadWelcomeMessage(), loadFollowupConfig(), loadPresets()])
+  await Promise.all([loadWelcomeMessage(), loadFollowupConfig(), loadIntentConfig(), loadPresets()])
 })
 </script>
 
@@ -280,6 +378,10 @@ onMounted(async () => {
   background: var(--app-surface-2);
   border-radius: 8px;
   padding: 24px;
+}
+
+.intent-section {
+  margin-top: 16px;
 }
 
 .section-header {

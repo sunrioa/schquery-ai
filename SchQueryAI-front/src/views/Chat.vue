@@ -547,6 +547,50 @@ const cleanAIResponse = (text) => {
   return cleaned
 }
 
+// 规范化追问建议，过滤掉 JSON 结构符号和字段名
+const isAssistantPerspectiveSuggestion = (text) => {
+  if (!text) return false
+  const content = String(text).trim()
+  return /^需要我/.test(content) ||
+    /^要不要我/.test(content) ||
+    /^是否需要我/.test(content) ||
+    /^我可以/.test(content) ||
+    /^我来/.test(content) ||
+    /^欢迎告诉我/.test(content) ||
+    content.includes('告诉我你的') ||
+    content.includes('告诉我你更')
+}
+
+const toUserQuestion = (text) => {
+  if (!text) return ''
+  let normalized = String(text).trim().replace(/[。!！]+$/, '？')
+  if (!/[？?]$/.test(normalized)) {
+    normalized = `${normalized}？`
+  }
+  return normalized
+}
+
+const normalizeSuggestions = (suggestions) => {
+  if (!Array.isArray(suggestions)) return []
+  const dedup = new Set()
+  for (const raw of suggestions) {
+    if (typeof raw !== 'string') continue
+    let item = raw.trim()
+    item = item.replace(/^[0-9]+[.、)]\s*/, '')
+    item = item.replace(/^[-*•]\s*/, '')
+    item = item.replace(/^["'`]+|["'`,]+$/g, '').trim()
+    if (!item) continue
+    if (item === '{' || item === '}' || item === '[' || item === ']' || item === ',') continue
+    if (/^"?[a-zA-Z_]+"?\s*:\s*\[?$/.test(item)) continue
+    if (isAssistantPerspectiveSuggestion(item)) continue
+    if (item.length < 4 || item.length > 80) continue
+    item = toUserQuestion(item)
+    dedup.add(item)
+    if (dedup.size >= 3) break
+  }
+  return Array.from(dedup)
+}
+
 // 使用 highlight.js 进行语法高亮
 const highlightCode = (code, lang) => {
   if (!code) return ''
@@ -1076,6 +1120,36 @@ const loadMessages = async (sessionId) => {
   }
 }
 
+const applySuggestionsToMessage = (messageId, suggestions, sessionId) => {
+  if (!Array.isArray(suggestions) || suggestions.length === 0) return
+  if (sessionId !== currentSessionId.value) return
+  const aiIndex = messages.value.findIndex(msg => msg.id === messageId)
+  if (aiIndex < 0 || !messages.value[aiIndex]) return
+  messages.value[aiIndex].suggestions = suggestions
+}
+
+const loadSuggestionsInBackground = async (intent, sessionId, messageId) => {
+  try {
+    const suggestResponse = await fetch(
+      `/api/user/suggest/by-intent?intent=${encodeURIComponent(intent || 'UNKNOWN')}&sessionId=${sessionId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      }
+    )
+    if (!suggestResponse.ok) return
+    const suggestResult = await suggestResponse.json()
+    if (suggestResult.code !== 200 || !suggestResult.data || !suggestResult.data.enabled) return
+    const normalized = normalizeSuggestions(suggestResult.data.suggestions || [])
+    if (normalized.length > 0) {
+      applySuggestionsToMessage(messageId, normalized, sessionId)
+    }
+  } catch (e) {
+    console.error('Failed to load suggestions:', e)
+  }
+}
+
 // 发送消息
 const sendMessage = async () => {
   if (!userMessage.value.trim() || isTyping.value) return
@@ -1161,15 +1235,16 @@ const sendMessage = async () => {
 
         const lines = event.split('\n')
         let eventType = 'message'
-        let eventData = ''
+        const dataLines = []
 
         for (const line of lines) {
           if (line.startsWith('event:')) {
             eventType = line.slice(6).trim()
           } else if (line.startsWith('data:')) {
-            eventData = line.slice(5).replace(/^ /, '')
+            dataLines.push(line.slice(5).replace(/^ /, ''))
           }
         }
+        const eventData = dataLines.join('\n')
 
         if (eventType === 'intent' && eventData) {
           // 处理意图事件
@@ -1205,12 +1280,13 @@ const sendMessage = async () => {
       for (const event of events) {
         if (!event.trim()) continue
         const lines = event.split('\n')
-        let eventData = ''
+        const dataLines = []
         for (const line of lines) {
           if (line.startsWith('data:')) {
-            eventData = line.slice(5).replace(/^ /, '')
+            dataLines.push(line.slice(5).replace(/^ /, ''))
           }
         }
+        const eventData = dataLines.join('\n')
         if (eventData && eventData !== '[DONE]') {
           aiMessageText += eventData
         }
@@ -1226,35 +1302,13 @@ const sendMessage = async () => {
       messages.value[aiMessageIndex].isStreaming = false
     }
 
-    // 获取追问建议
-    if (lastRecognizedIntent) {
-      try {
-        const suggestResponse = await fetch(`/api/user/suggest/by-intent?intent=${encodeURIComponent(lastRecognizedIntent)}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        })
-        if (suggestResponse.ok) {
-          const suggestResult = await suggestResponse.json()
-          if (suggestResult.code === 200 && suggestResult.data && suggestResult.data.enabled && suggestResult.data.suggestions) {
-            if (messages.value[aiMessageIndex]) {
-              messages.value[aiMessageIndex].suggestions = suggestResult.data.suggestions
-              messages.value[aiMessageIndex].renderVersion = ++renderVersion
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Failed to load suggestions:', e)
-      }
-    }
+    const suggestIntent = lastRecognizedIntent && lastRecognizedIntent.trim() ? lastRecognizedIntent.trim() : 'UNKNOWN'
+    const finalSessionId = currentSessionId.value
+    void loadSuggestionsInBackground(suggestIntent, finalSessionId, aiMessageObj.id)
 
     // 等待Vue更新完成
     await nextTick()
-
-    // 重新加载消息列表，确保 Markdown 正确渲染
-    await loadMessages(currentSessionId.value)
-
-    await loadSessions()
+    void loadSessions()
   } catch (error) {
     console.error('Send message error:', error)
     isTyping.value = false
@@ -1288,7 +1342,9 @@ const sendMessage = async () => {
 
 // 点击追问建议
 const clickSuggestion = (suggestion) => {
-  userMessage.value = suggestion
+  const normalized = normalizeSuggestions([suggestion])[0] || toUserQuestion(suggestion)
+  if (!normalized) return
+  userMessage.value = normalized
   sendMessage()
 }
 

@@ -1,5 +1,7 @@
 package cn.ling.crawler.service;
 
+import cn.ling.crawler.domain.CrawlerDraftRecord;
+import cn.ling.crawler.mapper.CrawlerDraftRecordMapper;
 import cn.ling.domain.pojo.Documents;
 import cn.ling.domain.pojo.DocumentChunks;
 import cn.ling.crawler.service.CrawlerConfigService.CrawlerConfig;
@@ -24,7 +26,6 @@ import org.springframework.util.StringUtils;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -62,14 +63,15 @@ public class WebsiteCrawlerService {
     @Resource
     private VectorStore qdrantVectorStore;
 
+    @Resource
+    private CrawlerDraftRecordMapper crawlerDraftRecordMapper;
+
     /**
      * 爬虫运行状态
      */
     private volatile boolean running = false;
     private final Set<String> pendingUrls = ConcurrentHashMap.newKeySet();
     private final Set<String> visitedUrlSet = ConcurrentHashMap.newKeySet();
-    private final Map<String, CrawlerDraftResultVO> draftResultMap = new ConcurrentHashMap<>();
-    private final Map<String, String> draftIdByUrl = new ConcurrentHashMap<>();
 
     /**
      * 获取爬虫完整状态信息
@@ -95,8 +97,15 @@ public class WebsiteCrawlerService {
      * 获取当前抓取结果草稿（按抓取时间倒序）
      */
     public List<CrawlerDraftResultVO> listDraftResults() {
-        List<CrawlerDraftResultVO> results = new ArrayList<>(draftResultMap.values());
-        results.sort(Comparator.comparing(CrawlerDraftResultVO::getFetchTime, Comparator.nullsLast(LocalDateTime::compareTo)).reversed());
+        List<CrawlerDraftRecord> records = crawlerDraftRecordMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CrawlerDraftRecord>()
+                        .orderByDesc(CrawlerDraftRecord::getFetchTime)
+                        .orderByDesc(CrawlerDraftRecord::getUpdatedTime)
+        );
+        List<CrawlerDraftResultVO> results = new ArrayList<>(records.size());
+        for (CrawlerDraftRecord record : records) {
+            results.add(toDraftVO(record));
+        }
         return results;
     }
 
@@ -104,7 +113,8 @@ public class WebsiteCrawlerService {
      * 获取草稿数量
      */
     public int getDraftResultCount() {
-        return draftResultMap.size();
+        Long count = crawlerDraftRecordMapper.selectCount(null);
+        return count == null ? 0 : count.intValue();
     }
 
     /**
@@ -114,7 +124,7 @@ public class WebsiteCrawlerService {
         if (!StringUtils.hasText(id)) {
             throw new IllegalArgumentException("草稿ID不能为空");
         }
-        CrawlerDraftResultVO draft = draftResultMap.get(id);
+        CrawlerDraftRecord draft = crawlerDraftRecordMapper.selectById(id);
         if (draft == null) {
             throw new IllegalArgumentException("未找到对应抓取草稿");
         }
@@ -125,18 +135,17 @@ public class WebsiteCrawlerService {
         draft.setTitle(StringUtils.hasText(title) ? title.trim() : draft.getTitle());
         draft.setContent(content.trim());
         draft.setContentLength(draft.getContent().length());
-        draft.setEdited(true);
+        draft.setEdited(1);
         draft.setUpdatedTime(LocalDateTime.now());
-        draftResultMap.put(id, draft);
-        return draft;
+        crawlerDraftRecordMapper.updateById(draft);
+        return toDraftVO(draft);
     }
 
     /**
      * 清空抓取草稿
      */
     public void clearDraftResults() {
-        draftResultMap.clear();
-        draftIdByUrl.clear();
+        crawlerDraftRecordMapper.delete(null);
     }
 
     /**
@@ -159,7 +168,7 @@ public class WebsiteCrawlerService {
         List<CrawlerDraftResultVO> savedItems = new ArrayList<>();
 
         for (String id : ids.stream().filter(Objects::nonNull).distinct().toList()) {
-            CrawlerDraftResultVO draft = draftResultMap.get(id);
+            CrawlerDraftRecord draft = crawlerDraftRecordMapper.selectById(id);
             if (draft == null) {
                 skippedCount++;
                 failedItems.add("未找到草稿：" + id);
@@ -175,11 +184,12 @@ public class WebsiteCrawlerService {
                 saveToKnowledgeBase(draft.getUrl(), draft.getTitle(), draft.getContent(), config, finalKnowledgeId);
                 dedupService.markUrlVisited(draft.getUrl(), draft.getTitle(), 1, null);
 
-                draft.setSaved(true);
+                draft.setSaved(1);
                 draft.setSavedTime(LocalDateTime.now());
                 draft.setKnowledgeId(finalKnowledgeId);
-                draftResultMap.put(draft.getId(), draft);
-                savedItems.add(draft);
+                draft.setUpdatedTime(LocalDateTime.now());
+                crawlerDraftRecordMapper.updateById(draft);
+                savedItems.add(toDraftVO(draft));
                 submittedCount++;
             } catch (Exception e) {
                 skippedCount++;
@@ -292,7 +302,7 @@ public class WebsiteCrawlerService {
             } finally {
                 running = false;
                 log.info("手动爬虫任务完成 - 已访问页面: {}, 待处理队列: {}, 草稿数: {}",
-                        visitedUrlSet.size(), pendingUrls.size(), draftResultMap.size());
+                        visitedUrlSet.size(), pendingUrls.size(), getDraftResultCount());
             }
         });
         return true;
@@ -545,37 +555,61 @@ public class WebsiteCrawlerService {
             return;
         }
         synchronized (this) {
-            String existingId = draftIdByUrl.get(url);
-            if (StringUtils.hasText(existingId) && draftResultMap.containsKey(existingId)) {
-                CrawlerDraftResultVO existing = draftResultMap.get(existingId);
+            CrawlerDraftRecord existing = crawlerDraftRecordMapper.selectOne(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CrawlerDraftRecord>()
+                            .eq(CrawlerDraftRecord::getUrl, url)
+                            .last("limit 1")
+            );
+            LocalDateTime now = LocalDateTime.now();
+            if (existing != null) {
                 existing.setTitle(title);
                 existing.setContent(content);
                 existing.setContentLength(content.length());
-                existing.setUpdatedTime(LocalDateTime.now());
-                existing.setSaved(existing.isSaved());
-                existing.setSavedTime(existing.isSaved() ? existing.getSavedTime() : null);
-                existing.setEdited(false);
-                draftResultMap.put(existingId, existing);
+                existing.setFetchTime(now);
+                existing.setUpdatedTime(now);
+                existing.setSaved(0);
+                existing.setSavedTime(null);
+                existing.setKnowledgeId(null);
+                existing.setEdited(0);
+                crawlerDraftRecordMapper.updateById(existing);
                 return;
             }
 
             String id = UUID.randomUUID().toString();
-            CrawlerDraftResultVO draft = CrawlerDraftResultVO.builder()
+            CrawlerDraftRecord draft = CrawlerDraftRecord.builder()
                     .id(id)
                     .url(url)
                     .title(title)
                     .content(content)
                     .contentLength(content.length())
-                    .fetchTime(LocalDateTime.now())
-                    .updatedTime(LocalDateTime.now())
-                    .saved(false)
-                    .edited(false)
+                    .fetchTime(now)
+                    .updatedTime(now)
+                    .saved(0)
+                    .edited(0)
                     .savedTime(null)
                     .build();
-            draftResultMap.put(id, draft);
-            draftIdByUrl.put(url, id);
+            crawlerDraftRecordMapper.insert(draft);
             log.info("新增爬虫草稿: url={}, 内容长度={}", url, content.length());
         }
+    }
+
+    private CrawlerDraftResultVO toDraftVO(CrawlerDraftRecord record) {
+        if (record == null) {
+            return null;
+        }
+        return CrawlerDraftResultVO.builder()
+                .id(record.getId())
+                .url(record.getUrl())
+                .title(record.getTitle())
+                .content(record.getContent())
+                .contentLength(record.getContentLength())
+                .fetchTime(record.getFetchTime())
+                .updatedTime(record.getUpdatedTime())
+                .edited(record.getEdited() != null && record.getEdited() == 1)
+                .saved(record.getSaved() != null && record.getSaved() == 1)
+                .savedTime(record.getSavedTime())
+                .knowledgeId(record.getKnowledgeId())
+                .build();
     }
 
     /**

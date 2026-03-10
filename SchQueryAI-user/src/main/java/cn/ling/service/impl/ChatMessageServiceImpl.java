@@ -163,7 +163,8 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
                             String intent = ChatContext.getIntent();
                             if (intent != null && !intent.isEmpty()) {
                                 // 发送意图信息，格式：event: intent\ndata: {"intent":"专业信息"}\n\n
-                                String intentEvent = String.format("event: intent\ndata: {\"intent\":\"%s\"}\n\n", intent);
+                                String safeIntent = intent.replace("\\", "\\\\").replace("\"", "\\\"");
+                                String intentEvent = String.format("event: intent\ndata: {\"intent\":\"%s\"}\n\n", safeIntent);
                                 return Flux.just(intentEvent);
                             }
                             return Flux.empty();

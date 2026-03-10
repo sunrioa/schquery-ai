@@ -1,6 +1,7 @@
 package cn.ling.controller;
 
 import cn.ling.Result;
+import cn.ling.controller.support.SecretMaskingSupport;
 import cn.ling.domain.pojo.ChatModel;
 import cn.ling.service.ChatModelService;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -53,6 +54,7 @@ public class ChatModelController {
                 .orderByDesc(ChatModel::getPriority)
                 .orderByDesc(ChatModel::getUpdateTime)
                 .page(page);
+        maskChatModelPage(result);
 
         return Result.success(result);
     }
@@ -63,6 +65,7 @@ public class ChatModelController {
             return Result.error(400, "id不能为空");
         }
         ChatModel model = chatModelService.getById(id);
+        maskChatModel(model);
         return Result.success(model);
     }
 
@@ -84,6 +87,14 @@ public class ChatModelController {
             model.setPriority(1);
         }
 
+        if (model.getId() != null) {
+            ChatModel persisted = chatModelService.getById(model.getId());
+            if (persisted == null) {
+                return Result.error(404, "模型不存在");
+            }
+            model.setApiKey(SecretMaskingSupport.mergeForUpdate(model.getApiKey(), persisted.getApiKey()));
+        }
+
         boolean ok = model.getId() == null ? chatModelService.save(model) : chatModelService.updateById(model);
         return ok ? Result.success("保存成功") : Result.error("保存失败");
     }
@@ -96,5 +107,18 @@ public class ChatModelController {
         boolean ok = chatModelService.removeById(id);
         return ok ? Result.success("删除成功") : Result.error("删除失败");
     }
-}
 
+    private void maskChatModelPage(IPage<ChatModel> page) {
+        if (page == null || page.getRecords() == null || page.getRecords().isEmpty()) {
+            return;
+        }
+        page.getRecords().forEach(this::maskChatModel);
+    }
+
+    private void maskChatModel(ChatModel model) {
+        if (model == null) {
+            return;
+        }
+        model.setApiKey(SecretMaskingSupport.maskSecret(model.getApiKey()));
+    }
+}

@@ -54,9 +54,14 @@ public class McpRagAdvisor implements BaseAdvisor {
 
         // 从 context 获取知识库已经准备的内容
         String userSystemMessage = (String) chatClientRequest.context().get("userSystemMessage");
+        String intentSystemPrompt = (String) chatClientRequest.context().get("intentSystemPrompt");
         String knowledgePrompt = (String) chatClientRequest.context().get("knowledgePrompt");
         String knowledgeContent = (String) chatClientRequest.context().get("knowledgeContent");
         boolean knowledgeHit = Boolean.TRUE.equals(chatClientRequest.context().get("knowledgeHit"));
+
+        if (StringUtils.hasText(intentSystemPrompt)) {
+            userSystemMessage = mergeIntentPrompt(userSystemMessage, intentSystemPrompt);
+        }
 
         // 决定是否使用 MCP
         // 注意：mcpMode=off 只关闭 MCP 检索；提示词融合（用户/知识库）仍然执行
@@ -265,6 +270,16 @@ public class McpRagAdvisor implements BaseAdvisor {
      */
     private static String buildMcpContentSection(String text) {
         return "以下内容来自网络检索结果，仅用于辅助回答，请自行判断其准确性与时效性：\n\n" + text;
+    }
+
+    private static String mergeIntentPrompt(String userSystemMessage, String intentSystemPrompt) {
+        if (!StringUtils.hasText(userSystemMessage)) {
+            return intentSystemPrompt.trim();
+        }
+        if (!StringUtils.hasText(intentSystemPrompt)) {
+            return userSystemMessage.trim();
+        }
+        return userSystemMessage.trim() + "\n\n## 意图导向补充\n" + intentSystemPrompt.trim();
     }
 
     @Override

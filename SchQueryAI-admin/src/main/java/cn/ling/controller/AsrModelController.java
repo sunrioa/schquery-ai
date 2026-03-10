@@ -1,6 +1,7 @@
 package cn.ling.controller;
 
 import cn.ling.Result;
+import cn.ling.controller.support.SecretMaskingSupport;
 import cn.ling.domain.pojo.AsrModel;
 import cn.ling.service.AsrModelService;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -51,6 +52,7 @@ public class AsrModelController {
                 .orderByDesc(AsrModel::getPriority)
                 .orderByDesc(AsrModel::getUpdateTime)
                 .page(page);
+        maskAsrModelPage(result);
 
         return Result.success(result);
     }
@@ -61,6 +63,7 @@ public class AsrModelController {
             return Result.error(400, "id不能为空");
         }
         AsrModel model = asrModelService.getById(id);
+        maskAsrModel(model);
         return Result.success(model);
     }
 
@@ -79,6 +82,15 @@ public class AsrModelController {
             model.setPriority(1);
         }
 
+        if (model.getId() != null) {
+            AsrModel persisted = asrModelService.getById(model.getId());
+            if (persisted == null) {
+                return Result.error(404, "配置不存在");
+            }
+            model.setApiKey(SecretMaskingSupport.mergeForUpdate(model.getApiKey(), persisted.getApiKey()));
+            model.setAuthHeaderValue(SecretMaskingSupport.mergeForUpdate(model.getAuthHeaderValue(), persisted.getAuthHeaderValue()));
+        }
+
         boolean ok = model.getId() == null ? asrModelService.save(model) : asrModelService.updateById(model);
         return ok ? Result.success("保存成功") : Result.error("保存失败");
     }
@@ -90,5 +102,20 @@ public class AsrModelController {
         }
         boolean ok = asrModelService.removeById(id);
         return ok ? Result.success("删除成功") : Result.error("删除失败");
+    }
+
+    private void maskAsrModelPage(IPage<AsrModel> page) {
+        if (page == null || page.getRecords() == null || page.getRecords().isEmpty()) {
+            return;
+        }
+        page.getRecords().forEach(this::maskAsrModel);
+    }
+
+    private void maskAsrModel(AsrModel model) {
+        if (model == null) {
+            return;
+        }
+        model.setApiKey(SecretMaskingSupport.maskSecret(model.getApiKey()));
+        model.setAuthHeaderValue(SecretMaskingSupport.maskSecret(model.getAuthHeaderValue()));
     }
 }

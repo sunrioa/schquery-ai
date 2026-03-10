@@ -2,6 +2,8 @@ package cn.ling.dto;
 
 import lombok.Data;
 
+import java.util.Map;
+
 /**
  * 默认对话参数（管理端配置 / 用户端读取）
  * 字段命名对齐 rin-ai 的 ChatDefaultConfigVo，便于后续迁移与前端复用。
@@ -13,6 +15,11 @@ public class ChatDefaultConfigDTO {
      * 追问建议配置
      */
     private SuggestConfig suggestConfig;
+
+    /**
+     * 意图识别增强配置
+     */
+    private IntentConfig intentConfig;
 
     /**
      * 追问建议配置
@@ -33,6 +40,24 @@ public class ChatDefaultConfigDTO {
          * 使用角色ID
          */
         private String roleId;
+    }
+
+    /**
+     * 意图识别增强配置
+     */
+    @Data
+    public static class IntentConfig {
+        /**
+         * 是否启用意图提示词增强
+         */
+        private String enabled;
+
+        /**
+         * 不同意图对应的提示词模板
+         * key=意图名称（如：专业信息）
+         * value=该意图下附加到系统提示词的规则
+         */
+        private Map<String, String> promptMap;
     }
 
     /**

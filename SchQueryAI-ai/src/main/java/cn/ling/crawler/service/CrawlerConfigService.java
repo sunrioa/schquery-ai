@@ -16,6 +16,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class CrawlerConfigService {
 
+    public static final String RUN_MODE_SCHEDULE = "schedule";
+    public static final String RUN_MODE_ONCE = "once";
+
     @Resource
     private SysConfigService sysConfigService;
 
@@ -38,6 +41,7 @@ public class CrawlerConfigService {
         Long knowledgeId = getLongFromDb("knowledge.id");
         Boolean scheduleEnabled = getBooleanFromDb("schedule.enabled");
         String scheduleCron = getStringFromDb("schedule.cron");
+        String runMode = normalizeRunMode(getStringFromDb("run.mode"));
 
         // 根据knowledgeId查询knowledgeName
         String knowledgeName = null;
@@ -65,6 +69,7 @@ public class CrawlerConfigService {
                 .knowledgeName(knowledgeName)
                 .scheduleEnabled(scheduleEnabled)
                 .scheduleCron(scheduleCron)
+                .runMode(runMode)
                 .build();
     }
 
@@ -72,7 +77,21 @@ public class CrawlerConfigService {
      * 更新配置
      */
     public void updateConfig(String key, String value) {
+        if ("run.mode".equals(key)) {
+            value = normalizeRunMode(value);
+        }
         sysConfigService.upsertConfig("crawler." + key, value, "crawler." + key, "爬虫配置");
+    }
+
+    public void setCrawlerEnabled(boolean enabled) {
+        updateConfig("enabled", String.valueOf(enabled));
+    }
+
+    public String normalizeRunMode(String runMode) {
+        if (RUN_MODE_ONCE.equalsIgnoreCase(runMode)) {
+            return RUN_MODE_ONCE;
+        }
+        return RUN_MODE_SCHEDULE;
     }
 
     private String getStringFromDb(String key) {
@@ -129,5 +148,6 @@ public class CrawlerConfigService {
         private String knowledgeName;
         private Boolean scheduleEnabled;
         private String scheduleCron;
+        private String runMode;
     }
 }

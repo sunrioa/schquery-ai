@@ -62,6 +62,14 @@ export function generateCronApi(params) {
   })
 }
 
+export function getCronNextExecutionApi(data) {
+  return request({
+    url: '/ai/crawler/cron/next-execution',
+    method: 'post',
+    data
+  })
+}
+
 export function getCrawlerResultsApi() {
   return request({
     url: '/ai/crawler/results',

@@ -1,37 +1,56 @@
 <template>
-  <div class="crawler-manager">
-    <el-card header="爬虫管理">
-      <div class="toolbar">
+  <div class="admin-page ai-crawler-manage">
+    <div class="page-header">
+      <div class="header-left">
+        <h2>爬虫管理</h2>
+        <p class="sub">统一控制抓取任务、调度策略与草稿入库流程</p>
+      </div>
+      <div class="header-actions">
         <el-button
+          class="action-btn"
           type="primary"
-          :loading="status.running"
-          :disabled="status.running"
+          :loading="startingCrawler"
+          :disabled="startButtonDisabled"
           @click="startCrawl"
         >
           <el-icon><VideoPlay /></el-icon>
-          启动爬虫
+          {{ startButtonText }}
         </el-button>
         <el-button
+          class="action-btn"
           type="danger"
-          :disabled="!status.running"
+          :loading="stoppingCrawler"
+          :disabled="!canStopCrawler"
           @click="stopCrawl"
         >
           <el-icon><VideoPause /></el-icon>
           停止爬虫
         </el-button>
-        <el-button @click="refreshStatus">
+        <el-button class="action-btn" @click="refreshStatus">
           <el-icon><Refresh /></el-icon>
           刷新状态
         </el-button>
       </div>
+    </div>
 
-      <el-alert
-        title="可选：输入本次起始页面URL（支持完整URL），系统会自动递归抓取同域页面并在下方生成每页一条草稿。"
-        type="info"
-        show-icon
-        :closable="false"
-        class="start-alert"
-      />
+    <el-card class="control-card" shadow="never">
+      <template #header>
+        <div class="panel-header">
+          <span class="panel-title">运行控制</span>
+          <span class="panel-subtitle">先保存配置再启动，系统会严格按当前模式执行</span>
+        </div>
+      </template>
+
+      <transition name="soft-fade" mode="out-in">
+        <el-alert
+          :key="configForm.runMode"
+          :title="startGuideText"
+          type="info"
+          show-icon
+          :closable="false"
+          class="start-alert"
+        />
+      </transition>
 
       <el-row :gutter="16" class="start-options">
         <el-col :xs="24" :md="16">
@@ -42,102 +61,177 @@
           />
         </el-col>
         <el-col :xs="24" :md="8">
-          <el-input-number
-            v-model="runForm.requestIntervalMs"
-            :min="0"
-            :max="60000"
-            :step="100"
-            controls-position="right"
-            style="width: 100%;"
-          />
+          <div class="interval-field">
+            <label class="interval-label">本次抓取间隔 (ms)</label>
+            <el-input-number
+              v-model="runForm.requestIntervalMs"
+              :min="0"
+              :max="60000"
+              :step="100"
+              controls-position="right"
+              class="full-width"
+            />
+          </div>
         </el-col>
       </el-row>
 
-      <el-row :gutter="20" class="status-panel">
-        <el-col :span="6">
-          <el-statistic title="已访问页面" :value="status.visitedCount" />
-        </el-col>
-        <el-col :span="6">
-          <el-statistic title="待处理队列" :value="status.pendingCount" />
-        </el-col>
-        <el-col :span="6">
-          <el-statistic title="抓取草稿" :value="status.draftCount" />
-        </el-col>
-        <el-col :span="6">
-          <el-statistic title="运行状态">
-            <template #default>
-              <el-tag :type="status.running ? 'success' : 'info'">
-                {{ status.running ? '运行中' : '已停止' }}
-              </el-tag>
-            </template>
-          </el-statistic>
-        </el-col>
-      </el-row>
+      <div class="status-panel">
+        <div class="metric-card">
+          <span class="metric-label">已访问页面</span>
+          <span class="metric-value">{{ status.visitedCount }}</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">待处理队列</span>
+          <span class="metric-value">{{ status.pendingCount }}</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">抓取草稿</span>
+          <span class="metric-value">{{ status.draftCount }}</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">运行状态</span>
+          <el-tag :type="stateTagType" effect="light" round class="state-tag">
+            {{ stateTagText }}
+          </el-tag>
+        </div>
+      </div>
+
+      <el-descriptions :column="2" border class="status-detail">
+        <el-descriptions-item label="运行模式">
+          {{ runModeLabel(configForm.runMode) }}
+        </el-descriptions-item>
+        <el-descriptions-item label="调度状态">
+          {{ status.scheduleActive ? '已启动，等待到点执行' : '未启用自动调度' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="当前 Cron">
+          <span class="mono-text">
+            {{ status.effectiveCron || (isScheduleMode ? configForm.scheduleCron : '-') }}
+          </span>
+        </el-descriptions-item>
+        <el-descriptions-item label="下次执行时间">
+          {{ status.nextExecutionTime || (isScheduleMode ? '启动自动爬取后生成' : '一次执行模式无后续调度') }}
+        </el-descriptions-item>
+      </el-descriptions>
 
       <el-divider content-position="left">爬虫配置</el-divider>
-      <el-form :model="configForm" label-width="150px">
-        <el-form-item label="启用爬虫">
-          <el-switch v-model="configForm.enabled" />
-        </el-form-item>
-        <el-form-item label="基础URL">
-          <el-input v-model="configForm.baseUrl" placeholder="https://www.gzmtu.edu.cn" />
-        </el-form-item>
-        <el-form-item label="起始URL">
-          <el-input v-model="configForm.startUrl" placeholder="/index.htm" />
-        </el-form-item>
-        <el-form-item label="最大页面数">
-          <el-input-number v-model="configForm.maxPages" :min="100" :max="10000" />
-        </el-form-item>
-        <el-form-item label="内容最小长度">
-          <el-input-number v-model="configForm.contentMinLength" :min="0" :max="10000" />
-        </el-form-item>
-        <el-form-item label="内容最大长度">
-          <el-input-number v-model="configForm.contentMaxLength" :min="100" :max="200000" />
-        </el-form-item>
-        <el-form-item label="抓取间隔(ms)">
-          <el-input-number v-model="configForm.requestIntervalMs" :min="0" :max="60000" :step="100" />
-          <span class="config-tip">用于控制每个页面抓取的等待时间，避免访问频率过高</span>
-        </el-form-item>
-        <el-form-item label="强校验向量存在">
-          <el-switch v-model="configForm.strictVectorCheckEnabled" />
-          <span class="config-tip">开启后会额外查询向量库确认点位存在，准确但更慢</span>
-        </el-form-item>
-        <el-form-item label="知识库">
-          <el-select
-            v-model="configForm.knowledgeId"
-            placeholder="请选择知识库"
-            filterable
-            clearable
-            style="width: 100%;"
-          >
-            <el-option
-              v-for="item in knowledgeList"
-              :key="item.id"
-              :label="item.kname"
-              :value="item.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="启用定时任务">
-          <el-switch v-model="configForm.scheduleEnabled" />
-        </el-form-item>
-        <el-form-item label="定时任务Cron">
-          <CronSelect v-model="configForm.scheduleCron" />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="saveConfig">保存配置</el-button>
+
+      <el-form :model="configForm" label-width="130px" class="crawler-form">
+        <div class="form-block">
+          <div class="block-title">基础参数</div>
+          <el-row :gutter="16">
+            <el-col :xs="24" :lg="12">
+              <el-form-item label="基础URL">
+                <el-input v-model="configForm.baseUrl" placeholder="https://www.gzmtu.edu.cn" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :lg="12">
+              <el-form-item label="起始URL">
+                <el-input v-model="configForm.startUrl" placeholder="/index.htm" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </div>
+
+        <div class="form-block">
+          <div class="block-title">抓取策略</div>
+          <el-row :gutter="16">
+            <el-col :xs="24" :md="12" :xl="8">
+              <el-form-item label="最大页面数">
+                <el-input-number v-model="configForm.maxPages" :min="100" :max="10000" class="full-width" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :md="12" :xl="8">
+              <el-form-item label="内容最小长度">
+                <el-input-number v-model="configForm.contentMinLength" :min="0" :max="10000" class="full-width" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :md="12" :xl="8">
+              <el-form-item label="内容最大长度">
+                <el-input-number v-model="configForm.contentMaxLength" :min="100" :max="200000" class="full-width" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :md="12">
+              <el-form-item label="抓取间隔(ms)">
+                <div class="inline-control">
+                  <el-input-number v-model="configForm.requestIntervalMs" :min="0" :max="60000" :step="100" class="full-width" />
+                  <span class="config-tip">用于控制每个页面抓取等待时间，避免访问频率过高。</span>
+                </div>
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :md="12">
+              <el-form-item label="强校验向量存在">
+                <div class="inline-control">
+                  <el-switch v-model="configForm.strictVectorCheckEnabled" />
+                  <span class="config-tip">开启后会额外查询向量库确认点位存在，准确但更慢。</span>
+                </div>
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24">
+              <el-form-item label="知识库">
+                <el-select
+                  v-model="configForm.knowledgeId"
+                  placeholder="请选择知识库"
+                  filterable
+                  clearable
+                  class="full-width"
+                >
+                  <el-option
+                    v-for="item in knowledgeList"
+                    :key="item.id"
+                    :label="item.kname"
+                    :value="item.id"
+                  />
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </div>
+
+        <div class="form-block">
+          <div class="block-title">调度模式</div>
+          <el-form-item label="运行模式" class="run-mode-item">
+            <el-radio-group v-model="configForm.runMode" class="mode-switcher">
+              <el-radio-button value="schedule">按 Cron 自动爬取</el-radio-button>
+              <el-radio-button value="once">启动后立即完整爬取一次并停止</el-radio-button>
+            </el-radio-group>
+            <span class="config-tip">顶部按钮会严格按这里的模式执行，不再维护独立“启用爬虫/定时任务”双开关。</span>
+          </el-form-item>
+
+          <transition name="mode-slide" mode="out-in">
+            <el-form-item v-if="isScheduleMode" key="schedule-mode" label="定时任务Cron">
+              <div class="mode-area">
+                <CronSelect v-model="configForm.scheduleCron" />
+                <span class="config-tip config-tip-inline">点击顶部“启动自动爬取”后，系统会按照这里配置的 Cron 自动执行。</span>
+              </div>
+            </el-form-item>
+            <el-form-item v-else key="once-mode" label="执行说明">
+              <span class="config-tip config-tip-inline">点击顶部按钮后会立即递归抓取一次全部页面，任务结束自动停止，不保留调度状态。</span>
+            </el-form-item>
+          </transition>
+        </div>
+
+        <el-form-item class="form-submit-row">
+          <el-button class="action-btn" type="primary" @click="saveConfig">保存配置</el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
-    <el-card class="result-card" header="抓取草稿（可编辑后再保存入库并向量化）">
+    <el-card class="result-card" shadow="never">
+      <template #header>
+        <div class="panel-header">
+          <span class="panel-title">抓取草稿</span>
+          <span class="panel-subtitle">可编辑后再保存入库并向量化</span>
+        </div>
+      </template>
+
       <div class="result-toolbar">
         <div class="result-toolbar-left">
-          <el-button @click="refreshResults">
+          <el-button class="action-btn" @click="refreshResults">
             <el-icon><Refresh /></el-icon>
             刷新草稿
           </el-button>
           <el-button
+            class="action-btn"
             type="warning"
             :disabled="selectedResultIds.length === 0"
             :loading="savingSelected"
@@ -146,6 +240,7 @@
             保存选中并向量化
           </el-button>
           <el-button
+            class="action-btn"
             type="danger"
             plain
             :disabled="crawlerResults.length === 0"
@@ -163,7 +258,7 @@
         :data="crawlerResults"
         row-key="id"
         stripe
-        style="width: 100%"
+        class="result-table"
         @selection-change="onResultSelectionChange"
       >
         <el-table-column type="selection" width="55" :selectable="isResultSelectable" />
@@ -189,7 +284,7 @@
         </el-table-column>
         <el-table-column label="操作" width="120" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" type="primary" @click="openEditor(row)">
+            <el-button class="action-btn" size="small" type="primary" @click="openEditor(row)">
               编辑
             </el-button>
           </template>
@@ -197,7 +292,7 @@
       </el-table>
     </el-card>
 
-    <el-dialog v-model="editorVisible" title="编辑抓取草稿" width="880px">
+    <el-dialog v-model="editorVisible" title="编辑抓取草稿" width="880px" class="editor-dialog" destroy-on-close>
       <el-form label-width="90px">
         <el-form-item label="标题">
           <el-input v-model="editingResult.title" maxlength="200" show-word-limit />
@@ -215,15 +310,15 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="editorVisible = false">取消</el-button>
-        <el-button type="primary" :loading="savingEditor" @click="saveEditedResult">保存草稿</el-button>
+        <el-button class="action-btn" @click="editorVisible = false">取消</el-button>
+        <el-button class="action-btn" type="primary" :loading="savingEditor" @click="saveEditedResult">保存草稿</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import {
   clearCrawlerResultsApi,
   getCrawlerResultsApi,
@@ -240,15 +335,19 @@ import CronSelect from '@/components/CronSelect.vue'
 
 const status = reactive({
   running: false,
+  enabled: false,
+  scheduleActive: false,
+  effectiveCron: '',
+  nextExecutionTime: '',
   visitedCount: 0,
   pendingCount: 0,
-  draftCount: 0
+  draftCount: 0,
+  runMode: 'schedule'
 })
 
 const knowledgeList = ref([])
 
 const defaultConfig = {
-  enabled: true,
   baseUrl: 'https://www.gzmtu.edu.cn',
   startUrl: '/index.htm',
   maxPages: 5000,
@@ -257,8 +356,8 @@ const defaultConfig = {
   requestIntervalMs: 1000,
   strictVectorCheckEnabled: false,
   knowledgeId: null,
-  scheduleEnabled: true,
-  scheduleCron: '0 0 2 ? * MON'
+  scheduleCron: '0 0 2 ? * MON',
+  runMode: 'schedule'
 }
 
 const config = reactive({ ...defaultConfig })
@@ -283,10 +382,11 @@ const editingResult = reactive({
   content: ''
 })
 
+const startingCrawler = ref(false)
+const stoppingCrawler = ref(false)
 let pollTimer = null
 
 const applyConfig = (target, source) => {
-  target.enabled = source?.enabled ?? defaultConfig.enabled
   target.baseUrl = source?.baseUrl ?? defaultConfig.baseUrl
   target.startUrl = source?.startUrl ?? defaultConfig.startUrl
   target.maxPages = source?.maxPages ?? defaultConfig.maxPages
@@ -295,13 +395,43 @@ const applyConfig = (target, source) => {
   target.requestIntervalMs = source?.requestIntervalMs ?? defaultConfig.requestIntervalMs
   target.strictVectorCheckEnabled = source?.strictVectorCheckEnabled ?? defaultConfig.strictVectorCheckEnabled
   target.knowledgeId = source?.knowledgeId ?? defaultConfig.knowledgeId
-  target.scheduleEnabled = source?.scheduleEnabled ?? defaultConfig.scheduleEnabled
   target.scheduleCron = source?.scheduleCron ?? defaultConfig.scheduleCron
+  target.runMode = source?.runMode ?? defaultConfig.runMode
 }
+
+const isScheduleMode = computed(() => configForm.runMode === 'schedule')
+const startButtonDisabled = computed(() => status.running || status.scheduleActive || startingCrawler.value)
+const canStopCrawler = computed(() => status.running || status.enabled || status.scheduleActive || stoppingCrawler.value)
+const startButtonText = computed(() => {
+  if (isScheduleMode.value && status.scheduleActive) {
+    return '自动调度已启动'
+  }
+  if (!isScheduleMode.value && status.running) {
+    return '正在执行一次完整爬取'
+  }
+  return isScheduleMode.value ? '启动自动爬取' : '立即执行一次'
+})
+const startGuideText = computed(() => {
+  if (isScheduleMode.value) {
+    return '点击顶部按钮后，爬虫会进入自动调度状态，并严格按照当前 Cron 表达式执行抓取。'
+  }
+  return '点击顶部按钮后，爬虫会立即从当前起始链接开始完整递归抓取一次，结束后自动停止。'
+})
+const stateTagType = computed(() => {
+  if (status.running) return 'success'
+  if (status.scheduleActive) return 'warning'
+  return 'info'
+})
+const stateTagText = computed(() => {
+  if (status.running) return '抓取中'
+  if (status.scheduleActive) return '自动调度中'
+  return '已停止'
+})
+
+const runModeLabel = (mode) => (mode === 'once' ? '立即完整爬取一次后停止' : '按 Cron 自动爬取')
 
 const persistConfig = async (showMessage = true) => {
   const payloads = [
-    { key: 'enabled', value: configForm.enabled },
     { key: 'base.url', value: configForm.baseUrl },
     { key: 'start.url', value: configForm.startUrl },
     { key: 'max.pages', value: configForm.maxPages },
@@ -310,8 +440,8 @@ const persistConfig = async (showMessage = true) => {
     { key: 'request.interval.ms', value: configForm.requestIntervalMs },
     { key: 'strict.vector.check.enabled', value: configForm.strictVectorCheckEnabled },
     { key: 'knowledge.id', value: configForm.knowledgeId },
-    { key: 'schedule.enabled', value: configForm.scheduleEnabled },
-    { key: 'schedule.cron', value: configForm.scheduleCron }
+    { key: 'schedule.cron', value: configForm.scheduleCron },
+    { key: 'run.mode', value: configForm.runMode }
   ]
 
   for (const payload of payloads) {
@@ -329,25 +459,32 @@ const startCrawl = async () => {
     return
   }
   try {
+    startingCrawler.value = true
     await persistConfig(false)
     const res = await startCrawlApi({
       startUrl: runForm.startUrl?.trim() || null,
-      requestIntervalMs: runForm.requestIntervalMs
+      requestIntervalMs: runForm.requestIntervalMs,
+      runMode: configForm.runMode
     })
     ElMessage.success(res.data || '爬虫任务已启动')
-    await Promise.all([fetchStatus(), fetchResults()])
+    await Promise.all([fetchStatus(true), fetchResults()])
   } catch (error) {
     ElMessage.error(error?.msg || '启动请求失败')
+  } finally {
+    startingCrawler.value = false
   }
 }
 
 const stopCrawl = async () => {
   try {
+    stoppingCrawler.value = true
     const res = await stopCrawlApi()
     ElMessage.success(res.data || '爬虫已停止')
-    await fetchStatus()
+    await fetchStatus(true)
   } catch (error) {
     ElMessage.error(error?.msg || '停止请求失败')
+  } finally {
+    stoppingCrawler.value = false
   }
 }
 
@@ -360,9 +497,14 @@ const fetchStatus = async (syncForm = false) => {
   const res = await getCrawlerStatusApi()
   const data = res?.data || {}
   status.running = !!data.running
+  status.enabled = !!data.enabled
+  status.scheduleActive = !!data.scheduleActive
+  status.effectiveCron = data.effectiveCron || ''
+  status.nextExecutionTime = data.nextExecutionTime || ''
   status.visitedCount = Number(data.visitedCount || 0)
   status.pendingCount = Number(data.pendingCount || 0)
   status.draftCount = Number(data.draftCount || 0)
+  status.runMode = data?.config?.runMode || defaultConfig.runMode
   applyConfig(config, data.config || {})
   if (syncForm) {
     applyConfig(configForm, data.config || {})
@@ -524,11 +666,15 @@ const startPolling = () => {
     clearInterval(pollTimer)
   }
   pollTimer = setInterval(async () => {
-    if (!status.running) {
+    if (!status.running && !status.enabled && !status.scheduleActive) {
       return
     }
     try {
-      await Promise.all([fetchStatus(), fetchResults()])
+      const wasRunning = status.running
+      await fetchStatus()
+      if (status.running || wasRunning) {
+        await fetchResults()
+      }
     } catch (e) {
       // 忽略轮询异常，避免打断页面
     }
@@ -549,34 +695,151 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.crawler-manager {
-  padding: 20px;
+.ai-crawler-manage {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.toolbar {
-  margin-bottom: 20px;
+.panel-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.panel-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--app-text);
+}
+
+.panel-subtitle {
+  font-size: 12px;
+  color: var(--app-muted);
 }
 
 .start-alert {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .start-options {
-  margin-bottom: 18px;
+  margin-bottom: 16px;
+}
+
+.interval-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.interval-label {
+  font-size: 12px;
+  color: var(--app-muted);
+}
+
+.full-width {
+  width: 100%;
 }
 
 .status-panel {
-  margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.metric-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 94px;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid var(--app-border);
+  background: var(--app-surface-2);
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.metric-card:hover {
+  border-color: var(--app-border-strong);
+  box-shadow: var(--app-shadow-xs);
+  transform: translateY(-1px);
+}
+
+.metric-label {
+  font-size: 13px;
+  color: var(--app-muted);
+}
+
+.metric-value {
+  margin-top: 6px;
+  font-size: 30px;
+  line-height: 1.1;
+  font-weight: 700;
+  color: var(--app-text);
+}
+
+.state-tag {
+  align-self: flex-start;
+  font-weight: 600;
+}
+
+.status-detail {
+  margin-bottom: 18px;
+}
+
+.mono-text {
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+  font-size: 13px;
+}
+
+.crawler-form {
+  padding-top: 4px;
+}
+
+.form-block + .form-block {
+  margin-top: 10px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--app-border);
+}
+
+.block-title {
+  margin: 0 0 12px 2px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.inline-control {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mode-switcher {
+  margin-right: 8px;
+}
+
+.mode-area {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .config-tip {
-  margin-left: 10px;
-  color: #909399;
+  color: var(--app-muted);
   font-size: 12px;
+  line-height: 1.5;
 }
 
-.result-card {
-  margin-top: 20px;
+.config-tip-inline {
+  margin-left: 0;
+}
+
+.form-submit-row {
+  margin-bottom: 0;
 }
 
 .result-toolbar {
@@ -596,17 +859,94 @@ onUnmounted(() => {
 }
 
 .result-summary {
-  color: #606266;
+  color: var(--app-muted);
   font-size: 13px;
+}
+
+.result-table {
+  width: 100%;
 }
 
 .content-preview {
   display: -webkit-box;
-  line-height: 1.4;
+  line-height: 1.45;
   -webkit-line-clamp: 3;
   line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-all;
+}
+
+:deep(.action-btn.el-button) {
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, background-color 180ms ease, color 180ms ease;
+}
+
+:deep(.action-btn.el-button:hover:not(.is-disabled)) {
+  transform: translateY(-1px);
+  box-shadow: var(--app-shadow-xs);
+}
+
+:deep(.action-btn.el-button:active:not(.is-disabled)) {
+  transform: translateY(0);
+}
+
+:deep(.el-input__wrapper),
+:deep(.el-textarea__inner),
+:deep(.el-select__wrapper),
+:deep(.el-input-number) {
+  transition: box-shadow 180ms ease, border-color 180ms ease, background-color 180ms ease;
+}
+
+:deep(.el-input__wrapper.is-focus),
+:deep(.el-select__wrapper.is-focused) {
+  box-shadow: var(--app-ring);
+}
+
+.soft-fade-enter-active,
+.soft-fade-leave-active {
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.soft-fade-enter-from,
+.soft-fade-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.mode-slide-enter-active,
+.mode-slide-leave-active {
+  transition: opacity 240ms ease, transform 240ms ease;
+}
+
+.mode-slide-enter-from,
+.mode-slide-leave-to {
+  opacity: 0;
+  transform: translateX(8px);
+}
+
+@media (max-width: 1200px) {
+  .status-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .status-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .inline-control {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .mode-switcher {
+    margin-right: 0;
+    margin-bottom: 6px;
+  }
+
+  .metric-value {
+    font-size: 26px;
+  }
 }
 </style>

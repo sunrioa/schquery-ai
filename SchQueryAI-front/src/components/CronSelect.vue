@@ -109,9 +109,9 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits, ref, computed, watch } from 'vue'
+import { defineProps, defineEmits, ref, computed, watch, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { generateCronApi } from '@/api/ai/crawler'
+import { generateCronApi, getCronNextExecutionApi } from '@/api/ai/crawler'
 
 const props = defineProps({
   modelValue: {
@@ -149,8 +149,8 @@ const cronExpression = computed({
   set: (val) => emit('update:modelValue', val)
 })
 
-// 下次执行时间
 const nextExecution = ref('')
+let previewTimer = null
 
 // 类型变更
 const onTypeChange = () => {
@@ -182,7 +182,7 @@ const generateCron = () => {
   }
 
   cronExpression.value = cron
-  calculateNextExecution(cron)
+  requestNextExecution(cron)
 }
 
 // 生成间隔执行cron
@@ -235,23 +235,42 @@ const generateMonthlyCron = () => {
   return `0 ${minute} ${hour} ${monthlyDay.value} * ?`
 }
 
-// 计算下次执行时间（简化版）
-const calculateNextExecution = (cron) => {
-  nextExecution.value = '下次执行时间：根据cron计算（仅供参考）'
-}
-
 // 复制cron表达式
 const copyCron = () => {
   navigator.clipboard.writeText(cronExpression.value)
   ElMessage.success('已复制到剪贴板')
 }
 
+const requestNextExecution = (cron) => {
+  const normalizedCron = normalizeCronExpression(cron)
+  if (!normalizedCron) {
+    nextExecution.value = '请先配置 Cron 表达式'
+    return
+  }
+
+  if (previewTimer) {
+    clearTimeout(previewTimer)
+  }
+
+  nextExecution.value = '计算中...'
+  previewTimer = setTimeout(async () => {
+    try {
+      const res = await getCronNextExecutionApi({ cron: normalizedCron })
+      const data = res?.data || {}
+      nextExecution.value = data.valid
+        ? (data.nextExecutionTime || '暂无执行时间')
+        : 'Cron 表达式无效'
+    } catch (error) {
+      nextExecution.value = '下次执行时间计算失败'
+    }
+  }, 250)
+}
+
 // 监听配置变化，调用后端API生成cron
 const callBackendGenerate = async () => {
   if (type.value === 'custom') {
-    // 自定义模式，不调用后端
     cronExpression.value = normalizeCronExpression(customCron.value)
-    calculateNextExecution(cronExpression.value)
+    requestNextExecution(cronExpression.value)
     return
   }
 
@@ -279,6 +298,7 @@ const callBackendGenerate = async () => {
     const res = await generateCronApi(params)
     if (res.code === 200) {
       cronExpression.value = res.data
+      requestNextExecution(cronExpression.value)
     }
   } catch (e) {
     console.error('生成cron表达式失败', e)
@@ -288,16 +308,19 @@ const callBackendGenerate = async () => {
 // 初始化
 watch([type, intervalValue, intervalUnit, dailyTime, weeklyDays, weeklyTime, monthlyDay, monthlyTime, customCron], () => {
   callBackendGenerate()
-}, { deep: true, immediate: true })
+}, { deep: true })
 
 // 从传入的cron表达式解析初始类型（可选）
 watch(() => props.modelValue, (newVal) => {
-  if (newVal && newVal !== cronExpression.value) {
-    // 这里可以解析传入的cron，设置到对应的表单
-    cronExpression.value = normalizeCronExpression(newVal)
-    calculateNextExecution(cronExpression.value)
-  }
+  requestNextExecution(newVal)
 }, { immediate: true })
+
+onUnmounted(() => {
+  if (previewTimer) {
+    clearTimeout(previewTimer)
+    previewTimer = null
+  }
+})
 
 function normalizeCronExpression (cron) {
   if (!cron || !cron.trim()) {

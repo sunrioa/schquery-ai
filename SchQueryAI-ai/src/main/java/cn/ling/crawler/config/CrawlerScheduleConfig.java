@@ -9,6 +9,7 @@ import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.time.format.DateTimeFormatter;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
@@ -26,6 +27,7 @@ public class CrawlerScheduleConfig {
     private CrawlerConfigService crawlerConfigService;
 
     private static final String DEFAULT_CRON = "0 0 2 ? * MON";
+    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private volatile String effectiveCron = null;
     private volatile LocalDateTime nextExecutionTime = null;
@@ -36,7 +38,7 @@ public class CrawlerScheduleConfig {
     @Scheduled(fixedDelay = 5000L)
     public synchronized void scheduledCrawl() {
         CrawlerConfigService.CrawlerConfig config = crawlerConfigService.getConfig();
-        if (!Boolean.TRUE.equals(config.getScheduleEnabled())) {
+        if (!isScheduleEnabled(config)) {
             resetScheduleState();
             return;
         }
@@ -78,6 +80,55 @@ public class CrawlerScheduleConfig {
         }
 
         nextExecutionTime = cronExpression.next(now);
+    }
+
+    public synchronized void refreshScheduleState() {
+        CrawlerConfigService.CrawlerConfig config = crawlerConfigService.getConfig();
+        if (!isScheduleEnabled(config)) {
+            resetScheduleState();
+            return;
+        }
+
+        String cron = normalizeCronExpression(config.getScheduleCron());
+        try {
+            CronExpression cronExpression = CronExpression.parse(cron);
+            effectiveCron = cron;
+            nextExecutionTime = cronExpression.next(LocalDateTime.now());
+        } catch (Exception e) {
+            log.warn("刷新爬虫定时状态失败，cron无效: {}", cron);
+            resetScheduleState();
+        }
+    }
+
+    public synchronized String previewNextExecution(String cron) {
+        try {
+            CronExpression cronExpression = CronExpression.parse(normalizeCronExpression(cron));
+            LocalDateTime next = cronExpression.next(LocalDateTime.now());
+            return formatDateTime(next);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public synchronized String getEffectiveCron() {
+        return effectiveCron;
+    }
+
+    public synchronized String getNextExecutionTimeFormatted() {
+        return formatDateTime(nextExecutionTime);
+    }
+
+    public synchronized boolean isScheduleActive() {
+        return StringUtils.hasText(effectiveCron) && nextExecutionTime != null;
+    }
+
+    private boolean isScheduleEnabled(CrawlerConfigService.CrawlerConfig config) {
+        return Boolean.TRUE.equals(config.getEnabled())
+                && CrawlerConfigService.RUN_MODE_SCHEDULE.equals(crawlerConfigService.normalizeRunMode(config.getRunMode()));
+    }
+
+    private String formatDateTime(LocalDateTime dateTime) {
+        return dateTime == null ? null : dateTime.format(DATE_TIME_FORMATTER);
     }
 
     private String normalizeCronExpression(String cron) {

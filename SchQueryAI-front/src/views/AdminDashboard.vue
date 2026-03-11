@@ -49,7 +49,7 @@
           <el-card shadow="never" class="stat-card" v-loading="loadingStates.customer">
             <div class="stat-title">客服待处理</div>
             <div class="stat-value">{{ customerPendingSessions }}</div>
-            <div class="stat-sub">未读会话 {{ customerUnreadTotal }}</div>
+            <div class="stat-sub">未读消息 {{ customerUnreadTotal }}</div>
           </el-card>
         </el-col>
       </el-row>
@@ -384,16 +384,16 @@ const loadCustomerServiceStats = async () => {
   try {
     const token = localStorage.getItem('token')
     if (!token) return
-    const response = await fetch('/api/customer-service/pending-sessions', {
+    const response = await fetch('/api/customer-service/stats', {
       method: 'GET',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
     })
     if (!response.ok) return
     const result = await response.json()
     if (result.code !== 200) return
-    const list = result.data || []
-    customerPendingSessions.value = list.filter((s) => (s.unreadCount || 0) > 0).length
-    customerUnreadTotal.value = list.reduce((sum, s) => sum + (s.unreadCount || 0), 0)
+    const stats = result.data || {}
+    customerPendingSessions.value = Number(stats.pendingCount || 0)
+    customerUnreadTotal.value = Number(stats.unreadCount || 0)
   } catch (e) {
     // 忽略：不阻塞控制台
   }

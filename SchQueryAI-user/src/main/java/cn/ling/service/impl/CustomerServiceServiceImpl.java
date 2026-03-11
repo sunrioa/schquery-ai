@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -239,14 +240,17 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
     public Result<List<CustomerServiceVO.UserSessionVO>> getPendingSessions() {
         try {
             List<CustomerServiceSession> sessions = customerServiceSessionMapper.selectPendingSessions();
+            Map<Long, List<CustomerServiceMessage>> messagesByUserId = sessions.stream()
+                    .collect(Collectors.toMap(
+                            CustomerServiceSession::getUserId,
+                            session -> this.baseMapper.selectByUserId(session.getUserId()),
+                            (left, right) -> left
+                    ));
 
             // 收集所有发送者ID（用户和管理员）
-            List<Long> allSenderIds = sessions.stream()
-                    .flatMap(session -> {
-                        List<CustomerServiceMessage> messages = this.baseMapper.selectByUserId(session.getUserId());
-                        return messages.stream()
-                                .map(CustomerServiceMessage::getSenderId);
-                    })
+            List<Long> allSenderIds = messagesByUserId.values().stream()
+                    .flatMap(List::stream)
+                    .map(CustomerServiceMessage::getSenderId)
                     .distinct()
                     .collect(Collectors.toList());
 
@@ -256,7 +260,7 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
             List<CustomerServiceVO.UserSessionVO> result = sessions.stream()
                     .map(session -> {
                         // 获取该用户的消息列表
-                        List<CustomerServiceMessage> messages = this.baseMapper.selectByUserId(session.getUserId());
+                        List<CustomerServiceMessage> messages = messagesByUserId.getOrDefault(session.getUserId(), List.of());
 
                         List<CustomerServiceVO> messageVOs = messages.stream()
                                 .map(msg -> CustomerServiceVO.builder()
@@ -324,23 +328,12 @@ public class CustomerServiceServiceImpl extends ServiceImpl<CustomerServiceMappe
             // 改为从message表动态计算未读数，而不是使用session表的unreadCount
             // 统计所有status=0(待处理)的会话中，来自用户(senderType=1)且未读(readStatus=0)的消息数
             Integer unreadCount = this.baseMapper.countUnreadMessagesByPendingSessions();
-            List<CustomerServiceSession> sessions = customerServiceSessionMapper.selectPendingSessions();
-
-            List<CustomerServiceVO.UserSessionVO> userSessions = sessions.stream()
-                    .map(session -> CustomerServiceVO.UserSessionVO.builder()
-                            .userId(session.getUserId())
-                            .userName(session.getUserName())
-                            .lastMessage(session.getLastMessage())
-                            .unreadCount(session.getUnreadCount())
-                            .lastMessageTime(session.getUpdateTime().toString())
-                            .build())
-                    .collect(Collectors.toList());
 
             CustomerServiceVO.StatsVO stats = CustomerServiceVO.StatsVO.builder()
                     .pendingCount(pendingCount != null ? pendingCount : 0)
                     .unreadCount(unreadCount != null ? unreadCount : 0)
                     .completedCount(0)
-                    .userSessions(userSessions)
+                    .userSessions(Collections.emptyList())
                     .build();
 
             return Result.success(stats);

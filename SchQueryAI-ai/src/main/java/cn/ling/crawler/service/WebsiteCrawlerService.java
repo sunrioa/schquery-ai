@@ -275,6 +275,7 @@ public class WebsiteCrawlerService {
                 .knowledgeName(config.getKnowledgeName())
                 .scheduleEnabled(config.getScheduleEnabled())
                 .scheduleCron(config.getScheduleCron())
+                .runMode(config.getRunMode())
                 .build();
 
         if (requestIntervalMsOverride != null && requestIntervalMsOverride >= 0) {
@@ -301,6 +302,9 @@ public class WebsiteCrawlerService {
                 crawlSite(runConfig);
             } finally {
                 running = false;
+                if (CrawlerConfigService.RUN_MODE_ONCE.equals(crawlerConfigService.normalizeRunMode(runConfig.getRunMode()))) {
+                    crawlerConfigService.setCrawlerEnabled(false);
+                }
                 log.info("手动爬虫任务完成 - 已访问页面: {}, 待处理队列: {}, 草稿数: {}",
                         visitedUrlSet.size(), pendingUrls.size(), getDraftResultCount());
             }

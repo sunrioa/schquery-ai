@@ -1,6 +1,7 @@
 package cn.ling.crawler.controller;
 
 import cn.ling.Result;
+import cn.ling.crawler.config.CrawlerScheduleConfig;
 import cn.ling.crawler.service.WebsiteCrawlerService;
 import cn.ling.crawler.service.CrawlerConfigService;
 import cn.ling.crawler.vo.CrawlerDraftResultVO;
@@ -33,6 +34,9 @@ public class CrawlerController {
     @Resource
     private CrawlerConfigService configService;
 
+    @Resource
+    private CrawlerScheduleConfig crawlerScheduleConfig;
+
     /**
      * 手动触发爬虫
      */
@@ -41,11 +45,35 @@ public class CrawlerController {
         try {
             String startUrl = request == null ? null : request.getStartUrl();
             Integer requestIntervalMs = request == null ? null : request.getRequestIntervalMs();
+            CrawlerConfigService.CrawlerConfig config = configService.getConfig();
+            String runMode = configService.normalizeRunMode(request == null ? null : request.getRunMode());
+            if (!StringUtils.hasText(request == null ? null : request.getRunMode())) {
+                runMode = configService.normalizeRunMode(config.getRunMode());
+            }
+
+            if (!StringUtils.hasText(startUrl)
+                    && (!StringUtils.hasText(config.getBaseUrl()) || !StringUtils.hasText(config.getStartUrl()))) {
+                return Result.error("请先配置基础URL和起始URL");
+            }
+
+            if (CrawlerConfigService.RUN_MODE_SCHEDULE.equals(runMode)) {
+                String nextExecutionTime = crawlerScheduleConfig.previewNextExecution(config.getScheduleCron());
+                if (!StringUtils.hasText(nextExecutionTime)) {
+                    return Result.error("当前 Cron 表达式无效，无法启动自动爬取");
+                }
+                configService.setCrawlerEnabled(true);
+                crawlerScheduleConfig.refreshScheduleState();
+                return Result.success("自动爬取已启动，下次执行时间：" + nextExecutionTime);
+            }
+
+            configService.setCrawlerEnabled(true);
             boolean started = crawlerService.manualCrawl(startUrl, requestIntervalMs);
             if (!started) {
-                return Result.error("爬虫正在运行中或未启用，请检查配置");
+                configService.setCrawlerEnabled(false);
+                return Result.error("爬虫正在运行中或配置不可用");
             }
-            return Result.success("爬虫任务已启动，抓取结果可在下方草稿列表查看");
+            crawlerScheduleConfig.refreshScheduleState();
+            return Result.success("已开始执行一次完整爬取，任务完成后会自动停止");
         } catch (Exception e) {
             log.error("启动爬虫失败", e);
             return Result.error("启动失败：" + e.getMessage());
@@ -58,8 +86,10 @@ public class CrawlerController {
     @PostMapping("/stop")
     public Result<String> stopCrawl() {
         try {
+            configService.setCrawlerEnabled(false);
             crawlerService.stop();
-            return Result.success("爬虫已停止");
+            crawlerScheduleConfig.refreshScheduleState();
+            return Result.success("爬虫已停止，自动调度已关闭");
         } catch (Exception e) {
             log.error("停止爬虫失败", e);
             return Result.error("停止失败：" + e.getMessage());
@@ -72,13 +102,18 @@ public class CrawlerController {
     @GetMapping("/status")
     public Result<Map<String, Object>> getStatus() {
         CrawlerStatusVO status = crawlerService.getStatus();
+        CrawlerConfigService.CrawlerConfig config = configService.getConfig();
 
         Map<String, Object> data = new HashMap<>();
         data.put("running", status.isRunning());
+        data.put("enabled", Boolean.TRUE.equals(config.getEnabled()));
         data.put("visitedCount", status.getVisitedCount());
         data.put("pendingCount", status.getPendingCount());
         data.put("draftCount", crawlerService.getDraftResultCount());
-        data.put("config", configService.getConfig());
+        data.put("scheduleActive", crawlerScheduleConfig.isScheduleActive());
+        data.put("effectiveCron", crawlerScheduleConfig.getEffectiveCron());
+        data.put("nextExecutionTime", crawlerScheduleConfig.getNextExecutionTimeFormatted());
+        data.put("config", config);
 
         return Result.success(data);
     }
@@ -98,6 +133,7 @@ public class CrawlerController {
     public Result<String> updateConfig(@RequestParam("key") String key, @RequestParam("value") String value) {
         try {
             configService.updateConfig(key, value);
+            crawlerScheduleConfig.refreshScheduleState();
             return Result.success("配置已更新");
         } catch (Exception e) {
             log.error("更新配置失败", e);
@@ -181,6 +217,18 @@ public class CrawlerController {
             default:
                 return normalizeCronExpression((String) params.getOrDefault("cron", "0 0 2 ? * MON"));
         }
+    }
+
+    @PostMapping("/cron/next-execution")
+    public Result<Map<String, Object>> previewCronNextExecution(@RequestBody Map<String, Object> params) {
+        String cron = normalizeCronExpression((String) params.get("cron"));
+        String nextExecutionTime = crawlerScheduleConfig.previewNextExecution(cron);
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("cron", cron);
+        data.put("valid", StringUtils.hasText(nextExecutionTime));
+        data.put("nextExecutionTime", nextExecutionTime);
+        return Result.success(data);
     }
 
     private String generateIntervalCron(Map<String, Object> params) {
@@ -339,5 +387,10 @@ public class CrawlerController {
          * 可选：本次任务请求间隔（毫秒）
          */
         private Integer requestIntervalMs;
+
+        /**
+         * 可选：本次运行模式
+         */
+        private String runMode;
     }
 }

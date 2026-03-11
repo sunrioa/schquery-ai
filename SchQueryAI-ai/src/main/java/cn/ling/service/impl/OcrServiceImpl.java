@@ -1,9 +1,6 @@
 package cn.ling.service.impl;
 
-import cn.ling.domain.ocr.OcrHealthResp;
-import cn.ling.domain.ocr.OcrResp;
 import cn.ling.exception.CustomException;
-import cn.ling.rpc.OcrRpc;
 import cn.ling.service.AliyunVLOcrService;
 import cn.ling.service.OcrService;
 import com.dtflys.forest.exceptions.ForestRuntimeException;
@@ -20,12 +17,6 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 @Service
 public class OcrServiceImpl implements OcrService {
-
-    /**
-     * OCR 远程调用客户端（保留用于兼容旧的 Python OCR 服务）
-     */
-    @Resource
-    OcrRpc ocrRpc;
 
     /**
      * 阿里云 VL-OCR 服务

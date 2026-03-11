@@ -1,10 +1,9 @@
 package cn.ling.service.impl;
 
 import cn.ling.domain.dto.DocumentsDTO;
-import cn.ling.domain.ocr.OcrResp;
 import cn.ling.domain.pojo.Documents;
-import cn.ling.rpc.OcrRpc;
 import cn.ling.service.DocumentChunksService;
+import cn.ling.service.OcrService;
 import cn.ling.service.DocumentsService;
 import cn.ling.service.SyncService;
 import cn.ling.utils.DocumentReaderStrategy;
@@ -26,7 +25,7 @@ import java.util.Map;
 public class SyncServiceImpl implements SyncService {
 
     @Resource
-    private OcrRpc ocrRpc;
+    private OcrService ocrService;
 
     /**
      * 异步处理知识库文档上传
@@ -177,7 +176,7 @@ public class SyncServiceImpl implements SyncService {
         if (!DocumentReaderStrategy.isSupported(file)) {
             log.warn("不支持的文件类型，尝试OCR处理 - 文档ID: {}, 文件名: {}",
                     documentsId, file.getOriginalFilename());
-            return executeOcr(file);
+            return ocrService.doOcr(file);
         }
 
         // 2. 使用文档读取策略中心提取内容
@@ -201,93 +200,11 @@ public class SyncServiceImpl implements SyncService {
             if (isLikelyScan) {
                 log.info("PDF提取内容过少，判定为扫描件，启用OCR识别 - 文档ID: {}, 已提取长度: {} 字符",
                         documentsId, content != null ? content.length() : 0);
-                return executeOcr(file);
+                return ocrService.doOcr(file);
             }
         }
 
         return content != null ? content : "";
-    }
-
-    /**
-     * 执行OCR识别
-     * 调用RPC服务对PDF文件进行文本提取
-     * 主要用于扫描版PDF或图片类文档
-     *
-     * @param pdfFile PDF文件
-     * @return 提取的文本内容
-     * @throws RuntimeException OCR识别失败时抛出异常
-     */
-    private String executeOcr(MultipartFile pdfFile) {
-        log.debug("开始执行OCR识别 - 文件名: {}, 文件大小: {} bytes", pdfFile.getOriginalFilename(), pdfFile.getSize());
-
-        try {
-            if (pdfFile.isEmpty()) {
-                log.error("OCR识别失败：文件为空");
-                throw new IllegalArgumentException("文件不能为空");
-            }
-
-            OcrResp ocrResp = ocrRpc.getOcrResult(pdfFile);
-            if (ocrResp == null) {
-                log.error("OCR识别失败：响应为空 - 文件名: {}", pdfFile.getOriginalFilename());
-                throw new RuntimeException("OCR响应为空");
-            }
-
-            if (!StringUtils.hasText(ocrResp.getData())) {
-                log.warn("OCR识别结果为空 - 文件名: {}", pdfFile.getOriginalFilename());
-                return "";
-            }
-
-            log.debug("OCR识别成功 - 文件名: {}, 提取文本长度: {} 字符",
-                    pdfFile.getOriginalFilename(), ocrResp.getData().length());
-
-            // OCR 结果后处理：清理和规范化文本
-            String processedContent = postProcessOcrResult(ocrResp.getData());
-            return processedContent;
-
-        } catch (Exception e) {
-            log.error("OCR识别过程中发生异常 - 文件名: {}, 错误信息: {}",
-                    pdfFile.getOriginalFilename(), e.getMessage(), e);
-            throw new RuntimeException("OCR识别失败：" + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * OCR 结果后处理
-     * 清理和规范化 OCR 识别的文本内容
-     *
-     * @param ocrResult OCR 原始识别结果
-     * @return 处理后的文本
-     */
-    private String postProcessOcrResult(String ocrResult) {
-        if (!StringUtils.hasText(ocrResult)) {
-            return ocrResult;
-        }
-
-        // 1. 去除多余的空白字符
-        String processed = ocrResult.replaceAll("\\s+", " ").trim();
-
-        // 2. 修正常见的 OCR 识别错误
-        processed = processed
-                // 修正连续的句号
-                .replaceAll("\\.{3,}", "…")
-                // 修正连续的连字符
-                .replaceAll("-{3,}", "—")
-                // 修正错误的换行合并（小写字母后跟大写字母可能是错误的换行）
-                .replaceAll("([a-z])(\\s*)([A-Z])", "$1$2 $3");
-
-        // 3. 去除控制字符
-        processed = processed.replaceAll("[\\p{Cntrl}]", " ");
-
-        // 4. 去除特殊字符序列（保留有意义的标点）
-        processed = processed.replaceAll("[^\\p{L}\\p{N}\\p{P}\\s]", " ");
-
-        // 5. 再次清理空白
-        processed = processed.replaceAll("\\s+", " ").trim();
-
-        log.debug("OCR 结果后处理完成 - 原始长度: {}, 处理后长度: {}",
-                ocrResult.length(), processed.length());
-
-        return processed;
     }
 
     /**

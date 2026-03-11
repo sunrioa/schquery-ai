@@ -69,38 +69,6 @@ public class KnowledgeController {
         return Result.success(result);
     }
 
-    /**
-     * 分页查询知识库
-     */
-    @GetMapping("/page")
-    public Result<IPage<KnowledgeInfo>> page(
-            @RequestParam(required = false, defaultValue = "1") Integer pageNum,
-            @RequestParam(required = false, defaultValue = "20") Integer pageSize,
-            @RequestParam(required = false) String kname,
-            @RequestParam(required = false) Integer status,
-            @RequestParam(required = false) String vectorModelName
-    ) {
-        if (pageNum == null || pageNum < 1) {
-            pageNum = 1;
-        }
-        if (pageSize == null || pageSize < 1) {
-            pageSize = 20;
-        }
-        if (pageSize > 200) {
-            pageSize = 200;
-        }
-
-        Page<KnowledgeInfo> page = new Page<>(pageNum, pageSize);
-        IPage<KnowledgeInfo> result = knowledgeInfoService.lambdaQuery()
-                .like(StringUtils.hasText(kname), KnowledgeInfo::getKname, StringUtils.hasText(kname) ? kname.trim() : null)
-                .eq(status != null, KnowledgeInfo::getStatus, status)
-                .like(StringUtils.hasText(vectorModelName), KnowledgeInfo::getVectorModelName, StringUtils.hasText(vectorModelName) ? vectorModelName.trim() : null)
-                .orderByDesc(KnowledgeInfo::getUpdateTime)
-                .page(page);
-
-        return Result.success(result);
-    }
-
     @GetMapping("/detail/{id}")
     public Result<KnowledgeInfo> detail(@PathVariable("id") Long id) {
         if (id == null) {

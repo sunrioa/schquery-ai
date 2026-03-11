@@ -3,7 +3,6 @@ package cn.ling.service.impl;
 import cn.ling.exception.CustomException;
 import cn.ling.service.AliyunVLOcrService;
 import cn.ling.service.OcrService;
-import com.dtflys.forest.exceptions.ForestRuntimeException;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

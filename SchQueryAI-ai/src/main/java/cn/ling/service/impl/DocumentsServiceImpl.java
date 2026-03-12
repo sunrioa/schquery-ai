@@ -5,6 +5,7 @@ import cn.ling.domain.dto.DocumentsDTO;
 import cn.ling.service.DocumentChunksService;
 import cn.ling.service.KnowledgeInfoService;
 import cn.ling.service.SyncService;
+import cn.ling.utils.DocumentReaderStrategy;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import cn.ling.domain.pojo.Documents;
 import cn.ling.service.DocumentsService;
@@ -88,7 +89,7 @@ public class DocumentsServiceImpl extends ServiceImpl<DocumentsMapper, Documents
 
             Documents documents = Documents.builder()
                     .knowledgeId(knowledgeId)
-                    .fileType(file.getContentType())
+                    .fileType(DocumentReaderStrategy.getStorageFileType(file))
                     .title(title)
                     .uploadTime(LocalDateTime.now())
                     .updateTime(LocalDateTime.now())

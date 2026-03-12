@@ -140,6 +140,42 @@ public class DocumentReaderStrategy {
     }
 
     /**
+     * 获取用于数据库持久化的短文件类型标识
+     * 优先使用文件扩展名，避免将超长 MIME Type 写入 documents.file_type。
+     *
+     * @param file 上传的文件对象
+     * @return 适合持久化的短类型，例如 pdf、docx、xlsx；无法识别时返回 unknown
+     */
+    public static String getStorageFileType(MultipartFile file) {
+        if (file == null) {
+            return "unknown";
+        }
+
+        String filename = file.getOriginalFilename();
+        if (filename != null) {
+            String extension = getFileExtension(filename).toLowerCase();
+            if (!extension.isEmpty()) {
+                return extension;
+            }
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null || contentType.isBlank()) {
+            return "unknown";
+        }
+
+        return switch (contentType.toLowerCase()) {
+            case "text/plain" -> TYPE_TXT;
+            case "application/pdf" -> TYPE_PDF;
+            case "application/vnd.ms-excel" -> TYPE_XLS;
+            case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" -> TYPE_XLSX;
+            case "application/msword" -> TYPE_DOC;
+            case "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> TYPE_DOCX;
+            default -> "unknown";
+        };
+    }
+
+    /**
      * 获取文件的MIME类型描述
      *
      * @param file 上传的文件对象

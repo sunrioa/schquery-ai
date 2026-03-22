@@ -56,6 +56,44 @@ public class ChatClientConfig {
     }
 
     /**
+     * 配置会话长期记忆客户端
+     * 专门用于压缩长链路历史对话，不启用RAG和顾问，避免引入额外噪声
+     *
+     * @param openAiChatModel OpenAI聊天模型实例
+     * @return 配置好的会话记忆客户端
+     */
+    @Bean("conversationMemoryChatClient")
+    public ChatClient conversationMemoryChatClient(OpenAiChatModel openAiChatModel) {
+        log.info("开始配置会话长期记忆客户端");
+
+        ChatClient chatClient = ChatClient.builder(openAiChatModel)
+                .defaultSystem(Prompts.CONVERSATION_MEMORY_PROMPT)
+                .build();
+
+        log.info("会话长期记忆客户端配置完成");
+        return chatClient;
+    }
+
+    /**
+     * 配置追问改写客户端
+     * 专门将依赖上下文的追问改写为独立问题，避免RAG检索丢主体
+     *
+     * @param openAiChatModel OpenAI聊天模型实例
+     * @return 配置好的追问改写客户端
+     */
+    @Bean("followUpRewriteChatClient")
+    public ChatClient followUpRewriteChatClient(OpenAiChatModel openAiChatModel) {
+        log.info("开始配置追问改写客户端");
+
+        ChatClient chatClient = ChatClient.builder(openAiChatModel)
+                .defaultSystem(Prompts.FOLLOW_UP_REWRITE_PROMPT)
+                .build();
+
+        log.info("追问改写客户端配置完成");
+        return chatClient;
+    }
+
+    /**
      * 配置OCR结果纠正客户端
      * 专门用于OCR识别结果的后处理，修正识别错误和格式问题
      * 不启用任何顾问，保持简单的文本处理流程

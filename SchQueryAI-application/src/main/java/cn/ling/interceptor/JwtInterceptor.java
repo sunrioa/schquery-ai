@@ -93,12 +93,12 @@ public class JwtInterceptor implements HandlerInterceptor {
         // 3. 提取令牌（去掉"Bearer "前缀）
         assert authHeader != null;
         String token = authHeader.substring(7).trim();
-        log.debug("提取到JWT令牌，长度: {} 字符", token.length());
+    //    log.debug("提取到JWT令牌，长度: {} 字符", token.length());
 
         try {
             // 4. 校验令牌有效性（调用JwtUtils解析令牌）
             HashMap<String, Object> allClaimsAsMap = JwtUtils.getAllClaimsAsMap(token);
-            log.debug("JWT令牌解析成功");
+     //       log.debug("JWT令牌解析成功");
 
             // 5. 检查该用户是否被强制下线（密码重置等操作）
             Long userId = Long.parseLong(allClaimsAsMap.get("userId").toString());
@@ -132,8 +132,8 @@ public class JwtInterceptor implements HandlerInterceptor {
             userInfo.setRole(allClaimsAsMap.get("role").toString());
             ContextUtils.setUserInfo(userInfo);
 
-            log.info("JWT令牌校验成功，用户ID: {}, 用户名: {}, 角色: {}, 请求路径: {}",
-                    userId, username, userInfo.getRole(), requestUri);
+    //        log.info("JWT令牌校验成功，用户ID: {}, 用户名: {}, 角色: {}, 请求路径: {}",
+    //                userId, username, userInfo.getRole(), requestUri);
 
             // 7. 放行请求
             return true;

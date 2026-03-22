@@ -89,7 +89,7 @@ public class CustomerServiceWebSocketHandler extends TextWebSocketHandler {
             String userName = convertToString(msgData.get("userName")); // 用户名
             String topic = convertToString(msgData.get("topic")); // 咨询主题
 
-            log.info("收到消息 - 类型: {}, 来自: {} ({}), 用户名: {}, 主题: {}, 内容: {}", messageType, fromUserId, fromType, userName, topic, content);
+         //   log.info("收到消息 - 类型: {}, 来自: {} ({}), 用户名: {}, 主题: {}, 内容: {}", messageType, fromUserId, fromType, userName, topic, content);
 
             if ("ping".equalsIgnoreCase(messageType)) {
                 Map<String, Object> pong = new HashMap<>();

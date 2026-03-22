@@ -2,6 +2,7 @@ package cn.ling.service.impl;
 
 import cn.ling.exception.CustomException;
 import cn.ling.service.ChatMessageService;
+import cn.ling.service.ConversationMemoryService;
 import cn.ling.utils.ContextUtils;
 import cn.ling.Result;
 import cn.ling.domain.dto.ChatSessionDTO;
@@ -40,6 +41,9 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
     @Resource
     private ChatMessageService chatMessageService;
 
+    @Resource
+    private ConversationMemoryService conversationMemoryService;
+
     /**
      * 创建新的聊天会话
      * 为当前登录用户创建一个新的对话会话，默认会话名称为"新会话"
@@ -71,6 +75,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
             boolean success = save(chatSession);
 
             if (success) {
+                conversationMemoryService.clearMemory(chatSession.getId());
                 log.info("聊天会话创建成功，会话ID: {}, 用户ID: {}", chatSession.getId(), userId);
 
                 // 添加欢迎消息
@@ -124,6 +129,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
             boolean success = updateById(existingSession);
 
             if (success) {
+                conversationMemoryService.clearMemory(chatSessionDTO.getId());
                 log.info("聊天会话删除成功，会话ID: {}, 用户ID: {}", chatSessionDTO.getId(), userId);
                 return Result.success();
             } else {

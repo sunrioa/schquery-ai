@@ -171,12 +171,11 @@
               <div class="message-content">
                 <div class="message-text" v-if="message.messageType === 0">{{ message.content }}</div>
                 <div class="message-text" v-else-if="message.content">
-                  <!-- 流式传输时显示预处理文本，完成后显示Markdown格式 -->
-                  <div v-if="message.isStreaming" class="streaming-text" v-text="message.content"></div>
-                  <div v-else>
+                  <div>
                     <div class="markdown-content"
+                         :class="{ 'streaming-markdown': message.isStreaming }"
                          :key="`md-${message.id}-${message.renderVersion || 0}`"
-                         v-html="renderMarkdown(message.content, message.id)"></div>
+                         v-html="renderMarkdown(message.content, message.id, message.isStreaming)"></div>
                     <!-- 追问建议 -->
                     <div v-if="message.suggestions && message.suggestions.length > 0 && !message.isStreaming" class="suggest-section">
                       <div class="suggest-header">
@@ -344,6 +343,7 @@ const chunkBuffer = ref(new Int16Array(0))
 const realTimeTranscript = ref('')
 const streamingSessionToken = ref('') // 流式识别会话令牌
 let renderVersion = 0 // 渲染版本号，用于强制重新渲染
+let activeChatAbortController = null
 
 const transcriptBaseMessage = ref('')
 let transcriptUpdateTimer = null
@@ -530,21 +530,43 @@ const handleApiError = (error, defaultMessage = '请求失败') => {
   }
 }
 
+const resetChatSessionState = ({ clearMessages = false } = {}) => {
+  if (activeChatAbortController) {
+    activeChatAbortController.abort()
+    activeChatAbortController = null
+  }
+
+  isTyping.value = false
+  userMessage.value = ''
+
+  if (clearMessages) {
+    messages.value = []
+  }
+}
+
 // 清理AI响应内容中的多余字符
 const cleanAIResponse = (text) => {
   if (!text) return ''
 
-  // 移除所有的data:前缀，包括全局匹配
-  let cleaned = text.replace(/^data:\s*/gm, '')
-
   // 基本格式清理
+  let cleaned = text.replace(/\r+/g, '')
   cleaned = cleaned
       .replace(/\n{3,}/g, '\n\n') // 最多保留2个连续换行
       .replace(/[ \t]+$/gm, '') // 移除行尾空白
-      .replace(/\r+/g, '') // 移除回车符
       .trim() // 去除首尾空白
 
   return cleaned
+}
+
+const preprocessStreamingMarkdown = (text) => {
+  if (!text) return ''
+
+  let processed = text.replace(/\r+/g, '')
+  const fences = processed.match(/```/g)
+  if (fences && fences.length % 2 === 1) {
+    processed = processed + '\n```'
+  }
+  return processed.replace(/\n{3,}/g, '\n\n')
 }
 
 // 规范化追问建议，过滤掉 JSON 结构符号和字段名
@@ -972,11 +994,11 @@ const prepareFootnotes = (markdown, messageId) => {
 }
 
 // 改进的Markdown渲染方法
-const renderMarkdown = (text, messageId) => {
+const renderMarkdown = (text, messageId, isStreaming = false) => {
   if (!text) return ''
 
   try {
-    let processedText = preprocessMarkdown(text)
+    let processedText = isStreaming ? preprocessStreamingMarkdown(text) : preprocessMarkdown(text)
     if (!processedText) return ''
 
     const parser = getMarkdownParser()
@@ -1072,11 +1094,12 @@ const createNewSession = async () => {
   if (!checkToken()) return
 
   try {
+    resetChatSessionState()
     const response = await chatApi.createSession()
     if (response?.code === 200) {
       ElMessage.success('创建会话成功')
       await loadSessions()
-      if (sessions.value.length > 0) selectSession(sessions.value[0])
+      if (sessions.value.length > 0) await selectSession(sessions.value[0])
     }
   } catch (error) {
     console.error('Create session error:', error)
@@ -1086,6 +1109,7 @@ const createNewSession = async () => {
 
 // 选择会话
 const selectSession = async (session) => {
+  resetChatSessionState({ clearMessages: true })
   currentSession.value = session
   currentSessionId.value = session.id
   if (isMobile.value) {
@@ -1157,6 +1181,7 @@ const sendMessage = async () => {
   if (!checkToken()) return
 
   const baseId = Date.now()
+  const requestSessionId = currentSessionId.value
   const messageContent = userMessage.value.trim()
   userMessage.value = ''
 
@@ -1187,17 +1212,24 @@ const sendMessage = async () => {
     }
   })
 
+  let abortController = null
   try {
     const baseURL = '/api'
-    const response = await fetch(`${baseURL}/user/message/send?sessionId=${currentSessionId.value}&content=${encodeURIComponent(messageContent)}`, {
+    abortController = new AbortController()
+    activeChatAbortController = abortController
+
+    const response = await fetch(`${baseURL}/user/message/send?sessionId=${requestSessionId}&content=${encodeURIComponent(messageContent)}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`,
         'Content-Type': 'text/event-stream'
-      }
+      },
+      signal: abortController.signal
     })
 
     if (!response.ok) throw new Error('发送失败')
+    if (!response.body) throw new Error('未收到响应流')
+    if (abortController.signal.aborted || currentSessionId.value !== requestSessionId) return
 
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
@@ -1215,6 +1247,11 @@ const sendMessage = async () => {
     // 读取流式数据
     let isReading = true
     while (isReading) {
+      if (abortController.signal.aborted || currentSessionId.value !== requestSessionId) {
+        await reader.cancel()
+        return
+      }
+
       const { done, value } = await reader.read()
 
       if (done) {
@@ -1274,6 +1311,8 @@ const sendMessage = async () => {
       }
     }
 
+    if (abortController.signal.aborted || currentSessionId.value !== requestSessionId) return
+
     // 处理缓冲区中残留的数据
     if (buffer && buffer.trim()) {
       const events = buffer.split('\n\n')
@@ -1313,6 +1352,10 @@ const sendMessage = async () => {
     console.error('Send message error:', error)
     isTyping.value = false
 
+    if (error.name === 'AbortError') {
+      return
+    }
+
     // 确保清理流式标记
     const aiIndex = messages.value.findIndex(msg => msg.id === aiMessageObj.id)
     if (aiIndex > -1) {
@@ -1326,6 +1369,9 @@ const sendMessage = async () => {
     // 也清理AI消息
     if (aiIndex > -1) messages.value.splice(aiIndex, 1)
   } finally {
+    if (activeChatAbortController === abortController) {
+      activeChatAbortController = null
+    }
     isTyping.value = false
     // 确保在所有情况下都清理流式状态
     const aiIndex = messages.value.findIndex(msg => msg.id === aiMessageObj.id)

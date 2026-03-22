@@ -9,6 +9,7 @@ import cn.ling.domain.vo.ChatMessageVO;
 import cn.ling.exception.CustomException;
 import cn.ling.mapper.ChatMessageMapper;
 import cn.ling.service.ChatMessageService;
+import cn.ling.service.ConversationMemoryService;
 import cn.ling.service.ChatPresetService;
 import cn.ling.service.ChatSessionService;
 import cn.ling.service.SysConfigService;
@@ -21,6 +22,9 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
+
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -43,6 +47,9 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
     private static final String KEY_PRESENCE_PENALTY = "chat.default.presence_penalty";
     private static final String KEY_FREQUENCY_PENALTY = "chat.default.frequency_penalty";
     private static final String KEY_DEFAULT_PRESET_ID = "chat.preset.defaultId";
+    private static final int MAX_CONTEXT_MESSAGES = 8;
+    private static final int MAX_CONTEXT_CHARS = 2000;
+    private static final int MAX_SINGLE_MESSAGE_CHARS = 500;
 
     /**
      * 系统配置（KV）
@@ -62,6 +69,9 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
      */
     @Resource
     private ChatSessionService chatSessionService;
+
+    @Resource
+    private ConversationMemoryService conversationMemoryService;
 
     /**
      * 获取指定会话的所有消息
@@ -146,7 +156,9 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
                 if (StringUtils.hasText(dynamicSystemMessage)) {
                     promptSpec = promptSpec.system(dynamicSystemMessage);
                 }
-                Flux<String> aiResponseStream = promptSpec.user(chatMessageDTO.getContent()).stream().content();
+                String standaloneQuestion = buildStandaloneQuestion(chatMessageDTO.getSessionId(), userMessage.getId(), chatMessageDTO.getContent());
+                log.info("会话 {} 独立问题改写结果: {}", chatMessageDTO.getSessionId(), standaloneQuestion);
+                Flux<String> aiResponseStream = promptSpec.user(standaloneQuestion).stream().content();
 
                 // 关键修复：添加微小延迟（50ms）确保浏览器不缓冲 SSE 响应
                 // 这使每个数据块间隔足够长，让浏览器识别为"流式"而非"缓冲"
@@ -199,6 +211,78 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
                 chatMessageDTO.getSessionId(), e.getMessage(), e);
             return Flux.error(new RuntimeException("消息发送失败：" + e.getMessage()));
         }
+    }
+
+    private String buildStandaloneQuestion(Long sessionId, Long currentUserMessageId, String currentQuestion) {
+        List<ChatMessage> sessionMessages = lambdaQuery()
+                .eq(ChatMessage::getSessionId, sessionId)
+                .ne(ChatMessage::getMessageType, -1)
+                .orderByAsc(ChatMessage::getCreatedAt)
+                .list();
+
+        if (sessionMessages == null || sessionMessages.isEmpty()) {
+            return currentQuestion;
+        }
+
+        List<ChatMessage> historyMessages = sessionMessages.stream()
+                .filter(message -> message.getId() == null || !message.getId().equals(currentUserMessageId))
+                .collect(Collectors.toList());
+
+        if (historyMessages.isEmpty()) {
+            return currentQuestion;
+        }
+
+        String longTermMemory = conversationMemoryService.getLongTermMemory(sessionId, historyMessages);
+        String recentHistory = buildRecentHistory(historyMessages);
+        return conversationMemoryService.rewriteQuestion(sessionId, longTermMemory, recentHistory, currentQuestion);
+    }
+
+    private String buildRecentHistory(List<ChatMessage> historyMessages) {
+        List<String> selectedHistoryLines = new ArrayList<>();
+        int totalChars = 0;
+        int startIndex = Math.max(0, historyMessages.size() - MAX_CONTEXT_MESSAGES);
+
+        for (int i = historyMessages.size() - 1; i >= startIndex; i--) {
+            String historyLine = formatHistoryLine(historyMessages.get(i));
+            if (!StringUtils.hasText(historyLine)) {
+                continue;
+            }
+            if (totalChars + historyLine.length() > MAX_CONTEXT_CHARS) {
+                break;
+            }
+            selectedHistoryLines.add(historyLine);
+            totalChars += historyLine.length();
+        }
+
+        if (selectedHistoryLines.isEmpty()) {
+            return "";
+        }
+
+        Collections.reverse(selectedHistoryLines);
+        return String.join("\n", selectedHistoryLines);
+    }
+
+    private String formatHistoryLine(ChatMessage message) {
+        String content = normalizeMessageContent(message.getContent());
+        if (!StringUtils.hasText(content)) {
+            return "";
+        }
+        String role = message.getMessageType() != null && message.getMessageType() == 1 ? "助手" : "用户";
+        return role + "：" + truncateContent(content, MAX_SINGLE_MESSAGE_CHARS);
+    }
+
+    private String normalizeMessageContent(String content) {
+        if (!StringUtils.hasText(content)) {
+            return "";
+        }
+        return content.replaceAll("\\s+", " ").trim();
+    }
+
+    private String truncateContent(String content, int maxLength) {
+        if (content.length() <= maxLength) {
+            return content;
+        }
+        return content.substring(0, maxLength) + "...";
     }
 
     private OpenAiChatOptions buildChatOptions(ChatPreset preset) {
@@ -343,6 +427,7 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
             boolean success = removeById(chatMessageDTO.getId());
 
             if (success) {
+                conversationMemoryService.clearMemory(existingMessage.getSessionId());
                 return Result.success("删除消息成功");
             } else {
                 log.error("消息删除失败，消息ID: {}", chatMessageDTO.getId());

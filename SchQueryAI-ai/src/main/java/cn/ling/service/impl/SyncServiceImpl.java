@@ -1,5 +1,6 @@
 package cn.ling.service.impl;
 
+import cn.ling.crawler.util.CrawlerUrlUtils;
 import cn.ling.domain.dto.DocumentsDTO;
 import cn.ling.domain.pojo.Documents;
 import cn.ling.service.DocumentChunksService;
@@ -14,7 +15,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * 同步服务实现类
@@ -26,6 +32,8 @@ public class SyncServiceImpl implements SyncService {
 
     @Resource
     private OcrService ocrService;
+
+    private final ConcurrentMap<String, Object> crawlerDocumentLocks = new ConcurrentHashMap<>();
 
     /**
      * 异步处理知识库文档上传
@@ -220,98 +228,185 @@ public class SyncServiceImpl implements SyncService {
     @Override
     @Async
     public void saveCrawlerContent(Long knowledgeId, String content, Map<String, Object> metadata,
-                                  DocumentsService documentsService, DocumentChunksService documentChunksService) {
-        log.info("爬虫直接保存内容 - 知识库ID: {}, 内容长度: {}", knowledgeId, content.length());
+                                   DocumentsService documentsService, DocumentChunksService documentChunksService) {
+        String normalizedContent = content == null ? "" : content;
+        log.info("爬虫直接保存内容 - 知识库ID: {}, 内容长度: {}", knowledgeId, normalizedContent.length());
+
+        Map<String, Object> normalizedMetadata = metadata == null ? new HashMap<>() : new HashMap<>(metadata);
+        String canonicalSourceUrl = normalizeCrawlerSourceUrl(normalizedMetadata);
+        Integer sourceType = extractCrawlerSourceType(normalizedMetadata);
+        String title = extractTextValue(normalizedMetadata.get("title"));
+
+        String lockKey = buildCrawlerDocumentLockKey(knowledgeId, canonicalSourceUrl);
+        Object lock = crawlerDocumentLocks.computeIfAbsent(lockKey, key -> new Object());
+        Documents documents = null;
 
         try {
-
-            // 1. 创建 Documents 对象
-            Documents documents = new Documents();
-            documents.setKnowledgeId(knowledgeId);
-            documents.setProcessStatus(1); // 处理中
-            documents.setUpdateTime(LocalDateTime.now());
-
-            // 2. 保存基本信息
-            boolean saved = documentsService.save(documents);
-            if (!saved) {
-                throw new RuntimeException("保存文档失败");
-            }
-
-            // 3. 更新内容
-            documents.setContent(content);
-            documents.setMetadata(metadata);
-            documents.setProcessStatus(2); // 已处理
-            documents.setUpdateTime(LocalDateTime.now());
-
-            // 3.5 提取 sourceUrl 并设置到 Documents.sourceUrl
-            if (metadata != null && !metadata.isEmpty()) {
-                Object sourceUrlObj = metadata.get("sourceUrl");
-                if (sourceUrlObj != null) {
-                    documents.setSourceUrl(sourceUrlObj.toString());
-                }
-
-                // 3.5.1 提取 sourceType 并设置到 Documents.sourceType
-                Object sourceTypeObj = metadata.get("sourceType");
-                if (sourceTypeObj != null) {
-                    try {
-                        documents.setSourceType(Integer.parseInt(sourceTypeObj.toString()));
-                    } catch (NumberFormatException e) {
-                        log.warn("sourceType 格式错误: {}", sourceTypeObj);
+            synchronized (lock) {
+                Documents existing = findExistingCrawlerDocument(knowledgeId, canonicalSourceUrl, sourceType, documentsService);
+                if (existing != null) {
+                    if (existing.getProcessStatus() != null && existing.getProcessStatus() == 1) {
+                        log.info("检测到同一 URL 文档正在处理中，跳过重复入库: knowledgeId={}, sourceUrl={}, documentId={}",
+                                knowledgeId, canonicalSourceUrl, existing.getId());
+                        return;
                     }
-                }
-            }
 
-            // 3.6 提取 title 并设置到 Documents.title
-            String title = null;
-            if (metadata != null && !metadata.isEmpty()) {
-                Object titleObj = metadata.get("title");
-                if (titleObj != null) {
-                    title = titleObj.toString();
+                    long existingChunkCount = countDocumentChunks(existing.getId(), documentChunksService);
+                    if (existingChunkCount > 0) {
+                        log.info("检测到同一 URL 文档已存在有效分块，跳过重复入库: knowledgeId={}, sourceUrl={}, documentId={}",
+                                knowledgeId, canonicalSourceUrl, existing.getId());
+                        return;
+                    }
+
+                    documents = existing;
+                    log.info("复用未完成的爬虫文档记录，准备重新处理: knowledgeId={}, sourceUrl={}, documentId={}",
+                            knowledgeId, canonicalSourceUrl, documents.getId());
+                } else {
+                    documents = new Documents();
+                    documents.setUploadTime(LocalDateTime.now());
                 }
-            }
-            if (title != null && !title.isEmpty()) {
+
+                LocalDateTime now = LocalDateTime.now();
+                documents.setKnowledgeId(knowledgeId);
                 documents.setTitle(title);
-            }
+                documents.setContent(normalizedContent);
+                documents.setMetadata(normalizedMetadata);
+                documents.setSourceUrl(canonicalSourceUrl);
+                documents.setSourceType(sourceType);
+                documents.setStatus(1);
+                documents.setUpdateTime(now);
+                documents.setProcessStatus(StringUtils.hasText(normalizedContent) ? 1 : 0);
 
-            boolean updated = documentsService.updateById(documents);
-            if (!updated) {
-                throw new RuntimeException("更新文档内容失败");
-            }
+                boolean persisted;
+                if (documents.getId() == null) {
+                    persisted = documentsService.save(documents);
+                } else {
+                    persisted = documentsService.updateById(documents);
+                }
+                if (!persisted || documents.getId() == null) {
+                    throw new RuntimeException("保存文档失败");
+                }
 
-            // 4. 如果有内容，进行向量化处理
-            if (StringUtils.hasText(content)) {
+                if (!StringUtils.hasText(normalizedContent)) {
+                    log.warn("文档内容为空，跳过分块和向量化处理 - 文档ID: {}", documents.getId());
+                    return;
+                }
+
                 log.info("开始文档分块和向量化处理 - 文档ID: {}", documents.getId());
                 documentChunksService.saveDocument(
                         documents.getId(),
                         knowledgeId,
-                        metadata,
-                        content
+                        normalizedMetadata,
+                        normalizedContent
                 );
                 log.info("文档分块和向量化处理完成 - 文档ID: {}", documents.getId());
 
-                // 5. 标记处理完成
-                documents.setProcessStatus(2); // 已完成
+                documents.setProcessStatus(2);
                 documents.setUpdateTime(LocalDateTime.now());
                 documentsService.updateById(documents);
-                log.info("爬虫内容保存完成 - 文档ID: {}, 内容长度: {}", documents.getId(), content.length());
-            } else {
-                log.warn("文档内容为空，跳过分块和向量化处理 - 文档ID: {}", documents.getId());
+                log.info("爬虫内容保存完成 - 文档ID: {}, 内容长度: {}", documents.getId(), normalizedContent.length());
             }
-
         } catch (Exception e) {
-            log.error("爬虫内容保存失败 - 知识库ID: {}, 错误信息: {}", knowledgeId, e.getMessage(), e);
-            // 尝试更新为处理失败
-            try {
-                Documents documents = documentsService.getById(knowledgeId);
-                if (documents != null) {
-                    documents.setProcessStatus(3); // 处理失败
-                    documents.setUpdateTime(LocalDateTime.now());
-                    documentsService.updateById(documents);
-                }
-            } catch (Exception updateEx) {
-                log.error("更新文档失败状态时发生异常 - 知识库ID: {}, 错误信息: {}", knowledgeId, updateEx.getMessage(), updateEx);
-            }
+            log.error("爬虫内容保存失败 - 知识库ID: {}, sourceUrl={}, 错误信息: {}",
+                    knowledgeId, canonicalSourceUrl, e.getMessage(), e);
+            markCrawlerDocumentFailed(documents == null ? null : documents.getId(), documentsService);
             throw new RuntimeException("爬虫内容保存失败：" + e.getMessage(), e);
+        } finally {
+            crawlerDocumentLocks.remove(lockKey, lock);
+        }
+    }
+
+    private String normalizeCrawlerSourceUrl(Map<String, Object> metadata) {
+        if (metadata == null) {
+            return "";
+        }
+        String canonicalSourceUrl = CrawlerUrlUtils.canonicalize(extractTextValue(metadata.get("sourceUrl")));
+        if (StringUtils.hasText(canonicalSourceUrl)) {
+            metadata.put("sourceUrl", canonicalSourceUrl);
+        }
+        return canonicalSourceUrl;
+    }
+
+    private Integer extractCrawlerSourceType(Map<String, Object> metadata) {
+        Integer sourceType = parseIntegerValue(metadata == null ? null : metadata.get("sourceType"), 2);
+        if (metadata != null) {
+            metadata.put("sourceType", sourceType);
+        }
+        return sourceType;
+    }
+
+    private String extractTextValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private Integer parseIntegerValue(Object value, Integer defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(String.valueOf(value).trim());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    private String buildCrawlerDocumentLockKey(Long knowledgeId, String canonicalSourceUrl) {
+        return String.valueOf(knowledgeId) + "::"
+                + (StringUtils.hasText(canonicalSourceUrl) ? canonicalSourceUrl : "blank-source-url");
+    }
+
+    private Documents findExistingCrawlerDocument(Long knowledgeId, String canonicalSourceUrl, Integer sourceType,
+                                                  DocumentsService documentsService) {
+        if (knowledgeId == null || !StringUtils.hasText(canonicalSourceUrl)) {
+            return null;
+        }
+
+        Set<String> urlCandidates = CrawlerUrlUtils.buildMatchCandidates(canonicalSourceUrl);
+        List<Documents> matches = documentsService.list(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Documents>()
+                        .eq(Documents::getKnowledgeId, knowledgeId)
+                        .eq(Documents::getSourceType, sourceType)
+                        .in(Documents::getSourceUrl, urlCandidates)
+                        .and(wrapper -> wrapper.eq(Documents::getStatus, 1).or().isNull(Documents::getStatus))
+                        .orderByDesc(Documents::getId)
+        );
+        if (matches == null || matches.isEmpty()) {
+            return null;
+        }
+        return matches.stream()
+                .filter(item -> canonicalSourceUrl.equals(item.getSourceUrl()))
+                .findFirst()
+                .orElse(matches.get(0));
+    }
+
+    private long countDocumentChunks(Long documentId, DocumentChunksService documentChunksService) {
+        if (documentId == null) {
+            return 0L;
+        }
+        Long count = documentChunksService.lambdaQuery()
+                .eq(cn.ling.domain.pojo.DocumentChunks::getDocumentId, documentId)
+                .count();
+        return count == null ? 0L : count;
+    }
+
+    private void markCrawlerDocumentFailed(Long documentId, DocumentsService documentsService) {
+        if (documentId == null) {
+            return;
+        }
+        try {
+            Documents documents = documentsService.getById(documentId);
+            if (documents == null) {
+                return;
+            }
+            documents.setProcessStatus(3);
+            documents.setUpdateTime(LocalDateTime.now());
+            documentsService.updateById(documents);
+        } catch (Exception updateEx) {
+            log.error("更新文档失败状态时发生异常 - 文档ID: {}, 错误信息: {}", documentId, updateEx.getMessage(), updateEx);
         }
     }
 }

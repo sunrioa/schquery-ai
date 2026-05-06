@@ -19,4 +19,6 @@ public interface ChatSessionService extends IService<ChatSession> {
     Result<List<ChatSessionVO>> getSession();
 
     void updateLastMessageTime(Long sessionId);
+
+    void refreshSessionNameFromFirstQuestion(Long sessionId, String firstQuestion);
 }

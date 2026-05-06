@@ -14,11 +14,16 @@ import cn.ling.service.SysConfigService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -33,6 +38,14 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
 
     private static final String KEY_DEFAULT_PRESET_ID = "chat.preset.defaultId";
     private static final String KEY_WELCOME_MESSAGE = "chat.default.message";
+    private static final String DEFAULT_SESSION_NAME = "新会话";
+    private static final int MAX_AUTO_SESSION_NAME_LENGTH = 12;
+    private static final Pattern GREETING_PATTERN = Pattern.compile(
+            "^(你好|您好|hello|hi|哈喽|嗨|在吗|有人吗|早上好|中午好|下午好|晚上好)[!！,，。.？?~～ ]*$",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern SCHOOL_PATTERN = Pattern.compile("([\\u4e00-\\u9fa5A-Za-z0-9]{2,30}(大学|学院|学校))");
+    private static final Pattern MAJOR_PATTERN = Pattern.compile("([\\u4e00-\\u9fa5A-Za-z0-9]{2,20}专业)");
 
     @Resource
     private SysConfigService sysConfigService;
@@ -43,6 +56,9 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
 
     @Resource
     private ConversationMemoryService conversationMemoryService;
+
+    @Resource(name = "sessionTitleChatClient")
+    private ChatClient sessionTitleChatClient;
 
     /**
      * 创建新的聊天会话
@@ -64,7 +80,7 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
             ChatSession chatSession = new ChatSession();
             chatSession.setUserId(userId);
             chatSession.setPresetId(parseLong(sysConfigService.getConfigValue(KEY_DEFAULT_PRESET_ID)));
-            chatSession.setSessionName("新会话");
+            chatSession.setSessionName(DEFAULT_SESSION_NAME);
             chatSession.setStatus(1); // 活跃状态
             chatSession.setCreatedAt(currentTime);
             chatSession.setUpdatedAt(currentTime);
@@ -287,6 +303,193 @@ public class ChatSessionServiceImpl extends ServiceImpl<ChatSessionMapper, ChatS
         } catch (Exception e) {
             log.error("更新会话 {} 最后消息时间时发生异常: {}", sessionId, e.getMessage(), e);
         }
+    }
+
+    @Override
+    public void refreshSessionNameFromFirstQuestion(Long sessionId, String firstQuestion) {
+        if (sessionId == null || !StringUtils.hasText(firstQuestion)) {
+            return;
+        }
+
+        try {
+            ChatSession session = getById(sessionId);
+            if (session == null) {
+                return;
+            }
+
+            if (!isDefaultSessionName(session.getSessionName())) {
+                return;
+            }
+
+            long userMessageCount = chatMessageService.lambdaQuery()
+                    .eq(cn.ling.domain.pojo.ChatMessage::getSessionId, sessionId)
+                    .eq(cn.ling.domain.pojo.ChatMessage::getMessageType, 0)
+                    .count();
+            if (userMessageCount != 1) {
+                return;
+            }
+
+            String summarizedName = generateSessionTitle(firstQuestion);
+            if (!StringUtils.hasText(summarizedName) || DEFAULT_SESSION_NAME.equals(summarizedName)) {
+                return;
+            }
+
+            session.setSessionName(summarizedName);
+            session.setUpdatedAt(new Date());
+            updateById(session);
+        } catch (Exception e) {
+            log.warn("根据首问自动更新会话标题失败: sessionId={}, error={}", sessionId, e.getMessage());
+        }
+    }
+
+    private boolean isDefaultSessionName(String sessionName) {
+        return !StringUtils.hasText(sessionName) || DEFAULT_SESSION_NAME.equals(sessionName.trim());
+    }
+
+    private String generateSessionTitle(String firstQuestion) {
+        String normalized = normalizeQuestion(firstQuestion);
+        if (!StringUtils.hasText(normalized)) {
+            return DEFAULT_SESSION_NAME;
+        }
+
+        try {
+            String prompt = """
+                    用户首问：
+                    %s
+
+                    请直接输出一个会话标题：
+                    """.formatted(normalized);
+
+            String aiTitle = sessionTitleChatClient.prompt()
+                    .user(prompt)
+                    .call()
+                    .content();
+            String sanitizedTitle = sanitizeSessionTitle(aiTitle);
+            if (StringUtils.hasText(sanitizedTitle)) {
+                return sanitizedTitle;
+            }
+        } catch (Exception e) {
+            log.warn("AI 生成会话标题失败，回退本地规则: {}", e.getMessage());
+        }
+
+        return summarizeSessionNameFallback(firstQuestion);
+    }
+
+    private String summarizeSessionNameFallback(String firstQuestion) {
+        String normalized = normalizeQuestion(firstQuestion);
+        if (!StringUtils.hasText(normalized)) {
+            return DEFAULT_SESSION_NAME;
+        }
+
+        if (GREETING_PATTERN.matcher(normalized).matches()) {
+            return "简单的问候";
+        }
+
+        String schoolName = findMatchedGroup(SCHOOL_PATTERN, normalized);
+        String majorName = findMatchedGroup(MAJOR_PATTERN, normalized);
+
+        if (containsAny(normalized, "录取分数", "分数线", "位次", "投档", "录取")) {
+            return limitSessionName(StringUtils.hasText(schoolName) ? schoolName + "录取咨询" : "录取分数咨询");
+        }
+        if (containsAny(normalized, "学费", "住宿", "宿舍", "奖学金", "助学金", "生活费")) {
+            return limitSessionName(StringUtils.hasText(schoolName) ? schoolName + "生活费用" : "费用与生活咨询");
+        }
+        if (StringUtils.hasText(majorName) && containsAny(normalized, "介绍", "怎么样", "就业", "课程", "前景", "学什么", "好不好")) {
+            return limitSessionName(majorName + "咨询");
+        }
+        if (StringUtils.hasText(schoolName) && containsAny(normalized, "介绍", "简介", "了解", "怎么样", "是什么", "招生", "地址", "官网", "专业")) {
+            return limitSessionName(schoolName + "介绍");
+        }
+
+        String stripped = stripQuestionPrefix(normalized);
+        if (!StringUtils.hasText(stripped)) {
+            return DEFAULT_SESSION_NAME;
+        }
+        return limitSessionName(stripped);
+    }
+
+    private String sanitizeSessionTitle(String aiTitle) {
+        if (!StringUtils.hasText(aiTitle)) {
+            return null;
+        }
+
+        String normalized = aiTitle
+                .replace("\r", " ")
+                .replace("\n", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+        normalized = normalized.replaceFirst("^(标题|会话标题)[:：]\\s*", "");
+        normalized = normalized.replaceAll("^[\"'“”‘’《》【】\\[\\]（）()]+", "");
+        normalized = normalized.replaceAll("[\"'“”‘’《》【】\\[\\]（）()]+$", "");
+        normalized = normalized.replaceAll("[。！？!?,，；;：:]+$", "");
+        normalized = normalized.trim();
+
+        if (!StringUtils.hasText(normalized)) {
+            return null;
+        }
+        if (normalized.length() < 2) {
+            return null;
+        }
+        return limitSessionName(normalized);
+    }
+
+    private String normalizeQuestion(String question) {
+        if (!StringUtils.hasText(question)) {
+            return "";
+        }
+        return question
+                .replace("\r", " ")
+                .replace("\n", " ")
+                .replaceAll("`+", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
+    private String stripQuestionPrefix(String text) {
+        String stripped = text;
+        String[] prefixes = {
+                "请问一下", "请问", "我想问一下", "我想问", "想问一下", "想问",
+                "帮我看看", "帮我介绍一下", "帮我介绍", "麻烦帮我", "麻烦", "请你", "介绍一下", "介绍"
+        };
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for (String prefix : prefixes) {
+                if (stripped.startsWith(prefix)) {
+                    stripped = stripped.substring(prefix.length()).trim();
+                    changed = true;
+                }
+            }
+        }
+
+        stripped = stripped.replaceAll("[？?！!。；;，,：:、~～]+$", "").trim();
+        return stripped;
+    }
+
+    private String findMatchedGroup(Pattern pattern, String text) {
+        Matcher matcher = pattern.matcher(text);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    private boolean containsAny(String text, String... keywords) {
+        String lower = text.toLowerCase(Locale.ROOT);
+        for (String keyword : keywords) {
+            if (lower.contains(keyword.toLowerCase(Locale.ROOT))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String limitSessionName(String value) {
+        if (!StringUtils.hasText(value)) {
+            return DEFAULT_SESSION_NAME;
+        }
+        String normalized = value.trim();
+        if (normalized.length() <= MAX_AUTO_SESSION_NAME_LENGTH) {
+            return normalized;
+        }
+        return normalized.substring(0, MAX_AUTO_SESSION_NAME_LENGTH);
     }
 
     private static Long parseLong(String raw) {

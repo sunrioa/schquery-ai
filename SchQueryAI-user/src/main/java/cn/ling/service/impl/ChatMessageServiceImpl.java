@@ -138,6 +138,7 @@ public class ChatMessageServiceImpl extends ServiceImpl<ChatMessageMapper, ChatM
 
             // 更新会话最后消息时间
             chatSessionService.updateLastMessageTime(chatMessageDTO.getSessionId());
+            chatSessionService.refreshSessionNameFromFirstQuestion(chatMessageDTO.getSessionId(), chatMessageDTO.getContent());
 
             // 解析预设并设置到 ThreadLocal
             ChatPreset preset = resolveChatPreset();

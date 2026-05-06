@@ -1078,6 +1078,12 @@ const loadSessions = async () => {
     const response = await chatApi.getSessions()
     if (response?.code === 200) {
       sessions.value = response.data || []
+      if (currentSessionId.value) {
+        const matchedSession = sessions.value.find(session => session.id === currentSessionId.value)
+        if (matchedSession) {
+          currentSession.value = matchedSession
+        }
+      }
     }
     if (isMobile.value && !currentSessionId.value) {
       mobileSidebarVisible.value = true

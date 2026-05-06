@@ -2,6 +2,7 @@ package cn.ling.crawler.service;
 
 import cn.ling.crawler.domain.CrawlerDraftRecord;
 import cn.ling.crawler.mapper.CrawlerDraftRecordMapper;
+import cn.ling.crawler.util.CrawlerUrlUtils;
 import cn.ling.domain.pojo.Documents;
 import cn.ling.domain.pojo.DocumentChunks;
 import cn.ling.crawler.service.CrawlerConfigService.CrawlerConfig;
@@ -181,9 +182,11 @@ public class WebsiteCrawlerService {
             }
 
             try {
-                saveToKnowledgeBase(draft.getUrl(), draft.getTitle(), draft.getContent(), config, finalKnowledgeId);
-                dedupService.markUrlVisited(draft.getUrl(), draft.getTitle(), 1, null);
+                String normalizedUrl = CrawlerUrlUtils.canonicalize(draft.getUrl());
+                saveToKnowledgeBase(normalizedUrl, draft.getTitle(), draft.getContent(), config, finalKnowledgeId);
+                dedupService.markUrlVisited(normalizedUrl, draft.getTitle(), 1, null);
 
+                draft.setUrl(normalizedUrl);
                 draft.setSaved(1);
                 draft.setSavedTime(LocalDateTime.now());
                 draft.setKnowledgeId(finalKnowledgeId);
@@ -327,39 +330,47 @@ public class WebsiteCrawlerService {
             // 从队列中取出一个 URL（使用迭代器安全遍历）
             String url = pendingUrls.iterator().next();
             pendingUrls.remove(url);
+            url = CrawlerUrlUtils.canonicalize(url);
+            if (!StringUtils.hasText(url)) {
+                continue;
+            }
 
             // 检查本次任务是否已处理（防止循环）
             if (visitedUrlSet.contains(url)) {
                 continue;
             }
 
-            // 标记为本次任务已访问
-            visitedUrlSet.add(url);
-
-            // 已入库（且仍有分块记录）则只提取链接，不重复抓取内容
-            boolean alreadyIndexed = isUrlIndexed(url, config);
-            if (alreadyIndexed) {
-                log.info("页面已向量化，跳过内容抓取，仅提取链接: {}", url);
-                Set<String> discoveredUrls = extractLinksOnly(url, config);
-                if (discoveredUrls != null && !discoveredUrls.isEmpty()) {
-                    pendingUrls.addAll(discoveredUrls);
-                }
+            // 历史已成功抓取过则直接跳过，避免跨任务重复访问
+            if (dedupService.isUrlVisited(url)) {
+                log.info("URL 历史已成功抓取，跳过重复访问: {}", url);
                 applyRequestInterval(config.getRequestIntervalMs());
                 continue;
             }
 
+            // 已入库（且仍有分块记录）则不再重复访问页面
+            boolean alreadyIndexed = isUrlIndexed(url, config);
+            if (alreadyIndexed) {
+                dedupService.markUrlVisited(url, null, 1, null);
+                log.info("页面已入库，跳过重复访问: {}", url);
+                applyRequestInterval(config.getRequestIntervalMs());
+                continue;
+            }
+
+            // 标记为本次任务已访问
+            visitedUrlSet.add(url);
+
             // 处理页面（获取内容和链接）
             CrawlResult result = processPage(url, config);
-            if (result.isSkipped()) {
-                log.debug("跳过页面: {}", url);
+            if (!result.isSuccess()) {
+                dedupService.markUrlVisited(url, result.getTitle(), 2, result.getMessage());
+                log.debug("页面处理失败，跳过当前 URL: {}, reason={}", url, result.getMessage());
                 applyRequestInterval(config.getRequestIntervalMs());
                 continue;
             }
 
             // 将每个成功页面保存为草稿记录（每个页面一条）
-            if (result.isSuccess()) {
-                saveAsDraft(url, result.getTitle(), result.getContent());
-            }
+            saveAsDraft(url, result.getTitle(), result.getContent());
+            dedupService.markUrlVisited(url, result.getTitle(), 1, null);
 
             // 将发现的链接添加到待处理队列（无论是否已访问）
             Set<String> discoveredUrls = result.getDiscoveredUrls();
@@ -496,6 +507,7 @@ public class WebsiteCrawlerService {
                     absoluteUrl = new java.net.URL(new java.net.URL(config.getBaseUrl().trim()), override).toString();
                 }
 
+                absoluteUrl = CrawlerUrlUtils.canonicalize(absoluteUrl);
                 java.net.URL parsed = new java.net.URL(absoluteUrl);
                 String baseUrl = parsed.getProtocol() + "://" + parsed.getHost();
                 if (parsed.getPort() != -1 && parsed.getPort() != parsed.getDefaultPort()) {
@@ -519,21 +531,12 @@ public class WebsiteCrawlerService {
         }
 
         try {
-            return new java.net.URL(new java.net.URL(config.getBaseUrl().trim()), config.getStartUrl().trim()).toString();
+            return CrawlerUrlUtils.canonicalize(
+                    new java.net.URL(new java.net.URL(config.getBaseUrl().trim()), config.getStartUrl().trim()).toString()
+            );
         } catch (Exception e) {
             throw new IllegalStateException("爬虫配置错误：baseUrl/startUrl 组合失败");
         }
-    }
-
-    /**
-     * 已向量化页面仅提取链接，不再抓取正文
-     */
-    private Set<String> extractLinksOnly(String url, CrawlerConfig config) {
-        Document doc = fetchPage(url, config);
-        if (doc == null) {
-            return new HashSet<>();
-        }
-        return extractLinks(doc, config);
     }
 
     /**
@@ -555,17 +558,23 @@ public class WebsiteCrawlerService {
      * 新抓取内容保存为草稿（前端可编辑后再入库）
      */
     private void saveAsDraft(String url, String title, String content) {
-        if (!StringUtils.hasText(url) || !StringUtils.hasText(content)) {
+        String normalizedUrl = CrawlerUrlUtils.canonicalize(url);
+        if (!StringUtils.hasText(normalizedUrl) || !StringUtils.hasText(content)) {
             return;
         }
         synchronized (this) {
-            CrawlerDraftRecord existing = crawlerDraftRecordMapper.selectOne(
+            Set<String> urlCandidates = CrawlerUrlUtils.buildMatchCandidates(url);
+            List<CrawlerDraftRecord> existingRecords = crawlerDraftRecordMapper.selectList(
                     new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<CrawlerDraftRecord>()
-                            .eq(CrawlerDraftRecord::getUrl, url)
-                            .last("limit 1")
+                            .in(CrawlerDraftRecord::getUrl, urlCandidates)
             );
+            CrawlerDraftRecord existing = existingRecords.stream()
+                    .filter(record -> normalizedUrl.equals(record.getUrl()))
+                    .findFirst()
+                    .orElse(existingRecords.isEmpty() ? null : existingRecords.get(0));
             LocalDateTime now = LocalDateTime.now();
             if (existing != null) {
+                existing.setUrl(normalizedUrl);
                 existing.setTitle(title);
                 existing.setContent(content);
                 existing.setContentLength(content.length());
@@ -582,7 +591,7 @@ public class WebsiteCrawlerService {
             String id = UUID.randomUUID().toString();
             CrawlerDraftRecord draft = CrawlerDraftRecord.builder()
                     .id(id)
-                    .url(url)
+                    .url(normalizedUrl)
                     .title(title)
                     .content(content)
                     .contentLength(content.length())
@@ -593,7 +602,7 @@ public class WebsiteCrawlerService {
                     .savedTime(null)
                     .build();
             crawlerDraftRecordMapper.insert(draft);
-            log.info("新增爬虫草稿: url={}, 内容长度={}", url, content.length());
+            log.info("新增爬虫草稿: url={}, 内容长度={}", normalizedUrl, content.length());
         }
     }
 
@@ -621,18 +630,25 @@ public class WebsiteCrawlerService {
      * 说明：若通过管理端删除文档，分块会一并删除；此时会被视为未索引，下一次可重新爬取为草稿。
      */
     private boolean isUrlIndexed(String url, CrawlerConfig config) {
-        if (!StringUtils.hasText(url)) {
+        String normalizedUrl = CrawlerUrlUtils.canonicalize(url);
+        if (!StringUtils.hasText(normalizedUrl)) {
             return false;
         }
+        Set<String> urlCandidates = CrawlerUrlUtils.buildMatchCandidates(url);
         Long knowledgeId = config == null ? null : config.getKnowledgeId();
-        Documents doc = documentsService.lambdaQuery()
-                .eq(Documents::getSourceUrl, url)
-                .eq(Documents::getSourceType, 2)
-                .eq(Documents::getProcessStatus, 2)
-                .eq(knowledgeId != null, Documents::getKnowledgeId, knowledgeId)
-                .orderByDesc(Documents::getId)
-                .last("limit 1")
-                .one();
+        List<Documents> matches = documentsService.list(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Documents>()
+                        .in(Documents::getSourceUrl, urlCandidates)
+                        .eq(Documents::getSourceType, 2)
+                        .eq(Documents::getProcessStatus, 2)
+                        .eq(knowledgeId != null, Documents::getKnowledgeId, knowledgeId)
+                        .and(wrapper -> wrapper.eq(Documents::getStatus, 1).or().isNull(Documents::getStatus))
+                        .orderByDesc(Documents::getId)
+        );
+        Documents doc = matches.stream()
+                .filter(item -> normalizedUrl.equals(item.getSourceUrl()))
+                .findFirst()
+                .orElse(matches.isEmpty() ? null : matches.get(0));
         if (doc == null || doc.getId() == null) {
             return false;
         }
@@ -708,7 +724,12 @@ public class WebsiteCrawlerService {
             }
 
             // 转换为绝对URL
-            String absoluteUrl = link.absUrl("href");
+            String rawAbsoluteUrl = link.absUrl("href");
+            String absoluteUrl = CrawlerUrlUtils.canonicalize(rawAbsoluteUrl);
+            if (!StringUtils.hasText(absoluteUrl)) {
+                skippedLinks++;
+                continue;
+            }
 
             // 检查是否应该访问该链接
             if (!shouldVisitUrl(absoluteUrl, config)) {
@@ -716,13 +737,15 @@ public class WebsiteCrawlerService {
                 continue;
             }
 
-            // 检查是否已在待处理队列或本次已访问（避免重复添加）
-            if (pendingUrls.contains(absoluteUrl) || visitedUrlSet.contains(absoluteUrl)) {
+            // 检查是否已在待处理队列、本次已访问或历史已成功抓取（避免重复添加）
+            if (pendingUrls.contains(absoluteUrl)
+                    || visitedUrlSet.contains(absoluteUrl)
+                    || dedupService.isUrlVisited(rawAbsoluteUrl)) {
                 skippedLinks++;
                 continue;
             }
 
-            // 添加到链接列表（不检查数据库历史记录，以便重新爬取）
+            // 添加到链接列表
             links.add(absoluteUrl);
         }
 
@@ -776,8 +799,10 @@ public class WebsiteCrawlerService {
      * 存入知识库
      */
     private void saveToKnowledgeBase(String url, String title, String content, CrawlerConfig config, Long knowledgeId) {
+        String normalizedUrl = CrawlerUrlUtils.canonicalize(url);
+
         // 生成元数据 JSON 字符串
-        String metadataJson = metadataService.generatePageMetadata(url, title, content, config);
+        String metadataJson = metadataService.generatePageMetadata(normalizedUrl, title, content, config);
 
         // 将 JSON 字符串转换为 Map
         Gson gson = new Gson();
@@ -789,7 +814,7 @@ public class WebsiteCrawlerService {
         syncService.saveCrawlerContent(knowledgeId, content, metadata,
                 documentsService, documentChunksService);
 
-        log.info("已提交入库: url={}, 标题={}, {} 字符, knowledgeId={}", url, title, content.length(), knowledgeId);
+        log.info("已提交入库: url={}, 标题={}, {} 字符, knowledgeId={}", normalizedUrl, title, content.length(), knowledgeId);
     }
 
     /**

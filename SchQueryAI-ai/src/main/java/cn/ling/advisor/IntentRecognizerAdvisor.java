@@ -34,6 +34,7 @@ public class IntentRecognizerAdvisor implements BaseAdvisor {
     private static final String KEY_INTENT_PROMPT_ENABLED = "intent.prompt.enabled";
     private static final String KEY_INTENT_PROMPT_MAP = "intent.prompt.map";
     private static final String UNKNOWN_INTENT = "UNKNOWN";
+    private static final String CHITCHAT_INTENT = "闲聊";
     private static final Gson GSON = new Gson();
     private static final Type MAP_TYPE = new TypeToken<Map<String, String>>() {}.getType();
 
@@ -62,6 +63,7 @@ public class IntentRecognizerAdvisor implements BaseAdvisor {
         BUSINESS_INTENT_MAP.put("U", "报考指南");
         BUSINESS_INTENT_MAP.put("V", "校园信息");
         BUSINESS_INTENT_MAP.put("W", UNKNOWN_INTENT);
+        BUSINESS_INTENT_MAP.put("X", CHITCHAT_INTENT);
     }
 
     /**
@@ -76,6 +78,12 @@ public class IntentRecognizerAdvisor implements BaseAdvisor {
         INTENT_KEYWORDS.put("报考指南", List.of("报考", "志愿", "填报", "冲稳保", "建议", "怎么选"));
         INTENT_KEYWORDS.put("校园信息", List.of("住宿", "宿舍", "食堂", "奖学金", "校园", "交通", "环境"));
     }
+
+    private static final List<String> CHITCHAT_KEYWORDS = List.of(
+            "你是谁", "你叫什么", "你叫什么名字", "介绍一下你自己",
+            "自我介绍", "你能做什么", "你可以做什么", "你有什么功能",
+            "你是ai吗", "你是机器人吗", "你是什么助手"
+    );
 
     /**
      * 请求前置处理
@@ -142,6 +150,9 @@ public class IntentRecognizerAdvisor implements BaseAdvisor {
 
     private String recognizeIntentWithFallback(String userInput) {
         String localIntent = detectIntentByKeyword(userInput);
+        if (CHITCHAT_INTENT.equals(localIntent)) {
+            return localIntent;
+        }
         try {
             String rpcIntent = normalizeIntent(recognizeIntent(userInput));
             if (!UNKNOWN_INTENT.equals(rpcIntent)) {
@@ -158,6 +169,9 @@ public class IntentRecognizerAdvisor implements BaseAdvisor {
             return UNKNOWN_INTENT;
         }
         String normalized = userInput.replaceAll("\\s+", "").toLowerCase();
+        if (isChitchatInput(normalized)) {
+            return CHITCHAT_INTENT;
+        }
         for (Map.Entry<String, List<String>> entry : INTENT_KEYWORDS.entrySet()) {
             for (String keyword : entry.getValue()) {
                 if (normalized.contains(keyword.toLowerCase())) {
@@ -166,6 +180,22 @@ public class IntentRecognizerAdvisor implements BaseAdvisor {
             }
         }
         return UNKNOWN_INTENT;
+    }
+
+    private boolean isChitchatInput(String normalizedInput) {
+        if (!StringUtils.hasText(normalizedInput)) {
+            return false;
+        }
+        String compact = normalizedInput.replaceAll("[\\p{Punct}\\p{IsPunctuation}，。？！、；：“”‘’（）()【】\\s]+", "");
+        if (compact.matches("^(你好|您好|嗨|哈喽|在吗|在么|谢谢|感谢|hi|hello|hey|thanks|thankyou)$")) {
+            return true;
+        }
+        for (String keyword : CHITCHAT_KEYWORDS) {
+            if (compact.contains(keyword.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String normalizeIntent(String rawIntent) {
@@ -235,6 +265,7 @@ public class IntentRecognizerAdvisor implements BaseAdvisor {
         map.put("招生政策", "回答时优先说明政策条款、适用范围和时间节点，不确定信息需提示以官方公告为准。");
         map.put("报考指南", "回答时优先给出可执行步骤和分层建议（冲/稳/保），减少泛泛描述。");
         map.put("校园信息", "回答时优先覆盖学习生活、住宿、奖助体系和校园资源，突出用户决策相关信息。");
+        map.put(CHITCHAT_INTENT, "这是闲聊或助手介绍类问题，请简洁自然回应，不需要生成招生追问方向。");
         map.put(UNKNOWN_INTENT, "若意图不清晰，请先澄清问题，再给出可供选择的追问方向。");
         return map;
     }

@@ -38,6 +38,7 @@ public class SuggestService {
     private static final String KEY_SUGGEST_USE = "suggest.use";
     private static final String KEY_SUGGEST_CHAT_TURN = "suggest.chatTurn";
     private static final String KEY_SUGGEST_ROLE = "suggest.role";
+    private static final String CHITCHAT_INTENT = "闲聊";
     private static final int MAX_SUGGESTION_COUNT = 3;
     private static final Pattern SCHOOL_NAME_PATTERN = Pattern.compile("([\\u4e00-\\u9fa5A-Za-z0-9]{2,24}(大学|学院|学校|中学|职校|职业技术学院))");
     private static final Pattern QUESTION_TOPIC_PATTERN = Pattern.compile("([\\u4e00-\\u9fa5A-Za-z0-9]{2,24})(怎么样|如何|好吗|有哪些|是什么|值不值得|值得报吗)");
@@ -115,6 +116,10 @@ public class SuggestService {
         }
 
         String normalizedIntent = normalizeIntent(intent);
+        if (isChitchatIntent(normalizedIntent) || isLatestUserQuestionChitchat(sessionId)) {
+            return new SuggestVO(true, Collections.emptyList());
+        }
+
         List<String> suggestions = buildFastSuggestions(normalizedIntent, sessionId);
         if (suggestions != null && !suggestions.isEmpty()) {
             return new SuggestVO(true, suggestions);
@@ -157,6 +162,10 @@ public class SuggestService {
 
             if (messageList == null || messageList.isEmpty()) {
                 return new SuggestVO(true, null);
+            }
+
+            if (isChitchatText(findLatestUserQuestion(messageList))) {
+                return new SuggestVO(true, Collections.emptyList());
             }
 
             // 构建上下文（消息已是按时间倒序，需要反转）
@@ -444,6 +453,8 @@ public class SuggestService {
                 return "报考指南";
             case "V":
                 return "校园信息";
+            case "X":
+                return CHITCHAT_INTENT;
             case "W":
                 return "UNKNOWN";
             default:
@@ -453,6 +464,23 @@ public class SuggestService {
             return "UNKNOWN";
         }
         return normalized;
+    }
+
+    private boolean isChitchatIntent(String intent) {
+        return CHITCHAT_INTENT.equalsIgnoreCase(intent);
+    }
+
+    private boolean isLatestUserQuestionChitchat(Long sessionId) {
+        if (sessionId == null) {
+            return false;
+        }
+        try {
+            List<Map<String, Object>> messageList = commonMapper.getChatMessages(sessionId, 6);
+            return isChitchatText(findLatestUserQuestion(messageList));
+        } catch (Exception e) {
+            log.debug("判断最新用户问题是否闲聊失败, sessionId={}, msg={}", sessionId, e.getMessage());
+            return false;
+        }
     }
 
     private List<String> buildFastSuggestions(String intent, Long sessionId) {
@@ -686,6 +714,9 @@ public class SuggestService {
             return null;
         }
         String normalized = text.replaceAll("\\s+", " ").trim();
+        if (isChitchatText(normalized)) {
+            return null;
+        }
         Matcher schoolMatcher = SCHOOL_NAME_PATTERN.matcher(normalized);
         if (schoolMatcher.find()) {
             return schoolMatcher.group(1);
@@ -698,6 +729,42 @@ public class SuggestService {
             return normalized;
         }
         return null;
+    }
+
+    private String findLatestUserQuestion(List<Map<String, Object>> messageList) {
+        if (messageList == null || messageList.isEmpty()) {
+            return null;
+        }
+        for (Map<String, Object> msg : messageList) {
+            Integer messageType = parseMessageType(msg.get("message_type"));
+            if (messageType != null && messageType == 0) {
+                Object content = msg.get("content");
+                return content == null ? null : String.valueOf(content);
+            }
+        }
+        return null;
+    }
+
+    private boolean isChitchatText(String text) {
+        if (!StringUtils.hasText(text)) {
+            return false;
+        }
+        String compact = text.replaceAll("[\\p{Punct}\\p{IsPunctuation}，。？！、；：“”‘’（）()【】\\s]+", "")
+                .toLowerCase();
+        if (!StringUtils.hasText(compact)) {
+            return false;
+        }
+        return compact.matches("^(你好|您好|嗨|哈喽|在吗|在么|谢谢|感谢|hi|hello|hey|thanks|thankyou)$")
+                || compact.contains("你是谁")
+                || compact.contains("你叫什么")
+                || compact.contains("自我介绍")
+                || compact.contains("介绍一下你自己")
+                || compact.contains("你能做什么")
+                || compact.contains("你可以做什么")
+                || compact.contains("你有什么功能")
+                || compact.contains("你是ai吗")
+                || compact.contains("你是机器人吗")
+                || compact.contains("你是什么助手");
     }
 
     private List<String> defaultFallbackSuggestions(String intent) {

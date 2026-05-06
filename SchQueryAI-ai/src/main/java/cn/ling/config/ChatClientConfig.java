@@ -94,6 +94,25 @@ public class ChatClientConfig {
     }
 
     /**
+     * 配置会话标题生成客户端
+     * 专门根据首条提问生成简短会话标题，不启用RAG和顾问，避免引入无关上下文
+     *
+     * @param openAiChatModel OpenAI聊天模型实例
+     * @return 配置好的会话标题生成客户端
+     */
+    @Bean("sessionTitleChatClient")
+    public ChatClient sessionTitleChatClient(OpenAiChatModel openAiChatModel) {
+        log.info("开始配置会话标题生成客户端");
+
+        ChatClient chatClient = ChatClient.builder(openAiChatModel)
+                .defaultSystem(Prompts.SESSION_TITLE_PROMPT)
+                .build();
+
+        log.info("会话标题生成客户端配置完成");
+        return chatClient;
+    }
+
+    /**
      * 配置OCR结果纠正客户端
      * 专门用于OCR识别结果的后处理，修正识别错误和格式问题
      * 不启用任何顾问，保持简单的文本处理流程

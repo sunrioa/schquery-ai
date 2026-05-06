@@ -64,7 +64,7 @@ public class CustomerServiceWebSocketHandler extends TextWebSocketHandler {
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         try {
             String payload = message.getPayload();
-            log.info("收到WebSocket原始消息: {}", payload);
+        //    log.info("收到WebSocket原始消息: {}", payload);
 
             // 兼容前端心跳：可能发送纯文本 ping 或 {type:"ping"}
             if (payload != null && payload.trim().equalsIgnoreCase("ping")) {

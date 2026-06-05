@@ -2,17 +2,6 @@
 
 SchQueryAI 是一个基于 Spring Boot、Spring AI 和 Vue 3 的招生咨询与知识库问答系统，包含用户端、管理端、RAG 检索、语音识别、MCP 搜索服务和前端页面。
 
-GitHub 仓库地址：`https://github.com/sunrioa/schquery-ai.git`
-
-## 开源状态
-
-本仓库已完成开源前脱敏处理：
-
-- 运行配置中的数据库连接、Redis 密码、邮箱授权码、AI 服务 Key、Tavily Key、MinIO 密钥、JWT 密钥均改为环境变量。
-- Git 历史已移除本地 IDE/Agent 配置、个人文档、旧私密脚本和已知敏感值。
-- `.env`、本地覆盖配置、Office 临时文件、Agent 本地目录已加入 `.gitignore`。
-
-如果你曾经在本地或远端提交过真实密钥，仍然需要到对应服务商控制台吊销并重新生成。Git 历史清理不能让已经泄露过的密钥重新变安全。
 
 ## 项目结构
 
@@ -40,9 +29,6 @@ GitHub 仓库地址：`https://github.com/sunrioa/schquery-ai.git`
 
 ## 配置说明
 
-项目已移除真实数据库连接、公网 IP、邮箱授权码和 API Key。所有敏感信息都通过环境变量注入，参考 `.env.example`。
-
-不要把 `.env` 或本地 `application-*.local.yml` 提交到仓库。公开仓库只保留 `.env.example` 作为配置模板。
 
 最小必填变量：
 
@@ -126,10 +112,3 @@ mvn -pl SchQueryAI-mcp-server -am spring-boot:run
 mvn -q -pl SchQueryAI-application,SchQueryAI-mcp-server -am compile -DskipTests
 ```
 
-## 开源前安全检查
-
-- 不要提交 `.env`、`application-local.yml`、`application-*.local.yml` 等本地私密配置。
-- 不要提交 `.agents/`、`.claude/`、`.idea/`、`.vscode/settings.json` 等个人工具配置。
-- 如果真实密钥曾经提交到 Git 历史，请立即在服务商控制台吊销并重新生成。
-- 如果仓库已经推送到远程，需要清理历史后使用 `git push --force-with-lease` 更新远端。
-- 建议开启 GitHub Secret scanning 和 Push protection。

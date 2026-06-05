@@ -2,7 +2,6 @@ package cn.ling.utils;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Component;
 
 import lombok.extern.slf4j.Slf4j;
@@ -21,8 +20,8 @@ import java.util.Map;
 @Component
 public class JwtUtils {
 
-    // 密钥（实际项目中建议从配置文件读取，长度至少32位）
-    private static final String SECRET_KEY = "${JWT_SECRET_KEY}";
+    private static final String DEFAULT_SECRET_KEY = "change-this-jwt-secret-key-at-least-32-bytes";
+    private static final String JWT_SECRET_ENV = "JWT_SECRET_KEY";
 
     // 令牌过期时间（2小时，单位：毫秒）
     private static final long EXPIRATION_TIME = 2 * 60 * 60 * 1000;
@@ -54,7 +53,7 @@ public class JwtUtils {
 
             // 生成签名密钥（HMAC-SHA256需要256位密钥）
             log.debug("生成HMAC-SHA256签名密钥");
-            SecretKey key = Keys.hmacShaKeyFor(SECRET_KEY.getBytes(StandardCharsets.UTF_8));
+            SecretKey key = getSecretKey();
 
             // 计算过期时间
             Date expirationTime = new Date(System.currentTimeMillis() + EXPIRATION_TIME);
@@ -107,7 +106,7 @@ public class JwtUtils {
 
             // 生成签名密钥
             log.debug("生成JWT解析密钥");
-            SecretKey key = Keys.hmacShaKeyFor(SECRET_KEY.getBytes(StandardCharsets.UTF_8));
+            SecretKey key = getSecretKey();
 
             // 解析并验证JWT令牌
             log.debug("开始解析JWT令牌并验证签名");
@@ -150,5 +149,19 @@ public class JwtUtils {
             log.error("解析JWT令牌时发生未知异常: {}", e.getMessage(), e);
             throw new RuntimeException("解析JWT令牌失败: " + e.getMessage(), e);
         }
+    }
+
+    private static SecretKey getSecretKey() {
+        String secret = System.getProperty(JWT_SECRET_ENV);
+        if (secret == null || secret.trim().isEmpty()) {
+            secret = System.getenv(JWT_SECRET_ENV);
+        }
+        if (secret == null || secret.trim().isEmpty()) {
+            secret = DEFAULT_SECRET_KEY;
+        }
+        if (secret.getBytes(StandardCharsets.UTF_8).length < 32) {
+            throw new IllegalStateException("JWT_SECRET_KEY长度不能少于32字节");
+        }
+        return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 }

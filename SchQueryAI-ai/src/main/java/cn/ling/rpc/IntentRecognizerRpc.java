@@ -2,10 +2,10 @@ package cn.ling.rpc;
 
 import com.dtflys.forest.annotation.BaseRequest;
 import com.dtflys.forest.annotation.ForestClient;
+import com.dtflys.forest.annotation.Header;
 import com.dtflys.forest.annotation.Post;
 import com.dtflys.forest.annotation.Body;
 import lombok.Data;
-import lombok.extern.slf4j.Slf4j;
 import java.util.Map;
 
 /**
@@ -17,7 +17,6 @@ import java.util.Map;
 @BaseRequest(
         baseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",  // 阿里云通义千问意图识别接口地址
         headers = {
-                "Authorization: Bearer ${DASHSCOPE_API_KEY}",  // API访问密钥
                 "Content-Type: application/json"  // 请求内容类型
         }
 )
@@ -127,7 +126,7 @@ public interface IntentRecognizerRpc {
             readTimeout = 30 * 1000,  // 读取超时时间：30秒
             connectTimeout = 5 * 1000  // 连接超时时间：5秒
     )
-    IntentResponse recognize(@Body IntentRequest request);
+    IntentResponse recognize(@Header("Authorization") String authorization, @Body IntentRequest request);
 
     /**
      * 获取用户意图
@@ -138,7 +137,7 @@ public interface IntentRecognizerRpc {
      * @param userInput 用户输入文本
      * @return 识别到的意图名称，识别失败返回"UNKNOWN"
      */
-    default String getIntent(Map<String,String> intentMap, String userInput){
+    default String getIntent(Map<String,String> intentMap, String userInput, String authorization){
         try {
             // 构造系统提示词，告诉模型需要从哪些意图中选择
             String systemPrompt = String.format(
@@ -160,7 +159,7 @@ public interface IntentRecognizerRpc {
             IntentRequest intentRequest = new IntentRequest(messages);
 
             // 调用意图识别API
-            IntentResponse response = recognize(intentRequest);
+            IntentResponse response = recognize(authorization, intentRequest);
 
             // 安全解析响应结果
             if (response != null && response.getChoices() != null && response.getChoices().length > 0) {

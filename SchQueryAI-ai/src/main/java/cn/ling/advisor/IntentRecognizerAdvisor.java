@@ -13,6 +13,7 @@ import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
@@ -47,6 +48,9 @@ public class IntentRecognizerAdvisor implements BaseAdvisor {
 
     @Resource
     private SysConfigService sysConfigService;
+
+    @Value("${dashscope.api-key:}")
+    private String dashscopeApiKey;
 
     /**
      * 业务意图映射表
@@ -144,8 +148,12 @@ public class IntentRecognizerAdvisor implements BaseAdvisor {
      * @return 识别出的意图类别（中文名称）
      */
     private String recognizeIntent(String userInput) {
+        if (!StringUtils.hasText(dashscopeApiKey)) {
+            log.debug("未配置 DASHSCOPE_API_KEY，跳过远程意图识别");
+            return UNKNOWN_INTENT;
+        }
         log.debug("调用意图识别服务，输入长度: {} 字符", userInput.length());
-        return intentRecognizerRpc.getIntent(BUSINESS_INTENT_MAP, userInput);
+        return intentRecognizerRpc.getIntent(BUSINESS_INTENT_MAP, userInput, "Bearer " + dashscopeApiKey.trim());
     }
 
     private String recognizeIntentWithFallback(String userInput) {

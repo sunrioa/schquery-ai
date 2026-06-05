@@ -2,6 +2,7 @@ package cn.ling.rpc;
 
 import com.dtflys.forest.annotation.BaseRequest;
 import com.dtflys.forest.annotation.ForestClient;
+import com.dtflys.forest.annotation.Header;
 import com.dtflys.forest.annotation.Post;
 import com.dtflys.forest.annotation.Body;
 import lombok.Data;
@@ -16,7 +17,6 @@ import lombok.Data;
 @BaseRequest(
         baseURL = "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank",  // 阿里云重排序服务地址
         headers = {
-                "Authorization: Bearer ${DASHSCOPE_API_KEY}",  // API访问密钥
                 "Content-Type: application/json"  // 请求内容类型
         }
 )
@@ -146,5 +146,5 @@ public interface RerankRpc {
             readTimeout = 30 * 1000,  // 读取超时时间：30秒
             connectTimeout = 5 * 1000  // 连接超时时间：5秒
     )
-    RerankResponse rerank(@Body RerankRequest request);
+    RerankResponse rerank(@Header("Authorization") String authorization, @Body RerankRequest request);
 }

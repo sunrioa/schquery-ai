@@ -1,106 +1,84 @@
-# Spring Boot应用配置文件
+# Spring Boot 应用配置文件
 spring:
   data:
     redis:
-      # Redis数据库配置 - 用于缓存和会话存储
-      database: 0        # Redis数据库索引（0-15）
-
-      host: localhost  # 百度云Redis服务器IP地址
-      port: 5580         # 腾讯云Redis服务器端口
-      password: ${PASSWORD} # 腾讯云Redis服务器密码
-
-#      host: localhost  # 腾讯云Redis服务器IP地址
-#      port: 6379         # 百度云Redis服务器端口
-#      password:          # 百度云Redis服务器密码
-
-      timeout: 2000ms    # 连接超时时间（毫秒）
-      lettuce:           # Lettuce连接池配置（Lettuce是默认的Redis客户端）
+      database: ${REDIS_DATABASE:0}
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: ${REDIS_TIMEOUT:2000ms}
+      lettuce:
         pool:
-          max-active: 8  # 连接池最大连接数
-          max-idle: 8    # 连接池最大空闲连接数
-          min-idle: 2    # 连接池最小空闲连接数
+          max-active: ${REDIS_POOL_MAX_ACTIVE:8}
+          max-idle: ${REDIS_POOL_MAX_IDLE:8}
+          min-idle: ${REDIS_POOL_MIN_IDLE:2}
 
-  # Servlet配置
   servlet:
     multipart:
-      # 文件上传配置
-      enabled: true             # 开启文件上传功能（默认为true）
-      max-file-size: 100MB      # 单个文件最大上传大小
-      max-request-size: 200MB   # 单次请求最大上传大小（所有文件总和）
-      file-size-threshold: 10MB # 文件大小阈值：超过此大小将写入磁盘
-      location: /data/tmp/upload # 临时文件存储目录
+      enabled: true
+      max-file-size: ${UPLOAD_MAX_FILE_SIZE:100MB}
+      max-request-size: ${UPLOAD_MAX_REQUEST_SIZE:200MB}
+      file-size-threshold: ${UPLOAD_FILE_SIZE_THRESHOLD:10MB}
+      location: ${UPLOAD_TMP_DIR:/data/tmp/upload}
 
   http:
     client:
       connect-timeout: 30s
       read-timeout: 30s
 
-  # AI功能配置
   ai:
     openai:
-      base-url: https://dashscope.aliyuncs.com/compatible-mode
-      api-key: ${DASHSCOPE_API_KEY}
+      base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode}
+      api-key: ${DASHSCOPE_API_KEY:}
       chat:
         options:
-          model: qwen-plus  # 对话模型：通义千问-plus版本
+          model: ${DASHSCOPE_CHAT_MODEL:qwen-plus}
 
       embedding:
         options:
-          model: text-embedding-v1  # 文本嵌入模型
-          dimensions: 1536          # 嵌入向量维度
-          topK: 6
-          similarityThreshold: 0.25
+          model: ${DASHSCOPE_EMBEDDING_MODEL:text-embedding-v1}
+          dimensions: ${DASHSCOPE_EMBEDDING_DIMENSIONS:1536}
+          topK: ${RAG_TOP_K:6}
+          similarityThreshold: ${RAG_SIMILARITY_THRESHOLD:0.25}
 
     vectorstore:
       qdrant:
-
-        host: localhost        # 腾讯云Qdrant服务器地址
-        port: 6005                  # 腾讯云Qdrant服务器端口
-
-
-        api-key: ${API_KEY}             # 腾讯云Qdrant访问密钥
-
-        collection-name: gzhhxy     # 向量集合名称
-        use-tls: false              # 是否启用TLS加密
-        initialize-schema: true     # 是否自动初始化数据库模式
+        host: ${QDRANT_HOST:localhost}
+        port: ${QDRANT_PORT:6334}
+        api-key: ${QDRANT_API_KEY:}
+        collection-name: ${QDRANT_COLLECTION_NAME:schqueryai}
+        use-tls: ${QDRANT_USE_TLS:false}
+        initialize-schema: ${QDRANT_INITIALIZE_SCHEMA:true}
 
     search:
       options:
-        apiKey: ${SEARCH_API_KEY}
-        engine: baidu
+        apiKey: ${SEARCH_API_KEY:}
+        engine: ${SEARCH_ENGINE:baidu}
 
-
-  # MySQL数据库配置
-  datasource:                          # 数据库密码
+  datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-
-#    url: jdbc:mysql://localhost:3306/schqueryai?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-#    username: root
-#    password: ${SECRET_VALUE}
-
-    url: jdbc:mysql://localhost:3306/schqueryai?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: root
-    password: ${PASSWORD}
+    url: ${DB_URL:jdbc:mysql://localhost:3306/schqueryai?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
 
 # 邮件服务配置
 email:
-  host: smtp.qq.com                    # SMTP服务器地址（QQ邮箱）
-  port: 465                            # SMTP服务器端口（SSL加密）
-  username: user@example.com       # 邮箱用户名
-  password: ${EMAIL_PASSWORD}           # 邮箱授权码（非邮箱密码）
-  from: user@example.com             # 发件人邮箱地址
+  host: ${EMAIL_HOST:smtp.qq.com}
+  port: ${EMAIL_PORT:465}
+  username: ${EMAIL_USERNAME:}
+  password: ${EMAIL_PASSWORD:}
+  from: ${EMAIL_FROM:${EMAIL_USERNAME:}}
 
 # 服务器配置
 server:
-  port: 8080                           # 应用服务端口号
-  # Tomcat 配置优化 SSE 流式响应
+  port: ${SERVER_PORT:8080}
   tomcat:
     threads:
-      max: 200                         # 最大工作线程数
-      min-spare: 20                    # 最小空闲线程数
-    connection-timeout: 20000          # 连接超时时间（毫秒）
-    accept-count: 100                  # 接受连接队列大小
-    async-timeout: 30000               # 异步请求超时时间（毫秒）
+      max: ${TOMCAT_THREADS_MAX:200}
+      min-spare: ${TOMCAT_THREADS_MIN_SPARE:20}
+    connection-timeout: ${TOMCAT_CONNECTION_TIMEOUT:20000}
+    accept-count: ${TOMCAT_ACCEPT_COUNT:100}
+    async-timeout: ${TOMCAT_ASYNC_TIMEOUT:30000}
 
 # 语音识别（Aliyun ASR）配置
 parameters:
@@ -122,8 +100,6 @@ parameters:
     chunkIntervalMs: 10
     connectTimeoutMs: 10000
   ffmpeg:
-    # 本地开发：填写绝对路径
-    # 服务器部署：使用环境变量 FFMPEG_PATH 或留空使用系统 PATH
     path: ${FFMPEG_PATH:ffmpeg}
   widget:
     siteKey: ${WIDGET_SITE_KEY:demo-site-key}
@@ -136,10 +112,14 @@ parameters:
 
 # MinIO配置
 minio:
-  endpoint: http://localhost:6000
-  accessKey: ${ACCESS_KEY}
-  secretKey: ${SECRET_KEY}
-  region: us-east-1
-  bucket: files
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  accessKey: ${MINIO_ACCESS_KEY:}
+  secretKey: ${MINIO_SECRET_KEY:}
+  region: ${MINIO_REGION:us-east-1}
+  bucket: ${MINIO_BUCKET:files}
+
+# DashScope 兼容模式/Rerank/意图识别共用密钥
+dashscope:
+  api-key: ${DASHSCOPE_API_KEY:}
 
 #debug: true

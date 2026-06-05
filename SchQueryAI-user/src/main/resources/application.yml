@@ -5,9 +5,9 @@ spring:
   # 数据源配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/schqueryai?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: root
-    password: ${PASSWORD}
+    url: ${DB_URL:jdbc:mysql://localhost:3306/schqueryai?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
     hikari:
       minimum-idle: 5
       maximum-pool-size: 15
@@ -21,10 +21,10 @@ spring:
   # Redis配置
   data:
     redis:
-      host: localhost  # Your Redis server IP/domain
-      port: 6379       # Default Redis port
-      password: ""     # If Redis has a password, set it here (empty by default)
-      timeout: 2000ms  # Connection timeout
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: ${REDIS_TIMEOUT:2000ms}
       lettuce: # Lettuce is the default client; configure pool if needed
         pool:
           max-active: 8  # Max connections
@@ -33,10 +33,10 @@ spring:
 
   # 邮件配置
   mail:
-    host: smtp.qq.com
-    port: 465
-    username: your-email@qq.com
-    password: your-smtp-authorization-code
+    host: ${EMAIL_HOST:smtp.qq.com}
+    port: ${EMAIL_PORT:465}
+    username: ${EMAIL_USERNAME:}
+    password: ${EMAIL_PASSWORD:}
     protocol: smtp
     default-encoding: UTF-8
     properties:
@@ -51,7 +51,7 @@ spring:
           starttls:
             enable: true
             required: true
-    from: your-email@qq.com
+    from: ${EMAIL_FROM:${EMAIL_USERNAME:}}
 
 # MyBatis Plus配置
 mybatis-plus:
@@ -72,16 +72,16 @@ mybatis-plus:
 
 # 邮件配置属性
 mail-notify:
-  host: smtp.qq.com
-  port: 465
-  username: your-email@qq.com
-  password: your-smtp-authorization-code
-  from: your-email@qq.com
+  host: ${EMAIL_HOST:smtp.qq.com}
+  port: ${EMAIL_PORT:465}
+  username: ${EMAIL_USERNAME:}
+  password: ${EMAIL_PASSWORD:}
+  from: ${EMAIL_FROM:${EMAIL_USERNAME:}}
 
 # JWT配置
 jwt:
-  secret: ${JWT_SECRET_KEY}
-  expiration: 86400000  # 24小时，单位毫秒
+  secret: ${JWT_SECRET_KEY:change-this-jwt-secret-key-at-least-32-bytes}
+  expiration: ${JWT_EXPIRATION:86400000}  # 24小时，单位毫秒
 
 # 日志配置
 logging:

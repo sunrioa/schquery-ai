@@ -12,11 +12,9 @@ spring:
         type: SYNC
 
 tavily:
-  # 建议通过环境变量配置：TAVILY_API_KEY
-  api-key: ${TAVILY_API_KEY}
-  api-url: https://api.tavily.com
-  search-depth: basic
-  max-results: 5
-  include-raw-content: false
-  include-images: false
-
+  api-key: ${TAVILY_API_KEY:}
+  api-url: ${TAVILY_API_URL:https://api.tavily.com}
+  search-depth: ${TAVILY_SEARCH_DEPTH:basic}
+  max-results: ${TAVILY_MAX_RESULTS:5}
+  include-raw-content: ${TAVILY_INCLUDE_RAW_CONTENT:false}
+  include-images: ${TAVILY_INCLUDE_IMAGES:false}

@@ -1,5 +1,4 @@
 # 本地开发环境配置
 parameters:
   ffmpeg:
-    # Windows 本地开发环境的 FFmpeg 路径
-    path: "E:\\gongju\\ffmpeg-8.0.1-essentials_build\\ffmpeg-8.0.1-essentials_build\\bin\\ffmpeg.exe"
+    path: ${FFMPEG_PATH:ffmpeg}

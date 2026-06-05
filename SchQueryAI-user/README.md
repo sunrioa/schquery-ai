@@ -18,7 +18,7 @@
 - **请求参数**:
 ```json
 {
-  "email": "your-email@example.com"
+  "email": "<user-email>"
 }
 ```
 - **响应示例**:
@@ -38,7 +38,7 @@
   "userName": "testuser",
   "password": "123456",
   "rePassword": "123456",
-  "email": "your-email@example.com",
+  "email": "<user-email>",
   "code": "123456"
 }
 ```
@@ -50,7 +50,7 @@
   "data": {
     "id": 1,
     "userName": "testuser",
-    "email": "your-email@example.com",
+    "email": "<user-email>",
     "createTime": "2025-11-03T10:30:00",
     "updateTime": "2025-11-03T10:30:00"
   }
@@ -74,7 +74,7 @@
   "data": {
     "id": 1,
     "userName": "testuser",
-    "email": "your-email@example.com",
+    "email": "<user-email>",
     "createTime": "2025-11-03T10:30:00",
     "updateTime": "2025-11-03T10:30:00"
   }
@@ -91,18 +91,18 @@
 ```yaml
 spring:
   mail:
-    host: smtp.qq.com
-    port: 465
-    username: your-email@qq.com
-    password: your-smtp-authorization-code
-    from: your-email@qq.com
+    host: ${EMAIL_HOST:smtp.qq.com}
+    port: ${EMAIL_PORT:465}
+    username: ${EMAIL_USERNAME:}
+    password: ${EMAIL_PASSWORD:}
+    from: ${EMAIL_FROM:${EMAIL_USERNAME:}}
 
 mail-notify:
-  host: smtp.qq.com
-  port: 465
-  username: your-email@qq.com
-  password: your-smtp-authorization-code
-  from: your-email@qq.com
+  host: ${EMAIL_HOST:smtp.qq.com}
+  port: ${EMAIL_PORT:465}
+  username: ${EMAIL_USERNAME:}
+  password: ${EMAIL_PASSWORD:}
+  from: ${EMAIL_FROM:${EMAIL_USERNAME:}}
 ```
 
 ### 3. Redis配置

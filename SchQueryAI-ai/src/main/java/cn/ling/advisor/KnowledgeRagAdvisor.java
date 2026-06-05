@@ -16,6 +16,7 @@ import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -45,17 +46,20 @@ public class KnowledgeRagAdvisor implements BaseAdvisor {
     private final SearchRequest baseSearchRequest;
     private final KnowledgeInfoService knowledgeInfoService;
     private final RerankRpc rerankRpc;
+    private final String dashscopeApiKey;
 
     public KnowledgeRagAdvisor(
             @Qualifier("qdrantVectorStore") VectorStore qdrantVectorStore,
             @Qualifier("searchRequest") SearchRequest baseSearchRequest,
             KnowledgeInfoService knowledgeInfoService,
-            RerankRpc rerankRpc
+            RerankRpc rerankRpc,
+            @Value("${dashscope.api-key:}") String dashscopeApiKey
     ) {
         this.qdrantVectorStore = qdrantVectorStore;
         this.baseSearchRequest = baseSearchRequest;
         this.knowledgeInfoService = knowledgeInfoService;
         this.rerankRpc = rerankRpc;
+        this.dashscopeApiKey = dashscopeApiKey;
     }
 
     @Override
@@ -273,6 +277,10 @@ public class KnowledgeRagAdvisor implements BaseAdvisor {
         if (!StringUtils.hasText(query)) {
             return docs;
         }
+        if (!StringUtils.hasText(dashscopeApiKey)) {
+            log.debug("未配置 DASHSCOPE_API_KEY，跳过 rerank");
+            return docs;
+        }
 
         try {
             List<Document> candidates = docs.stream()
@@ -293,7 +301,7 @@ public class KnowledgeRagAdvisor implements BaseAdvisor {
             req.setInput(new RerankRpc.RerankRequest.Input(query.trim(), candidateTexts));
             req.setParameters(new RerankRpc.RerankRequest.Parameters(true, candidateTexts.length, null));
 
-            RerankRpc.RerankResponse resp = rerankRpc.rerank(req);
+            RerankRpc.RerankResponse resp = rerankRpc.rerank("Bearer " + dashscopeApiKey.trim(), req);
             if (resp == null || resp.getOutput() == null || resp.getOutput().getResults() == null) {
                 return docs;
             }

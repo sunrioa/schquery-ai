@@ -1,3 +1,4 @@
+一个用来应付毕设做的Java项目
 # SchQueryAI
 
 SchQueryAI 是一个基于 Spring Boot、Spring AI 和 Vue 3 的招生咨询与知识库问答系统，包含用户端、管理端、RAG 检索、语音识别、MCP 搜索服务和前端页面。
